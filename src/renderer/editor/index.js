@@ -1,7 +1,7 @@
 // Monaco editor integration, bundled by scripts/build.mjs into dist/editor.js.
 // Exposes window.RFEditor for the (non-bundled) renderer scripts.
 import * as monaco from 'monaco-editor';
-import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf } from './robotSyntax.js';
+import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
 
 self.MonacoEnvironment = {
@@ -330,6 +330,7 @@ const RFEditor = (() => {
   const saveListeners = new Set();
   const openListeners = new Set();
   const problemListeners = new Set();
+  const runListeners = new Set();
   const validationTimers = new Map();
 
   function scheduleValidation(path, delay = 400) {
@@ -392,7 +393,11 @@ const RFEditor = (() => {
       suggest: { showWords: false },
       fixedOverflowWidgets: true,
       padding: { top: 8 },
+      glyphMargin: true,
+      // The context menu's shadow root would not get the bundled stylesheet (dist/editor.css).
+      useShadowDOM: false,
     });
+    mountRunGlyphs();
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       if (current)
         for (const listener of saveListeners)
@@ -427,6 +432,8 @@ const RFEditor = (() => {
       model.onDidChangeContent(() => {
         emitDirty(path);
         scheduleValidation(path);
+        if (path === current)
+          scheduleGlyphs();
       });
       scheduleValidation(path, 0);
     }
@@ -439,6 +446,7 @@ const RFEditor = (() => {
       editor.setPosition({ lineNumber: line, column: 1 });
     }
     editor.focus();
+    updateGlyphs();
     for (const listener of problemListeners)
       listener(path, problemCounts(file.model));
   }
@@ -450,6 +458,7 @@ const RFEditor = (() => {
     if (current === path) {
       editor.setModel(null);
       current = null;
+      updateGlyphs();
     }
     clearTimeout(validationTimers.get(path));
     validationTimers.delete(path);
@@ -539,6 +548,129 @@ const RFEditor = (() => {
     return count;
   }
 
+  // -------------------------------------------------------------------------
+  // Run glyphs: the last status of each test (and of the file's suite) in the
+  // gutter; clicking one runs it. Statuses come from the Testing panel.
+
+  let testStates = new Map(); // path -> { suite: status, tests: Map<name, status> }
+  let testsRunning = false;
+  let glyphs = null;
+  let glyphLines = new Map(); // line -> test names to run, or null for the whole file
+  let glyphTimer = null;
+  let robotFileKey = null;
+
+  const STATUS_LABELS = { PASS: 'Passed', FAIL: 'Failed', SKIP: 'Skipped', 'NOT RUN': 'Not run', running: 'Running', queued: 'Queued', stopped: 'Stopped' };
+
+  function escapeMarkdown(text) {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
+  }
+
+  function glyph(line, status, action, running) {
+    const parts = [status ? `**${STATUS_LABELS[status] || status}**` : null,
+      running ? 'Tests are running' : `Click to run ${action}`].filter(Boolean);
+    return {
+      range: new monaco.Range(line, 1, line, 1),
+      options: {
+        glyphMarginClassName: `test-glyph status-${String(status || 'none').toLowerCase().replace(/\s+/g, '-')}`,
+        glyphMarginHoverMessage: { value: parts.join(' · ') },
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+    };
+  }
+
+  function isRobotFile() {
+    return !!current && /\.robot$/i.test(current);
+  }
+
+  function updateGlyphs() {
+    clearTimeout(glyphTimer);
+    glyphLines = new Map();
+    robotFileKey?.set(isRobotFile());
+    const model = editor?.getModel();
+    if (!glyphs)
+      return;
+    if (!model || !isRobotFile()) {
+      glyphs.clear();
+      return;
+    }
+    const state = testStates.get(current) || { suite: null, tests: new Map() };
+    const { headers, tests } = testCases(model.getLinesContent());
+    const decorations = [];
+    for (const line of headers) {
+      glyphLines.set(line, null);
+      decorations.push(glyph(line, state.suite, 'all tests in this file', testsRunning));
+    }
+    for (const test of tests) {
+      glyphLines.set(test.line, [test.name]);
+      decorations.push(glyph(test.line, state.tests.get(test.name), `'${escapeMarkdown(test.name)}'`, testsRunning));
+    }
+    glyphs.set(decorations);
+  }
+
+  function scheduleGlyphs() {
+    clearTimeout(glyphTimer);
+    glyphTimer = setTimeout(updateGlyphs, 150);
+  }
+
+  /** @param {string[] | null} names tests to run, or null for every test of the file */
+  function requestRun(names) {
+    if (!isRobotFile())
+      return;
+    for (const listener of runListeners)
+      listener({ path: current, names });
+  }
+
+  function testAtCursor() {
+    const line = editor.getPosition()?.lineNumber;
+    const model = editor.getModel();
+    if (!line || !model)
+      return null;
+    return testCases(model.getLinesContent()).tests.find((test) => test.line <= line && line <= test.end) || null;
+  }
+
+  function mountRunGlyphs() {
+    glyphs = editor.createDecorationsCollection();
+    robotFileKey = editor.createContextKey('rfideRobotFile', false);
+    editor.onMouseDown((event) => {
+      if (event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !event.event.leftButton)
+        return;
+      const line = event.target.position?.lineNumber;
+      if (glyphLines.has(line))
+        requestRun(glyphLines.get(line));
+    });
+    editor.addAction({
+      id: 'rfide.runTestAtCursor',
+      label: 'Run Test at Cursor',
+      precondition: 'rfideRobotFile',
+      contextMenuGroupId: '0_run',
+      contextMenuOrder: 1,
+      run: () => {
+        const test = testAtCursor();
+        if (test)
+          requestRun([test.name]);
+      },
+    });
+    editor.addAction({
+      id: 'rfide.runTestsInFile',
+      label: 'Run Tests in File',
+      precondition: 'rfideRobotFile',
+      contextMenuGroupId: '0_run',
+      contextMenuOrder: 2,
+      run: () => requestRun(null),
+    });
+  }
+
+  /**
+   * Statuses shown in the gutter.
+   * @param {Map<string, { suite: string | null, tests: Map<string, string> }>} states by file path
+   * @param {boolean} running whether a run is in progress
+   */
+  function setTestStates(states, running) {
+    testStates = states;
+    testsRunning = running;
+    updateGlyphs();
+  }
+
   function markSaved(path) {
     const file = files.get(path);
     if (file) {
@@ -580,6 +712,8 @@ const RFEditor = (() => {
     onSave: (listener) => saveListeners.add(listener),
     onOpenRequest: (listener) => openListeners.add(listener),
     onProblems: (listener) => problemListeners.add(listener),
+    onRunTests: (listener) => runListeners.add(listener),
+    setTestStates,
     startRecording,
     updateRecording,
     stopRecording,

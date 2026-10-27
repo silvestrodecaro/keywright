@@ -90,3 +90,26 @@ test('cellAt finds keyword positions for completion', () => {
 test('normalizeKeyword', () => {
   assert.strictEqual(normalizeKeyword('Get_Text'), normalizeKeyword('get text'));
 });
+
+test('testCases finds test and task definitions', () => {
+  const { testCases } = require('../src/renderer/editor/robotSyntax');
+  const result = testCases([
+    '*** Settings ***',
+    'Library    Browser',
+    '*** Test Cases ***',
+    'First test',
+    '    Log    hi',
+    '# a comment',
+    '',
+    'Second    [Tags]    a',
+    '*** Keywords ***',
+    'Not a test',
+    '    No Operation',
+    '*** Tasks ***',
+    'Task one',
+  ]);
+  assert.deepStrictEqual(result, {
+    headers: [3, 12],
+    tests: [{ name: 'First test', line: 4, end: 7 }, { name: 'Second', line: 8, end: 8 }, { name: 'Task one', line: 13, end: 13 }],
+  });
+});

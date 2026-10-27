@@ -651,6 +651,15 @@
 
   // Requests from the Testing panel (tests.js).
   window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line));
+  window.addEventListener('rfide:show-testing', () => showSidebar('testing'));
+
+  // Run glyphs and context menu of the editor: tests run from the saved file.
+  editor.onRunTests(async ({ path, names }) => {
+    const saved = editor.isDirty(path);
+    if (saved && !await saveFile(path))
+      return;
+    window.dispatchEvent(new CustomEvent('rfide:run-from-editor', { detail: { path, names, saved } }));
+  });
   window.addEventListener('rfide:show-results', () => {
     if (activeTab !== RESULTS_TAB)
       activate(RESULTS_TAB);

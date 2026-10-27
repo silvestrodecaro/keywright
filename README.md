@@ -69,6 +69,11 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
   `@{list}`/`&{dict}` arguments, embedded-argument keywords and ambiguous names are not checked
 - Ctrl+S to save, ● on tabs with unsaved changes, confirmation before closing them
 
+**Run from the editor**: in `.robot` files the gutter shows ▶ (or the last result: ✓ ✕ ↷) next to each test and
+next to the `*** Test Cases ***` header. Clicking it runs that test, or every test of the file; the right-click menu
+has **Run Test at Cursor** and **Run Tests in File**. Unsaved changes are saved first, and new tests are picked up
+before running. Only files in the tests folder (`testsDir` in `rfide.json`) can be run.
+
 **● Record at cursor** (in the header of a `.robot`/`.resource` tab) records browser interactions straight into the
 file: the steps appear live at the cursor, indented like the surrounding block, starting with `New Page    <url>`
 (no settings, `New Browser` or `New Context`: the test is expected to have them). It uses the Test Generator's

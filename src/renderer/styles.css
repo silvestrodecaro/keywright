@@ -656,3 +656,15 @@ input:disabled, select:disabled { opacity: .55; }
 .record-bar input { flex: 1; min-width: 120px; height: 26px; font-family: var(--mono); font-size: 12px; }
 .recording-region { background: rgba(229, 72, 77, .10); border-left: 2px solid var(--record); }
 .pane-file > .error { margin: 0; }
+
+/* Run glyphs in the editor gutter: last status, ▶ on hover */
+.test-glyph { cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.test-glyph::before { content: '▶'; font-size: 10px; }
+.test-glyph.status-none::before { color: var(--ok); }
+.test-glyph.status-pass::before { content: '✓'; font-size: 12px; }
+.test-glyph.status-fail::before { content: '✕'; font-size: 12px; }
+.test-glyph.status-skip::before { content: '↷'; font-size: 12px; }
+.test-glyph.status-queued::before, .test-glyph.status-not-run::before { content: '○'; font-size: 12px; }
+.test-glyph.status-stopped::before { content: '■'; font-size: 10px; }
+.test-glyph.status-running::before { content: '◌'; font-size: 12px; animation: spin 1s linear infinite; }
+.test-glyph:not(.status-running):not(.status-queued):hover::before { content: '▶'; font-size: 10px; color: var(--ok); }

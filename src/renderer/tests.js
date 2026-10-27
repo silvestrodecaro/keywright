@@ -71,6 +71,7 @@
       renderSummary();
       renderDetail();
       renderControls();
+      pushEditorStates();
     });
   }
 
@@ -87,8 +88,12 @@
     return [...suite.tests.filter(testMatches), ...suite.suites.flatMap((child) => visibleTests(child))];
   }
 
-  function suiteStatus(suite) {
-    const statuses = visibleTests(suite).map((test) => results.get(test.id)?.status);
+  function allTests(suite) {
+    return [...suite.tests, ...suite.suites.flatMap(allTests)];
+  }
+
+  function suiteStatus(suite, tests = visibleTests(suite)) {
+    const statuses = tests.map((test) => results.get(test.id)?.status);
     if (statuses.some((s) => s === 'running' || s === 'queued'))
       return 'running';
     if (statuses.some((s) => s === 'FAIL'))
@@ -423,6 +428,22 @@
     target.scrollTop = scroll;
   }
 
+  /** Last statuses by .robot file, for the run glyphs in the editor gutter. */
+  function pushEditorStates() {
+    const states = new Map();
+    const add = (suite) => {
+      if (suite.source && /\.robot$/i.test(suite.source))
+        states.set(suite.source, {
+          suite: suiteStatus(suite, allTests(suite)),
+          tests: new Map(suite.tests.map((test) => [test.name, results.get(test.id)?.status])),
+        });
+      suite.suites.forEach(add);
+    };
+    if (rootSuite)
+      add(rootSuite);
+    window.RFEditor.setTestStates(states, running);
+  }
+
   // -------------------------------------------------------------------------
   // Actions
 
@@ -502,6 +523,53 @@
       scheduleRender();
     }
   }
+
+  function suiteForFile(path, suite = rootSuite) {
+    if (!suite)
+      return null;
+    if (suite.source === path)
+      return suite;
+    for (const child of suite.suites) {
+      const found = suiteForFile(path, child);
+      if (found)
+        return found;
+    }
+    return null;
+  }
+
+  /** Ids of the given tests of a file (or of its suite), or null if they are not discovered. */
+  function idsInFile(path, names) {
+    const suite = suiteForFile(path);
+    if (!suite)
+      return null;
+    if (!names)
+      return [suite.id];
+    const ids = names.map((name) => suite.tests.find((test) => test.name === name)?.id);
+    return ids.every(Boolean) ? ids : null;
+  }
+
+  /**
+   * Run requested from the editor gutter or context menu.
+   * @param {{ path: string, names: string[] | null, saved: boolean }} request saved: the file was just saved
+   */
+  async function runFromEditor({ path, names, saved }) {
+    if (running)
+      return;
+    let ids = saved ? null : idsInFile(path, names);
+    if (!ids) {
+      await discover({ quiet: true }); // new or renamed tests
+      ids = idsInFile(path, names);
+    }
+    if (!ids) {
+      const what = names ? `Test '${names.join("', '")}'` : `File ${path}`;
+      showError(`${what} was not found by Robot Framework. Only files in the tests folder (testsDir in rfide.json) can be run.`);
+      window.dispatchEvent(new CustomEvent('rfide:show-testing'));
+      return;
+    }
+    run(ids);
+  }
+
+  window.addEventListener('rfide:run-from-editor', (event) => runFromEditor(event.detail));
 
   // -------------------------------------------------------------------------
   // Runner events

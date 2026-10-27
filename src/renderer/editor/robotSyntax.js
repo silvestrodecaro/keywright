@@ -262,4 +262,34 @@ function normalizeKeyword(name) {
   return String(name).toLowerCase().replace(/[\s_]/g, '');
 }
 
-module.exports = { analyzeLine, tokenizeLine, cellAt, splitCells, variableRanges, normalizeKeyword, sectionOf };
+/**
+ * Test (or task) case definitions and the headers of their sections.
+ * @param {string[]} lines file content
+ * @returns {{ headers: number[], tests: { name: string, line: number, end: number }[] }}
+ *   1-based line numbers; `end` is the last line of the test's body
+ */
+function testCases(lines) {
+  const headers = [];
+  const tests = [];
+  let section = 'none';
+  let last = null;
+  lines.forEach((text, index) => {
+    const result = analyzeLine(text, section);
+    section = result.section;
+    const header = result.cells[0]?.type === 'section';
+    const name = section === 'tests' && result.cells.find((cell) => cell.type === 'name');
+    if (last && (header || name)) {
+      last.end = index;
+      last = null;
+    }
+    if (section === 'tests' && header)
+      headers.push(index + 1);
+    if (name) {
+      last = { name: name.text, line: index + 1, end: lines.length };
+      tests.push(last);
+    }
+  });
+  return { headers, tests };
+}
+
+module.exports = { analyzeLine, tokenizeLine, cellAt, splitCells, variableRanges, normalizeKeyword, sectionOf, testCases };
