@@ -3,6 +3,7 @@
 import * as monaco from 'monaco-editor';
 import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
+import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline } from './navigation.js';
 
 self.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -241,15 +242,165 @@ monaco.languages.registerDefinitionProvider(LANGUAGE, {
     if (!cell)
       return null;
     const targets = findKeywords(cell.text).filter((kw) => kw.user && kw.source);
-    // Monaco needs a model for the target (definition preview) before opening it.
-    for (const source of new Set(targets.map((kw) => kw.source))) {
-      if (!monaco.editor.getModel(uriFor(source))) {
-        const file = await window.rfide.readProjectFile(source).catch(() => null);
-        if (file && file.content !== null && !monaco.editor.getModel(uriFor(source)))
-          monaco.editor.createModel(file.content, LANGUAGE, uriFor(source));
-      }
-    }
+    for (const source of new Set(targets.map((kw) => kw.source)))
+      await ensureModel(source);
     return targets.map((kw) => ({ uri: uriFor(kw.source), range: new monaco.Range(kw.lineno, 1, kw.lineno, 1) }));
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Navigation: outline (Ctrl+Shift+O), imported files and variable definitions
+
+function languageForPath(path) {
+  const lower = path.toLowerCase();
+  const match = monaco.languages.getLanguages().find((lang) => (lang.extensions || []).some((ext) => lower.endsWith(ext.toLowerCase())));
+  return match ? match.id : 'plaintext';
+}
+
+function modelPath(model) {
+  return model.uri.path.replace(/^\//, '');
+}
+
+/** Lines of a project file: its model when open (it may have unsaved edits), else the file on disk; null if missing. */
+async function readLines(path) {
+  const model = monaco.editor.getModel(uriFor(path));
+  if (model)
+    return model.getLinesContent();
+  const file = await window.rfide.readProjectFile(path).catch(() => null);
+  return file && file.content !== null ? file.content.split(/\r?\n/) : null;
+}
+
+/** Monaco needs a model for a definition's file (preview) before opening it. */
+async function ensureModel(path) {
+  if (monaco.editor.getModel(uriFor(path)))
+    return;
+  const file = await window.rfide.readProjectFile(path).catch(() => null);
+  if (file && file.content !== null && !monaco.editor.getModel(uriFor(path)))
+    monaco.editor.createModel(file.content, languageForPath(path), uriFor(path));
+}
+
+async function firstExisting(paths) {
+  for (const path of paths) {
+    const lines = await readLines(path);
+    if (lines)
+      return { path, lines };
+  }
+  return null;
+}
+
+/**
+ * Where a variable used at `line` is defined: in the file (locals, Variables section,
+ * Set ... Variable), then in its resource and variable files, recursively.
+ * @returns {Promise<{ path: string, definition: object } | null>}
+ */
+async function resolveVariable(path, lines, name, line) {
+  const parsed = parseFile(lines);
+  const local = findVariable(parsed, name, line);
+  if (local)
+    return { path, definition: local };
+  const keys = lookupKeys(name);
+  const seen = new Set([path]);
+  const queue = parsed.imports.filter((i) => i.type !== 'library').map((i) => ({ from: path, item: i }));
+  while (queue.length) {
+    const { from, item } = queue.shift();
+    const target = await firstExisting(importCandidates(from, item.path));
+    if (!target || seen.has(target.path))
+      continue;
+    seen.add(target.path);
+    if (item.type === 'variables') {
+      const definition = variableFileDefinitions(target.path, target.lines).find((d) => keys.includes(d.key));
+      if (definition)
+        return { path: target.path, definition };
+      continue;
+    }
+    const imported = parseFile(target.lines);
+    const definition = imported.variables.find((d) => keys.includes(d.key))
+      || imported.locals.find((d) => d.fileWide && keys.includes(d.key));
+    if (definition)
+      return { path: target.path, definition };
+    queue.push(...imported.imports.filter((i) => i.type !== 'library').map((i) => ({ from: target.path, item: i })));
+  }
+  return null;
+}
+
+monaco.languages.registerDocumentSymbolProvider(LANGUAGE, {
+  displayName: 'Robot Framework',
+  provideDocumentSymbols(model) {
+    const { SymbolKind } = monaco.languages;
+    const kinds = { section: SymbolKind.Namespace, test: SymbolKind.Method, keyword: SymbolKind.Function, variable: SymbolKind.Variable,
+      resource: SymbolKind.File, variables: SymbolKind.File, library: SymbolKind.Module };
+    const symbol = (item) => {
+      const end = Math.max(item.end, item.line);
+      return {
+        name: item.name,
+        detail: '',
+        kind: kinds[item.kind],
+        tags: [],
+        range: new monaco.Range(item.line, 1, end, model.getLineMaxColumn(end)),
+        selectionRange: new monaco.Range(item.line, 1, item.line, model.getLineMaxColumn(item.line)),
+        children: (item.children || []).map(symbol),
+      };
+    };
+    return outline(model.getLinesContent()).map(symbol);
+  },
+});
+
+// Ctrl+click / F12 on an imported file or on a variable.
+monaco.languages.registerDefinitionProvider(LANGUAGE, {
+  async provideDefinition(model, position) {
+    const path = modelPath(model);
+    const lines = model.getLinesContent();
+    const line = position.lineNumber;
+    const offset = position.column - 1;
+    const item = parseFile(lines).imports.find((i) => i.line === line && i.start <= offset && offset <= i.end);
+    if (item) {
+      const target = await firstExisting(importCandidates(path, item.path));
+      if (!target)
+        return null;
+      await ensureModel(target.path);
+      return [{
+        uri: uriFor(target.path),
+        range: new monaco.Range(1, 1, 1, 1),
+        originSelectionRange: new monaco.Range(line, item.start + 1, line, item.end + 1),
+      }];
+    }
+    const variable = variableAt(lines[line - 1], offset);
+    if (!variable || variable.name.startsWith('%') || isBuiltinVariable(variable.name))
+      return null;
+    const found = await resolveVariable(path, lines, variable.name, line);
+    if (!found)
+      return null;
+    await ensureModel(found.path);
+    const d = found.definition;
+    return [{
+      uri: uriFor(found.path),
+      range: new monaco.Range(d.line, d.start + 1, d.line, d.end + 1),
+      originSelectionRange: new monaco.Range(line, variable.start + 1, line, variable.end + 1),
+    }];
+  },
+});
+
+monaco.languages.registerHoverProvider(LANGUAGE, {
+  async provideHover(model, position) {
+    const line = position.lineNumber;
+    const variable = variableAt(model.getLineContent(line), position.column - 1);
+    if (!variable)
+      return null;
+    const range = new monaco.Range(line, variable.start + 1, line, variable.end + 1);
+    const name = '`' + variable.name + '`';
+    if (variable.name.startsWith('%'))
+      return { range, contents: [{ value: `${name} environment variable` }] };
+    if (isBuiltinVariable(variable.name))
+      return { range, contents: [{ value: `${name} built-in variable` }] };
+    const path = modelPath(model);
+    const found = await resolveVariable(path, model.getLinesContent(), variable.name, line);
+    if (!found)
+      return { range, contents: [{ value: `${name} is not defined in this file or in its resource and variable files (it may come from the command line or a library)` }] };
+    const d = found.definition;
+    const where = found.path === path ? `line ${d.line}` : `${found.path}:${d.line}`;
+    const how = d.how === 'assignment' && d.from ? 'assigned from `' + d.from + '`' : d.how;
+    const value = d.values && d.values.length ? '\n\n```\n' + [d.name, ...d.values].join('    ') + '\n```' : '';
+    return { range, contents: [{ value: `**${d.name}**: ${how} (${where})${value}` }] };
   },
 });
 
@@ -364,11 +515,6 @@ const RFEditor = (() => {
       listener(path, isDirty(path));
   }
 
-  function languageFor(path) {
-    const lower = path.toLowerCase();
-    const match = monaco.languages.getLanguages().find((lang) => (lang.extensions || []).some((ext) => lower.endsWith(ext.toLowerCase())));
-    return match ? match.id : 'plaintext';
-  }
 
   function isDirty(path) {
     const file = files.get(path);
@@ -426,7 +572,7 @@ const RFEditor = (() => {
       if (model)
         model.setValue(content);
       else
-        model = monaco.editor.createModel(content, languageFor(path), uriFor(path));
+        model = monaco.editor.createModel(content, languageForPath(path), uriFor(path));
       file = { model, savedVersion: model.getAlternativeVersionId(), viewState: null };
       files.set(path, file);
       model.onDidChangeContent(() => {

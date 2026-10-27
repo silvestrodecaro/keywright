@@ -61,6 +61,13 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
 - keyword completion (Ctrl+Space) from the libraries imported by the project (via `libdoc` with the project's
   Python) and the project's own keywords, with placeholders for required arguments; snippets for FOR/IF/TRY/...
 - documentation on hover, Ctrl+click / F12 to jump to a user keyword's definition
+- Ctrl+click / F12 on a variable jumps to where it is defined: `[Arguments]`, assignments, `FOR`, `VAR`,
+  `EXCEPT ... AS` and embedded arguments of the enclosing test or keyword, the `*** Variables ***` section,
+  `Set Test/Suite/Global Variable`, then the imported resource files and Python/YAML variable files (recursively);
+  hovering shows where it comes from and its value
+- Ctrl+click / F12 on the path of a `Resource`, `Variables` or `Library` import opens the file (relative to the
+  file or to the project root, `${CURDIR}` and `${/}` supported)
+- Ctrl+Shift+O: outline of the file (sections, tests, keywords, variables, imports)
 - problems while typing: syntax errors from Robot's own parser (missing `END`, unknown settings, invalid
   sections, ...) and warnings for unknown keywords; counts in the tab header, F8 jumps to the next one.
   Unknown keywords are not reported when a library of the project cannot be imported.
@@ -139,6 +146,7 @@ src/main/traceServer.js      serves Playwright's trace viewer and the project's 
 src/renderer/editor/         Monaco integration (bundled with esbuild by scripts/build.mjs into src/renderer/dist)
   robotSyntax.js             Robot line analysis shared by highlighting and completion
   argumentCheck.js           keyword calls and argument validation (mirrors Robot's argument resolver)
+  navigation.js              outline, variable definitions and imported files
 src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project
 src/main/recentProjects.js   recent projects list
