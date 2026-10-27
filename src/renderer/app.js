@@ -435,6 +435,7 @@
 
   let recorderBusy = false; // a recording (here or in the Test Generator) is running
   let recordingHere = false;
+  let picking = false; // a locator is being picked (here or in the Test Generator)
 
   function viewportSetting() {
     const match = /^(\d+)x(\d+)$/.exec($('#viewport').value);
@@ -445,7 +446,9 @@
     const file = tabs.find((t) => t.path === activeTab);
     const recordable = !!file && file.content !== null && /\.(robot|resource)$/i.test(file.path);
     $('#record-at-cursor').hidden = !recordable;
-    $('#record-at-cursor').disabled = recorderBusy;
+    $('#record-at-cursor').disabled = recorderBusy || picking;
+    $('#pick-at-cursor').hidden = !recordable;
+    $('#pick-at-cursor').disabled = recordingHere; // the editor is read-only while recording into it
     const bar = $('#record-bar');
     if (recordingHere) {
       bar.hidden = false;
@@ -506,6 +509,44 @@
   });
 
   $('#record-stop').addEventListener('click', () => api.stopRecording());
+
+  // Pick locator: the selector of the clicked element is inserted at the cursor.
+  // Uses the Test Generator's browser while it records, otherwise its settings.
+
+  $('#pick-at-cursor').addEventListener('click', async () => {
+    if (picking) {
+      api.cancelPickLocator();
+      return;
+    }
+    const path = activeTab;
+    showError($('#record-error'), '');
+    setEditorStatus('Click an element in the browser to insert its locator');
+    const result = await api.pickLocator({
+      url: $('#record-url').value.trim() || $('#url').value.trim(),
+      browser: $('#browser').value,
+      viewport: viewportSetting(),
+    });
+    if (!result.ok) {
+      const hint = result.install ? ' Install it from the Test Generator tab.' : '';
+      showError($('#record-error'), result.error + hint);
+      setEditorStatus('Could not pick a locator', true);
+    } else if (result.cancelled) {
+      setEditorStatus('Pick cancelled');
+    } else if (editor.currentPath() === path && editor.insertCell(result.cell)) {
+      setEditorStatus(`Inserted ${result.selector}`);
+    } else {
+      await api.copyToClipboard(result.cell);
+      setEditorStatus(`Copied ${result.selector} to the clipboard`);
+    }
+  });
+
+  api.onPickState((state) => {
+    picking = state.picking;
+    const button = $('#pick-at-cursor');
+    button.classList.toggle('is-picking', picking);
+    button.textContent = picking ? '✕ Cancel pick' : '◎ Pick locator';
+    renderRecordBar();
+  });
 
   api.onCode(({ lines }) => {
     if (recordingHere)

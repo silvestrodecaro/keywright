@@ -671,6 +671,25 @@ const RFEditor = (() => {
     updateGlyphs();
   }
 
+  /**
+   * Inserts a cell at the cursor, with a separator when it would join the text before it.
+   * @returns {boolean} false when no file is shown or it is read-only
+   */
+  function insertCell(text) {
+    const model = editor?.getModel();
+    const position = editor?.getPosition();
+    if (!model || !position || recording)
+      return false;
+    const before = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+    const separator = before === '' || /( {2,}|\t)$/.test(before) ? '' : before.endsWith(' ') ? '   ' : '    ';
+    const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+    editor.pushUndoStop();
+    editor.executeEdits('rfide-pick', [{ range, text: separator + text, forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+    editor.focus();
+    return true;
+  }
+
   function markSaved(path) {
     const file = files.get(path);
     if (file) {
@@ -719,6 +738,8 @@ const RFEditor = (() => {
     stopRecording,
     recordingPath: () => recording?.path ?? null,
     cursorLine: () => editor?.getPosition()?.lineNumber ?? null,
+    currentPath: () => current,
+    insertCell,
   };
 })();
 

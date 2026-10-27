@@ -16,6 +16,7 @@ const { ProjectWatcher } = require('./projectWatcher');
 const { TraceServer } = require('./traceServer');
 const { generateRobot, generateSteps, DEFAULT_OPTIONS } = require('../generator/robotGenerator');
 const { toBrowserSelector } = require('../generator/selectors');
+const { escapeArg } = require('../generator/escape');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -109,6 +110,7 @@ async function openProject(root) {
   stopLanguageWorker();
   await session.stop();
   session.clear();
+  await pickerSession.stop();
   currentProject = project;
   watchProject(project);
   recentProjects.add(project.root);
@@ -163,6 +165,7 @@ ipcMain.handle('projects:close', async () => {
   stopWatchingProject();
   await session.stop();
   session.clear();
+  await pickerSession.stop();
   currentProject = null;
   setWindowTitle();
 });
@@ -352,6 +355,47 @@ ipcMain.handle('recorder:stop', () => session.stop());
 ipcMain.handle('recorder:clear', () => session.clear());
 ipcMain.handle('recorder:remove-step', (_event, index) => session.removeAction(index));
 
+// Pick locator: in the Test Generator's browser while it records, otherwise in
+// a browser opened just for picking (kept open for the next picks).
+const pickerSession = new RecorderSession();
+if (process.env.RFIDE_TEST)
+  global.__rfidePicker = pickerSession;
+let pickingSession = null;
+
+function publishPickState() {
+  send('locator:state', { picking: !!pickingSession });
+}
+
+ipcMain.handle('locator:pick', async (_event, options = {}) => {
+  if (pickingSession)
+    return { ok: false, error: 'Already picking a locator.' };
+  const target = session.recording ? session : pickerSession;
+  pickingSession = target;
+  publishPickState();
+  try {
+    if (!target.recording) {
+      const browser = BROWSERS[options.browser] || BROWSERS.chromium;
+      await pickerSession.start({ ...browser, url: options.url, viewport: options.viewport, record: false });
+    }
+    const selector = await target.pickLocator();
+    if (!selector)
+      return { ok: true, cancelled: true };
+    const browserSelector = toBrowserSelector(selector);
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    return { ok: true, selector: browserSelector, cell: escapeArg(browserSelector, { escapeNamedArg: false }) };
+  } catch (error) {
+    return { ok: false, ...explainLaunchError(error, options.browser) };
+  } finally {
+    pickingSession = null;
+    publishPickState();
+  }
+});
+
+ipcMain.handle('locator:cancel', () => pickingSession && pickingSession.cancelPick());
+
 ipcMain.handle('generator:set-options', (_event, options) => {
   generatorOptions = { ...generatorOptions, ...options };
   publishCode();
@@ -457,5 +501,6 @@ app.on('window-all-closed', async () => {
   stopLanguageWorker();
   stopWatchingProject();
   await session.stop();
+  await pickerSession.stop();
   app.quit();
 });

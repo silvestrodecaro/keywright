@@ -57,4 +57,7 @@ contextBridge.exposeInMainWorld('rfide', {
   saveFile: (code) => ipcRenderer.invoke('file:save', code),
   onCode: (callback) => subscribe('recorder:code', callback),
   onState: (callback) => subscribe('recorder:state', callback),
+  pickLocator: (options) => ipcRenderer.invoke('locator:pick', options),
+  cancelPickLocator: () => ipcRenderer.invoke('locator:cancel'),
+  onPickState: (callback) => subscribe('locator:state', callback),
 });

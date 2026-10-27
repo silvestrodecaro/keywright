@@ -74,6 +74,9 @@ next to the `*** Test Cases ***` header. Clicking it runs that test, or every te
 has **Run Test at Cursor** and **Run Tests in File**. Unsaved changes are saved first, and new tests are picked up
 before running. Only files in the tests folder (`testsDir` in `rfide.json`) can be run.
 
+**◎ Pick locator** (in the header of the tab) inserts the selector of the element you click in the browser at
+the cursor; see [Test Generator](#test-generator).
+
 **● Record at cursor** (in the header of a `.robot`/`.resource` tab) records browser interactions straight into the
 file: the steps appear live at the cursor, indented like the surrounding block, starting with `New Page    <url>`
 (no settings, `New Browser` or `New Context`: the test is expected to have them). It uses the Test Generator's
@@ -87,6 +90,12 @@ Enter a URL, choose browser and viewport, press **Record** and interact with the
 injected in the recorded page to pick locators and add assertions (visible, text, value, aria snapshot).
 Steps can be removed from the list on the left; copy or save the generated `.robot` file (by default in the
 project's `tests` folder).
+
+**◎ Pick locator** lets you click an element and shows its Browser library selector (e.g.
+`role=button[name="Sign in"i]`), ready to copy. While recording it picks in the recorded browser and recording
+goes on afterwards; otherwise it opens a browser at the URL above, which stays open for the next picks (click
+the button again to cancel a pick). The same button in the header of a `.robot`/`.resource` tab inserts the
+selector at the cursor, as a new cell.
 
 Firefox/WebKit: `npx playwright-core install firefox webkit`. Chrome and Edge use the installed browsers.
 

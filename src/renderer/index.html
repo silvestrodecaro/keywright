@@ -163,9 +163,15 @@
               <option value="390x844">390 × 844 (phone)</option>
             </select>
             <button id="record" type="submit" class="btn btn-record"><span class="dot"></span><span class="label">Record</span></button>
+            <button id="pick" type="button" class="btn btn-pick" title="Click an element in the browser to get its Browser library selector">◎ Pick locator</button>
           </form>
 
           <div id="error" class="error" hidden></div>
+          <div id="picked" class="picked" hidden>
+            <span class="muted">Locator</span>
+            <code id="picked-selector"></code>
+            <button id="picked-copy" class="btn btn-sm" type="button">Copy</button>
+          </div>
 
           <div class="workspace">
             <section class="panel steps-panel">
@@ -210,6 +216,7 @@
           <div class="file-header">
             <span id="file-path" class="muted"></span>
             <span class="file-header-right">
+              <button id="pick-at-cursor" class="btn btn-sm btn-pick" type="button" title="Click an element in the browser and insert its selector at the cursor">◎ Pick locator</button>
               <button id="record-at-cursor" class="btn btn-sm" type="button" title="Record browser interactions and insert the steps at the cursor">● Record at cursor</button>
               <span id="file-problems" class="file-problems" title="F8: next problem"></span>
               <span class="muted">Ctrl+S save · Ctrl+Space keywords · F8 next problem</span>

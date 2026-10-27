@@ -149,8 +149,9 @@
   });
 
   $('#copy').addEventListener('click', async (event) => {
+    const button = event.currentTarget; // null after the await
     await window.rfide.copyToClipboard(currentCode);
-    flash(event.currentTarget, 'Copied');
+    flash(button, 'Copied');
   });
 
   $('#save').addEventListener('click', async (event) => {
@@ -163,6 +164,41 @@
   });
 
   $('#clear').addEventListener('click', () => window.rfide.clearRecording());
+
+  // Pick locator: in the recorded browser, or in a browser opened for picking.
+  let picking = false;
+
+  $('#pick').addEventListener('click', async () => {
+    if (picking) {
+      window.rfide.cancelPickLocator();
+      return;
+    }
+    showError('');
+    const result = await window.rfide.pickLocator({
+      url: $('#url').value.trim(),
+      browser: $('#browser').value,
+      viewport: parseViewport($('#viewport').value),
+    });
+    if (!result.ok)
+      showError(result.error, result.install);
+    else if (!result.cancelled) {
+      $('#picked-selector').textContent = result.cell;
+      $('#picked').hidden = false;
+    }
+  });
+
+  $('#picked-copy').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    await window.rfide.copyToClipboard($('#picked-selector').textContent);
+    flash(button, 'Copied');
+  });
+
+  window.rfide.onPickState((state) => {
+    picking = state.picking;
+    const button = $('#pick');
+    button.classList.toggle('is-picking', picking);
+    button.textContent = picking ? '✕ Cancel pick' : '◎ Pick locator';
+  });
 
   window.rfide.onCode(({ code, steps }) => {
     renderCode(code);
