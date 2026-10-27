@@ -1,0 +1,58 @@
+{
+  "name": "robotframework-ide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "IDE for Robot Framework (Browser library) with a Playwright-style test generator",
+  "main": "src/main/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:watch": "node scripts/build.mjs --watch",
+    "prestart": "npm run build",
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "install-browsers": "playwright-core install chromium",
+    "pack": "npm run build && electron-builder --win --dir",
+    "dist": "npm run build && electron-builder --win"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "monaco-editor": "^0.57.0"
+  },
+  "build": {
+    "appId": "io.github.rfide",
+    "productName": "Robot Framework IDE",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/**/*",
+      "!src/renderer/editor/**"
+    ],
+    "asarUnpack": [
+      "src/python/**",
+      "node_modules/playwright-core/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Robot Framework IDE",
+      "artifactName": "RobotFrameworkIDE-Setup-${version}.${ext}"
+    }
+  }
+}

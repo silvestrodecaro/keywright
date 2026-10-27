@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Fixture App</title></head>
+<body>
+  <h1>Login</h1>
+  <label for="user">User Name</label>
+  <input id="user" placeholder="Your name">
+  <input type="checkbox" id="remember"> <label for="remember">Remember me</label>
+  <select id="color"><option value="r">Red</option><option value="g">Green</option></select>
+  <button data-testid="sign-in" onclick="document.querySelector('#out').textContent = 'Welcome ' + document.querySelector('#user').value">Sign in</button>
+  <button onclick="document.querySelector('#out').textContent = confirm('Sure?') ? 'yes' : 'no'">Ask</button>
+  <span>Hello  World</span>
+  <a href="popup.html" target="_blank">Open popup</a>
+  <iframe srcdoc="<button onclick=&quot;this.textContent='Done'&quot;>Inner</button>"></iframe>
+  <div id="out"></div>
+</body>
+</html>
