@@ -55,6 +55,7 @@ class TestRunner extends EventEmitter {
   /**
    * @param {{ root: string, python: string|null, config: object }} project
    * @param {{ select?: string[], variables?: Record<string,string>, trace?: boolean,
+   *           include?: string[], exclude?: string[], dryrun?: boolean, extraArgs?: string,
    *           debug?: { breakpoints: Record<string, number[]>, pauseOnFailure?: boolean } }} [options]
    *   select: full names of tests or suites to run (all when empty);
    *   debug: stop at breakpoints (project-relative path -> lines) and accept debugCommand()
@@ -80,6 +81,13 @@ class TestRunner extends EventEmitter {
       args.push('--prerunmodifier', 'rfide_runner.SelectTests');
     for (const [name, value] of Object.entries(options.variables || {}))
       args.push('--variable', `${name}:${value}`);
+    for (const pattern of options.include || [])
+      args.push('--include', pattern);
+    for (const pattern of options.exclude || [])
+      args.push('--exclude', pattern);
+    if (options.dryrun)
+      args.push('--dryrun');
+    args.push(...splitArgs(options.extraArgs));
     args.push(path.join(project.root, project.config.testsDir));
 
     this._stopped = false;
@@ -210,4 +218,12 @@ function screenshotsFromHtml(html, outputDir) {
   return files;
 }
 
-module.exports = { discoverTests, TestRunner, screenshotsFromHtml };
+/** Splits extra command line arguments like a shell: spaces separate, quotes group. */
+function splitArgs(text) {
+  const args = [];
+  for (const match of String(text || '').matchAll(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g))
+    args.push(match[0].replace(/"([^"]*)"|'([^']*)'/g, '$1$2'));
+  return args;
+}
+
+module.exports = { discoverTests, TestRunner, screenshotsFromHtml, splitArgs };

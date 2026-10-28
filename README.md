@@ -159,6 +159,12 @@ teardown marks the suite's tests as failed, as in Robot's report.
 
 *Show browser* runs with `--variable HEADLESS:False`, which the project template uses in `New Browser`.
 
+**Run options** (under the checkboxes, kept per project): *Include tags* and *Exclude tags* take Robot tag patterns
+(`smoke`, `fastANDui`, `reg*`, `NOTslow`, comma-separated); tests they leave out are struck through in the tree and
+the summary counts the matching ones. They apply to Run all, suites and watch runs of everything, not to running a
+single test. *Browser* passes `--variable BROWSER:...` (used by the template's `New Browser`), *Dry run* checks
+keywords and arguments without running them (`--dryrun`), *Arguments* adds any other robot option.
+
 **Trace viewer**: with *Record trace* (on by default) the Browser library records a Playwright trace for every
 browser context created with `New Context` (`ROBOT_FRAMEWORK_BROWSER_TRACING`). The **Trace** button of a test opens
 Playwright's trace viewer inside the IDE: Robot keywords as groups, DOM snapshots before/after each action, timeline,

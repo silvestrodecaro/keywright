@@ -184,6 +184,10 @@
       watchButton(test.id, test.name));
     if (isWatched(test.id, testIndex.get(test.id)?.suites))
       row.classList.add('is-watched');
+    if (!matchesTagFilter(test)) {
+      row.classList.add('is-tag-excluded');
+      row.title = `${test.id} (not selected by the tag filter)`;
+    }
     row.style.paddingLeft = `${6 + depth * 12}px`;
     row.addEventListener('click', () => select(test.id));
     row.addEventListener('dblclick', () => goToSource(test.id));
@@ -214,6 +218,11 @@
       el('span', { className: 'status-skip', textContent: `↷ ${counts.SKIP}` }),
       el('span', { className: 'muted', textContent: `${total} test${total === 1 ? '' : 's'}` }),
     ];
+    const filter = tagFilter();
+    if (filter.include.length || filter.exclude.length) {
+      const matching = visibleTests().filter(matchesTagFilter).length;
+      summary.push(el('span', { className: 'status-tags', textContent: `⌗ ${matching} match tags`, title: 'Tests selected by the tag filter (Run options)' }));
+    }
     if (running)
       summary.push(el('span', { className: 'status-running', textContent: 'running…' }));
     const watching = visibleTests().filter((t) => isWatched(t.id, testIndex.get(t.id).suites)).length;
@@ -529,7 +538,14 @@
     if (running)
       return;
     showError('');
-    for (const id of testsInScope(select)) {
+    // Tag filters apply to Run all and suites; running a single test is an explicit choice.
+    const filter = select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
+    const scope = testsInScope(select).filter((id) => window.RFTags.selected(testIndex.get(id).test.tags, filter));
+    if (!scope.length) {
+      showError('No test matches the tag filter of the Run options.');
+      return;
+    }
+    for (const id of scope) {
       results.set(id, { status: 'queued' });
       runs.delete(id);
       traces.delete(id);
@@ -546,7 +562,9 @@
     debugging = $('#tests-debug').checked;
     paused = null;
     const debug = debugging ? { breakpoints: window.RFEditor.breakpoints(), pauseOnFailure: $('#tests-debug-failures').checked } : undefined;
-    const result = await api.runTests({ select, headed: $('#tests-headed').checked, trace: $('#tests-trace').checked, debug });
+    const options = runOptions();
+    const result = await api.runTests({ select, headed: $('#tests-headed').checked, trace: $('#tests-trace').checked, debug,
+      include: filter.include, exclude: filter.exclude, dryrun: options.dryrun, browser: options.browser, extraArgs: options.extraArgs });
     if (!result.ok) {
       running = false;
       for (const [id, value] of results)
@@ -905,6 +923,65 @@
       saved = {};
     }
     window.RFEditor.setBreakpoints(saved);
+  });
+
+  // -------------------------------------------------------------------------
+  // Run options: tag filters, browser, dry run, extra arguments (kept per project)
+
+  const RUN_OPTION_FIELDS = { include: '#run-include', exclude: '#run-exclude', browser: '#run-browser', extraArgs: '#run-args' };
+  let runOptionsKey = null;
+
+  function runOptions() {
+    const values = Object.fromEntries(Object.entries(RUN_OPTION_FIELDS).map(([name, selector]) => [name, $(selector).value.trim()]));
+    return { ...values, dryrun: $('#run-dryrun').checked };
+  }
+
+  function tagFilter() {
+    return { include: window.RFTags.parseList($('#run-include').value), exclude: window.RFTags.parseList($('#run-exclude').value) };
+  }
+
+  function matchesTagFilter(test) {
+    return window.RFTags.selected(test.tags, tagFilter());
+  }
+
+  function renderRunOptions() {
+    const options = runOptions();
+    const active = [
+      options.include || options.exclude ? 'tags' : null,
+      options.browser || null,
+      options.dryrun ? 'dry run' : null,
+      options.extraArgs ? 'arguments' : null,
+    ].filter(Boolean);
+    $('#run-options-active').textContent = active.length ? `(${active.join(', ')})` : '';
+  }
+
+  function saveRunOptions() {
+    renderRunOptions();
+    scheduleRender();
+    try {
+      if (runOptionsKey)
+        localStorage.setItem(runOptionsKey, JSON.stringify(runOptions()));
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  for (const selector of [...Object.values(RUN_OPTION_FIELDS), '#run-dryrun'])
+    $(selector).addEventListener(selector === '#run-browser' || selector === '#run-dryrun' ? 'change' : 'input', saveRunOptions);
+
+  window.addEventListener('rfide:project-opened', (event) => {
+    runOptionsKey = event.detail && event.detail.root ? `rfide.runOptions:${event.detail.root}` : null;
+    let saved = {};
+    try {
+      saved = JSON.parse((runOptionsKey && localStorage.getItem(runOptionsKey)) || '{}');
+    } catch {
+      saved = {};
+    }
+    for (const [name, selector] of Object.entries(RUN_OPTION_FIELDS))
+      $(selector).value = saved[name] || '';
+    $('#run-dryrun').checked = !!saved.dryrun;
+    $('#run-options').open = Object.values(saved).some(Boolean);
+    renderRunOptions();
   });
 
   // -------------------------------------------------------------------------

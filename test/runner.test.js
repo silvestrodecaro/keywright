@@ -139,3 +139,17 @@ test('streams suite setup and teardown steps and teardown failures', { skip, tim
     ['Tests.Teardown Fails.B', 'FAIL', 'Parent suite teardown failed:\nteardown broke'],
   ]);
 });
+
+test('tag filters, dry run and extra arguments', { skip, timeout: 60_000 }, async () => {
+  const included = await runAndCollect(fixtureProject(), { include: ['smoke'], extraArgs: '--loglevel DEBUG' });
+  assert.deepStrictEqual(testEnds(included.events), { 'Tests.Basic.Passing Test': 'PASS' });
+  assert.match(included.output, /--include smoke --loglevel DEBUG/);
+
+  const excluded = await runAndCollect(fixtureProject(), { select: ['Tests.Basic'], exclude: ['smoke'] });
+  assert.ok(!('Tests.Basic.Passing Test' in testEnds(excluded.events)));
+  assert.ok('Tests.Basic.Failing Test' in testEnds(excluded.events));
+
+  // Dry run: keywords are checked, not run, so `Fail` passes.
+  const dry = await runAndCollect(fixtureProject(), { select: ['Tests.Basic.Failing Test'], dryrun: true });
+  assert.deepStrictEqual(testEnds(dry.events), { 'Tests.Basic.Failing Test': 'PASS' });
+});

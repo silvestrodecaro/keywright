@@ -175,6 +175,26 @@
                 <input id="tests-debug-failures" type="checkbox" checked disabled> <span>Stop on failure</span></label>
             </div>
           </div>
+          <details id="run-options" class="run-options">
+            <summary>Run options <span id="run-options-active" class="muted"></span></summary>
+            <div class="run-options-fields">
+              <label title="Robot tag patterns, comma-separated: smoke, fastANDui, reg*, NOTslow (Run all and suites only)">Include tags
+                <input id="run-include" type="text" placeholder="smoke, fastANDui" spellcheck="false" autocomplete="off"></label>
+              <label title="Tests matching any of these patterns are not run">Exclude tags
+                <input id="run-exclude" type="text" placeholder="slow, NOTready" spellcheck="false" autocomplete="off"></label>
+              <label title="Passed as --variable BROWSER:... (the project template uses ${BROWSER} in New Browser)">Browser
+                <select id="run-browser">
+                  <option value="">Project default</option>
+                  <option value="chromium">Chromium</option>
+                  <option value="firefox">Firefox</option>
+                  <option value="webkit">WebKit</option>
+                </select></label>
+              <label title="Other robot options, e.g. --loglevel DEBUG or --variable ENV:staging">Arguments
+                <input id="run-args" type="text" placeholder="--loglevel DEBUG" spellcheck="false" autocomplete="off"></label>
+              <label class="check check-sm" title="robot --dryrun: checks keywords and their arguments without running them">
+                <input id="run-dryrun" type="checkbox"> <span>Dry run</span></label>
+            </div>
+          </details>
           <div id="tests-summary" class="tests-summary"></div>
           <div id="tests-error" class="error" hidden></div>
           <div id="debug-panel" class="debug-panel" hidden>
@@ -319,6 +339,7 @@
   <script src="generator.js"></script>
   <script src="watchPlan.js"></script>
   <script src="searchCore.js"></script>
+  <script src="tagPatterns.js"></script>
   <script src="tests.js"></script>
   <script src="problems.js"></script>
   <script src="search.js"></script>

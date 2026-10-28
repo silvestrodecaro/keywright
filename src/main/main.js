@@ -314,8 +314,15 @@ ipcMain.handle('tests:run', async (_event, options = {}) => {
     traceServer.allow([runOutputDir]);
     await runner.run(currentProject, {
       select: options.select || [],
-      variables: options.headed ? { HEADLESS: 'False' } : {},
+      variables: {
+        ...(options.headed ? { HEADLESS: 'False' } : {}),
+        ...(options.browser ? { BROWSER: options.browser } : {}), // used by the project template's New Browser
+      },
       trace: !!options.trace,
+      include: options.include || [],
+      exclude: options.exclude || [],
+      dryrun: !!options.dryrun,
+      extraArgs: options.extraArgs || '',
       debug: options.debug ? { breakpoints: options.debug.breakpoints || {}, pauseOnFailure: !!options.debug.pauseOnFailure } : undefined,
     });
     return { ok: true };

@@ -753,3 +753,12 @@ input:disabled, select:disabled { opacity: .55; }
 .problem-info { color: #58a6ff; }
 .problems-robocop { margin-right: 4px; }
 #sidebar-problems .notice { margin: 6px 8px; }
+
+/* Run options (Testing panel) */
+.run-options { margin: 0 10px 6px; font-size: 12px; }
+.run-options summary { cursor: pointer; color: var(--muted); padding: 2px 0; }
+.run-options-fields { display: grid; gap: 6px; padding: 6px 0 2px; }
+.run-options-fields > label:not(.check) { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 6px; color: var(--muted); }
+.run-options-fields input[type="text"], .run-options-fields select { min-width: 0; font-size: 12px; }
+.test-row.is-tag-excluded .tree-label { opacity: .45; text-decoration: line-through; }
+.status-tags { color: #c792ea; }
