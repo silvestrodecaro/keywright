@@ -76,6 +76,10 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
   the others are saved. Library keywords, duplicate names, embedded arguments and variable files are not renamed.
 - Shift+F12 lists the references of a keyword (library keywords too) or a variable in a peek view, with the same
   rules as F2; the definition is included, also when it is in a Python/YAML variable file.
+- Ctrl+. (or the light bulb) offers quick fixes: for an unknown keyword, the most similar names and "Create
+  keyword" in the file or in an imported resource (with `[Arguments]` from the call; the new keyword is shown);
+  for an undefined variable, similar visible variables and "Define in the Variables section"; "Add END" for
+  FOR/IF/WHILE/TRY blocks without END.
 - problems while typing: syntax errors from Robot's own parser (missing `END`, unknown settings, invalid
   sections, ...) and warnings for unknown keywords; counts in the tab header, F8 jumps to the next one.
   Unknown keywords are not reported when a library of the project cannot be imported.
@@ -170,6 +174,7 @@ src/renderer/editor/         Monaco integration (bundled with esbuild by scripts
   argumentCheck.js           keyword calls and argument validation (mirrors Robot's argument resolver)
   navigation.js              outline, variable definitions, undefined variables and imported files
   rename.js                  occurrences of keywords and variables for F2 rename
+  quickFix.js                similar names, new keywords and variables, missing END
 src/main/projectVariables.js variables set at run time / defined by suites across the project
 src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project

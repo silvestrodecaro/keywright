@@ -4,8 +4,9 @@ import * as monaco from 'monaco-editor';
 import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
 import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
-  isDynamicVariableFile, unresolvedVariables } from './navigation.js';
+  isDynamicVariableFile, unresolvedVariables, normalizeVariable } from './navigation.js';
 import { keywordPart, keywordOccurrences, variablePart, variableOccurrences, invalidName, applyEdits } from './rename.js';
+import { similarNames, keywordStub, keywordInsertion, variableInsertion, endInsertion, applyInsertion, callArguments } from './quickFix.js';
 
 self.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -741,6 +742,7 @@ for (const event of ['rfide:files-changed', 'rfide:file-saved', 'rfide:project-o
  */
 async function importedVariables(path, lines) {
   const keys = new Set();
+  const names = []; // as written in their definitions, for suggestions
   let unknown = false;
   const seen = new Set([path]);
   const queue = parseFile(lines).imports.filter((i) => i.type !== 'library').map((i) => ({ from: path, item: i }));
@@ -758,15 +760,20 @@ async function importedVariables(path, lines) {
       if (isDynamicVariableFile(target.path, target.lines))
         unknown = true;
       else
-        variableFileDefinitions(target.path, target.lines).forEach((d) => keys.add(d.key));
+        variableFileDefinitions(target.path, target.lines).forEach((d) => {
+          keys.add(d.key);
+          names.push('${' + d.name + '}');
+        });
       continue;
     }
     const imported = parseFile(target.lines);
-    imported.variables.forEach((d) => keys.add(d.key));
-    imported.locals.filter((d) => d.fileWide).forEach((d) => keys.add(d.key));
+    for (const d of [...imported.variables, ...imported.locals.filter((l) => l.fileWide)]) {
+      keys.add(d.key);
+      names.push(d.name);
+    }
     queue.push(...imported.imports.filter((i) => i.type !== 'library').map((i) => ({ from: target.path, item: i })));
   }
-  return { keys, unknown };
+  return { keys, names, unknown };
 }
 
 /** Warnings for variables defined neither in the file, its imports nor (at run time) elsewhere in the project. */
@@ -839,6 +846,112 @@ function toProblem(marker) {
     source: marker.source,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Quick fixes (Ctrl+.): similar names, create keyword, define variable, add END
+
+/** A Monaco text edit inserting `insertion` ({ afterLine, lines }) into a model. */
+function insertionEdit(model, insertion) {
+  const lineCount = model.getLineCount();
+  if (insertion.afterLine >= lineCount) {
+    const column = model.getLineMaxColumn(lineCount);
+    return { range: new monaco.Range(lineCount, column, lineCount, column), text: '\n' + insertion.lines.join('\n') };
+  }
+  const line = insertion.afterLine + 1;
+  return { range: new monaco.Range(line, 1, line, 1), text: insertion.lines.join('\n') + '\n' };
+}
+
+function quickFix(title, model, marker, edits, preferred = false) {
+  return {
+    title,
+    kind: 'quickfix',
+    diagnostics: [marker],
+    isPreferred: preferred,
+    edit: { edits: edits.map((textEdit) => ({ resource: model.uri, versionId: model.getVersionId(), textEdit })) },
+  };
+}
+
+// Adds a keyword to a file (open: as an unsaved edit; closed: saved), then shows it.
+monaco.editor.registerCommand('rfide.createKeyword', async (_accessor, { path, stub }) => {
+  const model = RFEditor.has(path) ? monaco.editor.getModel(uriFor(path)) : null;
+  let insertion;
+  if (model) {
+    insertion = keywordInsertion(model.getLinesContent(), stub);
+    model.pushEditOperations([], [insertionEdit(model, insertion)], () => null);
+  } else {
+    const file = await window.rfide.readProjectFile(path);
+    const eol = file.content.includes('\r\n') ? '\r\n' : '\n';
+    const lines = file.content.split(/\r?\n/);
+    insertion = keywordInsertion(lines, stub);
+    const content = applyInsertion(lines, insertion).join(eol);
+    await window.rfide.writeProjectFile(path, content);
+    monaco.editor.getModel(uriFor(path))?.setValue(content); // definition preview
+  }
+  window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path, line: insertion.keywordLine + stub.length - 1, column: 5 } }));
+  window.dispatchEvent(new CustomEvent('rfide:status', { detail: { text: `Created keyword '${stub[0]}' in ${path}` } }));
+});
+
+const BDD = /^(given|when|then|and|but)\s+/i;
+
+async function keywordFixes(model, marker, name) {
+  const actions = [];
+  const path = modelPath(model);
+  const lines = model.getLinesContent();
+  const bdd = BDD.exec(name)?.[0] || '';
+  const base = name.slice(bdd.length);
+  for (const candidate of similarNames(base, [...new Set(keywords.map((kw) => kw.name))].filter((n) => !n.includes('${')), normalizeKeyword)) {
+    actions.push(quickFix(`Change to '${candidate}'`, model, marker,
+      [{ range: new monaco.Range(marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn), text: bdd + candidate }],
+      actions.length === 0));
+  }
+  const stub = keywordStub(base, callArguments(lines, marker.startLineNumber, marker.startColumn - 1));
+  const create = (target, title) => ({ title, kind: 'quickfix', diagnostics: [marker],
+    command: { id: 'rfide.createKeyword', title, arguments: [{ path: target, stub }] } });
+  actions.push(create(path, `Create keyword '${base}' in this file`));
+  // Resource files the file imports: the new keyword is found there too.
+  for (const item of parseFile(lines).imports.filter((i) => i.type === 'resource')) {
+    const target = await firstExisting(importCandidates(path, item.path));
+    if (target && /\.resource$/i.test(target.path))
+      actions.push(create(target.path, `Create keyword '${base}' in ${target.path}`));
+  }
+  return actions;
+}
+
+async function variableFixes(model, marker, name) {
+  const actions = [];
+  const path = modelPath(model);
+  const lines = model.getLinesContent();
+  const line = marker.startLineNumber;
+  const parsed = parseFile(lines);
+  const block = parsed.blocks.find((b) => b.line <= line && line <= b.end);
+  const visible = [...parsed.variables, ...parsed.locals.filter((d) => d.fileWide || (block && d.block === block))].map((d) => d.name);
+  const imported = await importedVariables(path, lines);
+  const inner = (variable) => variable.slice(2, -1);
+  const range = new monaco.Range(line, marker.startColumn + 2, line, marker.endColumn - 1); // the name inside ${ }
+  for (const candidate of similarNames(name, [...visible, ...imported.names], (n) => normalizeVariable(n))) {
+    actions.push(quickFix(`Change to ${name[0]}{${inner(candidate)}}`, model, marker, [{ range, text: inner(candidate) }], actions.length === 0));
+  }
+  const definition = name.startsWith('$') ? `${name}    \${EMPTY}` : name;
+  actions.push(quickFix(`Define ${name} in the Variables section`, model, marker, [insertionEdit(model, variableInsertion(lines, definition))]));
+  return actions;
+}
+
+monaco.languages.registerCodeActionProvider(LANGUAGE, {
+  async provideCodeActions(model, _range, context) {
+    const actions = [];
+    for (const marker of context.markers) {
+      const keyword = /^No keyword with name '(.+)' found\.$/.exec(marker.message);
+      const variable = /^Variable '([$@&]\{.+?\})' is not defined/.exec(marker.message);
+      if (keyword)
+        actions.push(...await keywordFixes(model, marker, keyword[1]));
+      else if (variable)
+        actions.push(...await variableFixes(model, marker, variable[1]));
+      else if (/must have closing END/.test(marker.message))
+        actions.push(quickFix('Add END', model, marker, [insertionEdit(model, endInsertion(model.getLinesContent(), marker.startLineNumber))], true));
+    }
+    return { actions, dispose() {} };
+  },
+}, { providedCodeActionKinds: ['quickfix'] });
 
 // ---------------------------------------------------------------------------
 // Editor and models
