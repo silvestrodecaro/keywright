@@ -398,7 +398,8 @@
     sourceBtn.addEventListener('click', () => goToSource(test.id));
     const logBtn = el('button', { type: 'button', className: 'btn btn-sm', textContent: 'Open log' });
     logBtn.disabled = !result || running;
-    logBtn.addEventListener('click', () => api.openTestOutput('log.html'));
+    logBtn.title = 'Robot Framework log, opened at this test';
+    logBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rfide:show-output', { detail: { file: 'log.html', anchor: result?.robotId } })));
     const trace = traceFor(test.id);
     const traceBtn = el('button', {
       type: 'button',
@@ -492,7 +493,7 @@
   function select(testId) {
     selected = testId;
     scheduleRender();
-    window.dispatchEvent(new CustomEvent('rfide:show-results'));
+    window.dispatchEvent(new CustomEvent('rfide:show-results', { detail: { test: testId } }));
   }
 
   function goToSource(testId) {
@@ -653,7 +654,7 @@
           selected = event.id;
         break;
       case 'test-end':
-        results.set(event.id, { status: event.status, message: event.message, elapsed: event.elapsed });
+        results.set(event.id, { status: event.status, message: event.message, elapsed: event.elapsed, robotId: event.robotId });
         break;
       case 'step-start': {
         const runData = runDataFor(event);

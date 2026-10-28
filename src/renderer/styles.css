@@ -794,3 +794,11 @@ input:disabled, select:disabled { opacity: .55; }
 .results-trend { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; }
 .results-trend .muted { margin-right: 4px; }
 .history-header .results-meta { padding-left: 0; margin-left: 0; }
+
+/* Robot report and log in the Test Results tab */
+.results-output { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.results-output[hidden] { display: none; }
+.results-output-bar { display: flex; flex: none; align-items: center; gap: 8px; padding: 6px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.results-output-bar > span { flex: 1; }
+.output-frame { flex: 1; width: 100%; border: 0; background: #fff; }
+.output-frame[hidden] { display: none; }

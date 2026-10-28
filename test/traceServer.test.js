@@ -42,3 +42,29 @@ test('serves the trace viewer and only the allowed trace files', async () => {
     server.stop();
   }
 });
+
+test('serves Robot report files from the results folder only', async () => {
+  const dir = tempDir('output');
+  const results = path.join(dir, 'results');
+  fs.mkdirSync(path.join(results, 'browser', 'screenshot'), { recursive: true });
+  fs.writeFileSync(path.join(results, 'log.html'), '<html>log</html>');
+  fs.writeFileSync(path.join(results, 'browser', 'screenshot', 'fail 1.png'), 'PNG');
+  fs.writeFileSync(path.join(dir, 'secret.txt'), 'no');
+  const server = new TraceServer();
+  try {
+    const url = await server.outputUrl(results, 'log.html');
+    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/output\/log\.html$/);
+    const log = await fetch(url);
+    assert.strictEqual(log.status, 200);
+    assert.match(log.headers.get('content-type'), /text\/html/);
+    // Relative links (screenshots) resolve inside the folder.
+    const shot = await fetch(new URL('browser/screenshot/fail%201.png', url));
+    assert.strictEqual(shot.status, 200);
+    assert.strictEqual(shot.headers.get('content-type'), 'image/png');
+    // Nothing outside it, even with encoded ../
+    assert.strictEqual((await fetch(new URL('/output/..%2Fsecret.txt', url))).status, 403);
+    assert.strictEqual((await fetch(new URL('/output/missing.html', url))).status, 404);
+  } finally {
+    server.stop();
+  }
+});

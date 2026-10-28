@@ -291,8 +291,19 @@
           <div class="results-switch" role="tablist">
             <button type="button" class="results-switch-btn is-active" data-results-view="test">Test</button>
             <button type="button" class="results-switch-btn" data-results-view="history" title="Past runs and what changed since the previous one">History <span id="history-count" class="muted"></span></button>
+            <button type="button" class="results-switch-btn" data-results-view="report" title="Robot Framework's report.html of the last run">Report</button>
+            <button type="button" class="results-switch-btn" data-results-view="log" title="Robot Framework's log.html of the last run">Log</button>
           </div>
           <div id="results-detail" class="results-detail"></div>
+          <div id="results-output" class="results-output" hidden>
+            <div class="results-output-bar">
+              <span id="output-info" class="muted"></span>
+              <button id="output-reload" class="btn btn-sm" type="button">Reload</button>
+              <button id="output-external" class="btn btn-sm" type="button">Open in browser</button>
+            </div>
+            <div id="output-empty" class="empty results-empty" hidden></div>
+            <iframe id="output-frame" class="output-frame" title="Robot Framework report"></iframe>
+          </div>
           <div id="results-history" class="results-history" hidden>
             <ul id="history-runs" class="history-runs"></ul>
             <div id="history-detail" class="history-detail"></div>

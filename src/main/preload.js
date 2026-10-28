@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('rfide', {
   testHistory: () => ipcRenderer.invoke('tests:history'),
   onHistoryAdded: (callback) => subscribe('tests:history-added', callback),
   openTestOutput: (file) => ipcRenderer.invoke('tests:open-output', file),
+  testOutputUrl: (file) => ipcRenderer.invoke('tests:output-url', file),
   traceUrl: (traceFile) => ipcRenderer.invoke('tests:trace-url', traceFile),
   onTestEvent: (callback) => subscribe('tests:event', callback),
   onTestOutput: (callback) => subscribe('tests:output', callback),

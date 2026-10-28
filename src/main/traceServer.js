@@ -16,6 +16,12 @@ const CONTENT_TYPES = {
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webm': 'video/webm',
+  '.xml': 'application/xml; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
   '.zip': 'application/zip',
 };
 
@@ -26,13 +32,23 @@ function isInside(dir, file) {
 
 /**
  * Serves Playwright's trace viewer on 127.0.0.1 (its service worker needs
- * http, not file://) and the trace files of the allowed folders only.
+ * http, not file://) and the trace files of the allowed folders only; also
+ * Robot's report and log under /output/, from the project's results folder only
+ * (their links to each other and to screenshots are relative).
  */
 class TraceServer {
   constructor() {
     this._server = null;
     this._port = null;
     this._allowed = [];
+    this._outputDir = null;
+  }
+
+  /** @returns {Promise<string>} the URL of a file of `outputDir` (e.g. log.html), which becomes the served folder */
+  async outputUrl(outputDir, file) {
+    this._outputDir = path.resolve(outputDir);
+    await this._start();
+    return `http://127.0.0.1:${this._port}/output/${file.split('/').map(encodeURIComponent).join('/')}`;
   }
 
   /** Folders whose .zip traces may be served (e.g. the open project's results folder). */
@@ -73,6 +89,10 @@ class TraceServer {
 
   _handle(request, response) {
     const url = new URL(request.url, 'http://127.0.0.1');
+    if (request.method === 'GET' && url.pathname.startsWith('/output/') && this._outputDir) {
+      const file = path.resolve(this._outputDir, decodeURIComponent(url.pathname.slice('/output/'.length)));
+      return isInside(this._outputDir, file) ? this._sendFile(response, file) : this._send(response, 403);
+    }
     if (request.method !== 'GET' || !url.pathname.startsWith('/trace/'))
       return this._send(response, 404);
     const relative = decodeURIComponent(url.pathname.slice('/trace/'.length));

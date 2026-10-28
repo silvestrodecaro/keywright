@@ -394,10 +394,10 @@ class Listener:
         self._stack = []
         self._frames = []
         self._kinds = []
-        self._send({"type": "test-start", "id": result.full_name, "name": result.name})
+        self._send({"type": "test-start", "id": result.full_name, "name": result.name, "robotId": result.id})
 
     def end_test(self, data, result):
-        self._send({"type": "test-end", "id": result.full_name, "status": result.status,
+        self._send({"type": "test-end", "id": result.full_name, "status": result.status, "robotId": result.id,
                     "message": _truncate(result.message), "elapsed": _seconds(result)})
         self._test = None
 

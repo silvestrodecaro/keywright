@@ -155,7 +155,9 @@ The **Test Results** tab shows the selected test while it runs: status, error, f
 Browser library, and the tree of executed steps (keywords, FOR/IF/TRY…) with timings and log messages. The
 setups and teardowns of the suites containing the test are shown before and after its steps; a failing suite
 teardown marks the suite's tests as failed, as in Robot's report.
-*Go to source* opens the test at its line, *Open log* opens Robot's `log.html`. Results are written to `results/`.
+*Go to source* opens the test at its line, *Open log* shows Robot's `log.html` opened at this test. Results are written
+to `results/`; the **Report** and **Log** views of the tab show Robot's `report.html` and `log.html` of the last run
+(refreshed after each run, *Open in browser* for the external browser).
 
 *Show browser* runs with `--variable HEADLESS:False`, which the project template uses in `New Browser`.
 

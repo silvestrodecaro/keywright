@@ -361,10 +361,20 @@ ipcMain.handle('tests:trace-url', async (_event, traceFile) => {
   }
 });
 
+// Robot's report.html / log.html of the project, shown in the Test Results tab.
+ipcMain.handle('tests:output-url', async (_event, file) => {
+  if (!currentProject || !['log.html', 'report.html'].includes(file))
+    return { ok: false, error: 'No project is open.' };
+  const outputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
+  if (!existsSync(path.join(outputDir, file)))
+    return { ok: false, error: `There is no ${file} yet: run some tests first.` };
+  return { ok: true, url: await traceServer.outputUrl(outputDir, file) };
+});
+
 ipcMain.handle('tests:open-output', async (_event, file) => {
-  if (!runOutputDir || !['log.html', 'report.html'].includes(file))
+  if (!currentProject || !['log.html', 'report.html'].includes(file))
     return 'No results yet.';
-  return shell.openPath(path.join(runOutputDir, file));
+  return shell.openPath(path.join(path.resolve(currentProject.root, currentProject.config.outputDir), file));
 });
 
 // ---------------------------------------------------------------------------

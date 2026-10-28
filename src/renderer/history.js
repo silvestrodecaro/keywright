@@ -130,15 +130,50 @@
     renderDetail();
   }
 
-  function setView(name) {
+  function setView(name, anchor) {
     view = name;
     for (const button of document.querySelectorAll('.results-switch-btn'))
       button.classList.toggle('is-active', button.dataset.resultsView === name);
     $('#results-detail').hidden = name !== 'test';
     $('#results-history').hidden = name !== 'history';
+    $('#results-output').hidden = name !== 'report' && name !== 'log';
     if (name === 'history')
       render();
+    else if (name === 'report' || name === 'log')
+      showOutput(`${name}.html`, anchor);
   }
+
+  // Robot's report.html and log.html, served from the results folder (their links are relative).
+  // anchor: Robot's id of an element (s1-s1-t1), which log.html opens.
+  async function showOutput(file, anchor) {
+    const frame = $('#output-frame');
+    const result = await api.testOutputUrl(file);
+    if (view !== file.replace('.html', ''))
+      return; // switched view meanwhile
+    $('#output-empty').hidden = result.ok;
+    frame.hidden = !result.ok;
+    $('#output-reload').disabled = !result.ok;
+    $('#output-external').disabled = !result.ok;
+    if (!result.ok) {
+      $('#output-empty').textContent = result.error;
+      $('#output-info').textContent = '';
+      return;
+    }
+    $('#output-info').textContent = file;
+    // A new query string forces a reload, also when only the anchor changes.
+    frame.src = `${result.url}?t=${Date.now()}${anchor ? `#${anchor}` : ''}`;
+  }
+
+  $('#output-reload').addEventListener('click', () => showOutput(`${view}.html`));
+  $('#output-external').addEventListener('click', () => api.openTestOutput(`${view}.html`));
+
+  window.addEventListener('rfide:show-output', (event) => setView(event.detail.file.replace('.html', ''), event.detail.anchor));
+
+  // A finished run writes new files: show them.
+  api.onTestsFinished(() => {
+    if (view === 'report' || view === 'log')
+      setTimeout(() => showOutput(`${view}.html`), 300);
+  });
 
   async function load() {
     runs = await api.testHistory();
@@ -158,9 +193,9 @@
     window.dispatchEvent(new CustomEvent('rfide:history-changed'));
   });
 
-  // Selecting a test or starting a run shows the test details.
-  window.addEventListener('rfide:show-results', () => {
-    if (view !== 'test')
+  // Selecting a test shows its details; starting a run leaves the report and log, which it refreshes.
+  window.addEventListener('rfide:show-results', (event) => {
+    if (view !== 'test' && (view === 'history' || (event.detail && event.detail.test)))
       setView('test');
   });
 
