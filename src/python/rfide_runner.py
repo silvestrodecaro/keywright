@@ -148,9 +148,15 @@ class Listener:
 
     def start_suite(self, data, result):
         self._suites.append(result.full_name)
+        self._stack = []
         self._send({"type": "suite-start", "id": result.full_name, "name": result.name})
 
     def end_suite(self, data, result):
+        # A failing suite teardown fails the suite's tests after their end_test.
+        if result.has_teardown and result.teardown.failed:
+            for test in result.all_tests:
+                self._send({"type": "test-end", "id": test.full_name, "status": test.status,
+                            "message": _truncate(test.message), "elapsed": _seconds(test)})
         self._send({"type": "suite-end", "id": result.full_name, "status": result.status,
                     "message": _truncate(result.message), "elapsed": _seconds(result)})
         if self._suites:
@@ -166,17 +172,21 @@ class Listener:
                     "message": _truncate(result.message), "elapsed": _seconds(result)})
         self._test = None
 
+    def _suite(self):
+        """The running suite, for steps of suite setups and teardowns (outside tests)."""
+        return self._suites[-1] if self._suites else None
+
     def start_body_item(self, data, result):
         item_id = result.id
         parent = self._stack[-1] if self._stack else None
         self._stack.append(item_id)
-        self._send({"type": "step-start", "id": item_id, "parent": parent, "test": self._test,
+        self._send({"type": "step-start", "id": item_id, "parent": parent, "test": self._test, "suite": self._suite(),
                     "lineno": getattr(data, "lineno", None), **_describe(result)})
 
     def end_body_item(self, data, result):
         if self._stack and self._stack[-1] == result.id:
             self._stack.pop()
-        self._send({"type": "step-end", "id": result.id, "test": self._test, "status": result.status,
+        self._send({"type": "step-end", "id": result.id, "test": self._test, "suite": self._suite(), "status": result.status,
                     "message": _truncate(getattr(result, "message", "") or ""), "elapsed": _seconds(result)})
 
     def log_message(self, message):
@@ -186,7 +196,7 @@ class Listener:
             # created in a suite setup; the file is written when the context closes.
             self._send({"type": "trace", "test": self._test, "suite": self._suites[-1] if self._suites else None,
                         "path": trace.group(1).strip()})
-        self._send({"type": "log", "step": self._stack[-1] if self._stack else None, "test": self._test,
+        self._send({"type": "log", "step": self._stack[-1] if self._stack else None, "test": self._test, "suite": self._suite(),
                     "level": message.level, "html": bool(message.html), "text": _truncate(message.message),
                     "timestamp": message.timestamp.isoformat() if message.timestamp else None})
 

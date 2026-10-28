@@ -578,6 +578,7 @@ input:disabled, select:disabled { opacity: .55; }
 .pane-results h3 { margin: 20px 0 6px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
 
 .steps-tree { font: 12.5px/1.5 var(--mono); }
+.steps-suite { padding: 4px 8px 2px; font: 11px/1.4 var(--sans); text-transform: uppercase; letter-spacing: .04em; }
 .step-row { display: flex; align-items: center; gap: 6px; min-height: 24px; padding-right: 8px; border-radius: 4px; cursor: default; }
 .step-row:hover { background: var(--surface); }
 .step-row .tree-icon { cursor: pointer; }

@@ -120,7 +120,9 @@ own API, using the project's `.venv`). Run everything, a suite or a single test 
 tag) *Run all* runs only the visible tests. **Stop** kills robot and the browsers it started.
 
 The **Test Results** tab shows the selected test while it runs: status, error, failure screenshots taken by the
-Browser library, and the tree of executed steps (keywords, FOR/IF/TRY…) with timings and log messages.
+Browser library, and the tree of executed steps (keywords, FOR/IF/TRY…) with timings and log messages. The
+setups and teardowns of the suites containing the test are shown before and after its steps; a failing suite
+teardown marks the suite's tests as failed, as in Robot's report.
 *Go to source* opens the test at its line, *Open log* opens Robot's `log.html`. Results are written to `results/`.
 
 *Show browser* runs with `--variable HEADLESS:False`, which the project template uses in `New Browser`.

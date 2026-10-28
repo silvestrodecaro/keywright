@@ -113,3 +113,29 @@ test('screenshotsFromHtml resolves Browser library screenshots', () => {
   assert.deepStrictEqual(screenshotsFromHtml(html, path.resolve('/out')), [path.resolve('/out/browser/screenshot/fail-1.png')]);
   assert.deepStrictEqual(screenshotsFromHtml('<img src="data:image/png;base64,AAA">', '/out'), []);
 });
+
+test('streams suite setup and teardown steps and teardown failures', { skip, timeout: 60_000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-suite-'));
+  fs.mkdirSync(path.join(dir, 'tests'));
+  fs.writeFileSync(path.join(dir, 'tests', 'setup_fails.robot'),
+    '*** Settings ***\nSuite Setup    Fail    setup broke\n\n*** Test Cases ***\nA\n    Log    a\n');
+  fs.writeFileSync(path.join(dir, 'tests', 'teardown_fails.robot'),
+    '*** Settings ***\nSuite Setup    Log    hello\nSuite Teardown    Fail    teardown broke\n\n*** Test Cases ***\nB\n    Log    b\n');
+  const project = { root: dir, python, config: { testsDir: 'tests', outputDir: path.join(dir, 'results') } };
+  const { events } = await runAndCollect(project, {});
+
+  const suiteSteps = events.filter((e) => e.type === 'step-start' && !e.test).map((e) => [e.suite, e.kind, e.name]);
+  assert.deepStrictEqual(suiteSteps, [
+    ['Tests.Setup Fails', 'setup', 'Fail'],
+    ['Tests.Teardown Fails', 'setup', 'Log'],
+    ['Tests.Teardown Fails', 'teardown', 'Fail'],
+  ]);
+  assert.ok(events.some((e) => e.type === 'log' && !e.test && e.suite === 'Tests.Teardown Fails' && e.text === 'hello'));
+  const ends = events.filter((e) => e.type === 'test-end').map((e) => [e.id, e.status, e.message]);
+  assert.deepStrictEqual(ends, [
+    ['Tests.Setup Fails.A', 'FAIL', 'Parent suite setup failed:\nsetup broke'],
+    ['Tests.Teardown Fails.B', 'PASS', ''],
+    // Sent again at the end of the suite: the failing teardown fails the test.
+    ['Tests.Teardown Fails.B', 'FAIL', 'Parent suite teardown failed:\nteardown broke'],
+  ]);
+});

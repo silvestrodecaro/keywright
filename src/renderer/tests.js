@@ -16,6 +16,8 @@
   const results = new Map();
   /** @type {Map<string, { steps: Map<string, object>, roots: object[], logs: object[] }>} */
   const runs = new Map();
+  /** Steps of suite setups and teardowns, by suite id (same shape as `runs`). */
+  const suiteRuns = new Map();
   const collapsedSuites = new Set();
   const stepToggles = new Map(); // `${test}|${step}` -> expanded (overrides the default)
   let selected = null;
@@ -410,17 +412,40 @@
     if (result?.message)
       nodes.push(el('pre', { className: `results-message ${statusClass(result.status)}`, textContent: result.message }));
 
-    if (runData) {
-      const images = allImages(runData);
+    // Suite setups run outermost first, suite teardowns innermost first.
+    const suiteSteps = (kind) => (kind === 'setup' ? suites : [...suites].reverse())
+      .map((suite) => ({ suite, steps: (suiteRuns.get(suite.id)?.roots || []).filter((step) => step.kind === kind) }))
+      .filter((group) => group.steps.length);
+    const setups = suiteSteps('setup');
+    const teardowns = suiteSteps('teardown');
+    const suiteSection = (title, groups) => [
+      el('h3', { textContent: title }),
+      el('div', { className: 'steps-tree' }, ...groups.flatMap(({ suite, steps }) => [
+        el('div', { className: 'steps-suite muted', textContent: suite.name }),
+        ...steps.map((step) => renderStep(suite.id, step, 0)),
+      ])),
+    ];
+
+    if (runData || setups.length) {
+      const images = [...setups, ...teardowns].flatMap(({ suite }) => allImages(suiteRuns.get(suite.id)))
+        .concat(runData ? allImages(runData) : []);
       if (images.length)
-        nodes.push(el('div', { className: 'results-images' }, ...images.map((src) => el('img', { src, alt: 'Screenshot', loading: 'lazy' }))));
+        nodes.push(el('div', { className: 'results-images' }, ...[...new Set(images)].map((src) => el('img', { src, alt: 'Screenshot', loading: 'lazy' }))));
+      if (setups.length)
+        nodes.push(...suiteSection('Suite Setup', setups));
       nodes.push(el('h3', { textContent: 'Steps' }));
       const steps = el('div', { className: 'steps-tree' },
-        ...runData.logs.map(renderLog),
-        ...runData.roots.map((step) => renderStep(test.id, step, 0)));
-      if (!runData.roots.length && !runData.logs.length)
-        steps.append(el('div', { className: 'empty', textContent: result?.status === 'running' ? 'Starting…' : 'No steps were recorded.' }));
+        ...(runData ? runData.logs.map(renderLog) : []),
+        ...(runData ? runData.roots.map((step) => renderStep(test.id, step, 0)) : []));
+      if (!runData || (!runData.roots.length && !runData.logs.length)) {
+        const setupFailed = /^Parent suite setup failed/.test(result?.message || '');
+        const text = setupFailed ? 'Not run: the suite setup failed.'
+          : !runData || result?.status === 'running' || result?.status === 'queued' ? 'Starting…' : 'No steps were recorded.';
+        steps.append(el('div', { className: 'empty', textContent: text }));
+      }
       nodes.push(steps);
+      if (teardowns.length)
+        nodes.push(...suiteSection('Suite Teardown', teardowns));
     } else if (!result) {
       nodes.push(el('div', { className: 'empty', textContent: 'This test has not been run yet.' }));
     }
@@ -505,6 +530,8 @@
       results.set(id, { status: 'queued' });
       runs.delete(id);
       traces.delete(id);
+      for (const suite of testIndex.get(id)?.suites || [])
+        suiteRuns.delete(suite.id);
     }
     traceView = null; // the Browser library deletes old traces when the run starts
     output = '';
@@ -574,8 +601,16 @@
   // -------------------------------------------------------------------------
   // Runner events
 
+  /** Where a step or log goes: its test, or the suite whose setup/teardown is running. */
+  function runDataFor(event) {
+    return event.test ? runs.get(event.test) : suiteRuns.get(event.suite);
+  }
+
   function onEvent(event) {
     switch (event.type) {
+      case 'suite-start':
+        suiteRuns.set(event.id, { steps: new Map(), roots: [], logs: [] });
+        break;
       case 'test-start':
         results.set(event.id, { status: 'running' });
         runs.set(event.id, { steps: new Map(), roots: [], logs: [] });
@@ -586,9 +621,9 @@
         results.set(event.id, { status: event.status, message: event.message, elapsed: event.elapsed });
         break;
       case 'step-start': {
-        const runData = runs.get(event.test);
+        const runData = runDataFor(event);
         if (!runData)
-          break; // suite setup/teardown
+          break;
         const step = { ...event, status: 'running', children: [], logs: [] };
         runData.steps.set(step.id, step);
         const parent = event.parent && runData.steps.get(event.parent);
@@ -596,7 +631,7 @@
         break;
       }
       case 'step-end': {
-        const step = runs.get(event.test)?.steps.get(event.id);
+        const step = runDataFor(event)?.steps.get(event.id);
         if (step)
           Object.assign(step, { status: event.status, message: event.message, elapsed: event.elapsed });
         break;
@@ -605,7 +640,7 @@
         traces.set(event.test || event.suite, event.path);
         break;
       case 'log': {
-        const runData = runs.get(event.test);
+        const runData = runDataFor(event);
         if (!runData)
           break;
         const step = event.step && runData.steps.get(event.step);
@@ -690,6 +725,7 @@
     testIndex = new Map();
     results.clear();
     runs.clear();
+    suiteRuns.clear();
     collapsedSuites.clear();
     stepToggles.clear();
     selected = null;
