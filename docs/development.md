@@ -73,7 +73,9 @@ Installed copies read updates from this repository's GitHub releases.
 
 1. Raise `version` in `package.json`. The IDE only offers versions higher than its own.
 2. Commit, push, and push the tag: `git tag v<version>` and `git push origin v<version>`.
-3. Either run `npm run release` with `GH_TOKEN` set to a token with *Contents: read and write* on the
+3. Create the GitHub release for the tag first (with the release notes). Left to itself, `npm run release`
+   can create two releases for the same tag, one of them with only the `.blockmap`.
+4. Either run `npm run release` with `GH_TOKEN` set to a token with *Contents: read and write* on the
    repository, or run `npm run dist` and attach the three files from `release/` to a GitHub release for the tag:
    the `.exe`, its `.blockmap` and `latest.yml`.
 
