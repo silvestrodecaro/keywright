@@ -3,7 +3,8 @@
 import * as monaco from 'monaco-editor';
 import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
-import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline } from './navigation.js';
+import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
+  isDynamicVariableFile, unresolvedVariables } from './navigation.js';
 
 self.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -451,14 +452,94 @@ function keywordMarkers(model) {
   return markers;
 }
 
+// Variables known across the project (see src/main/projectVariables.js), reloaded after file changes.
+let projectVariablesPromise = null;
+
+function projectVariables() {
+  if (!projectVariablesPromise) {
+    projectVariablesPromise = window.rfide.projectVariables()
+      .then((r) => ({ runtime: new Set(r.runtime), suite: new Set(r.suite), dynamicSuite: r.dynamicSuite }))
+      .catch(() => null);
+  }
+  return projectVariablesPromise;
+}
+
+for (const event of ['rfide:files-changed', 'rfide:file-saved', 'rfide:project-opened']) {
+  window.addEventListener(event, () => {
+    projectVariablesPromise = null;
+    RFEditor.revalidate();
+  });
+}
+
+/**
+ * Variables defined by the resource and variable files a file imports (recursively).
+ * `unknown`: some import cannot be read statically (missing file, path with variables,
+ * module name, get_variables()), so undefined variables cannot be told apart.
+ */
+async function importedVariables(path, lines) {
+  const keys = new Set();
+  let unknown = false;
+  const seen = new Set([path]);
+  const queue = parseFile(lines).imports.filter((i) => i.type !== 'library').map((i) => ({ from: path, item: i }));
+  while (queue.length) {
+    const { from, item } = queue.shift();
+    const target = await firstExisting(importCandidates(from, item.path));
+    if (!target) {
+      unknown = true;
+      continue;
+    }
+    if (seen.has(target.path))
+      continue;
+    seen.add(target.path);
+    if (item.type === 'variables') {
+      if (isDynamicVariableFile(target.path, target.lines))
+        unknown = true;
+      else
+        variableFileDefinitions(target.path, target.lines).forEach((d) => keys.add(d.key));
+      continue;
+    }
+    const imported = parseFile(target.lines);
+    imported.variables.forEach((d) => keys.add(d.key));
+    imported.locals.filter((d) => d.fileWide).forEach((d) => keys.add(d.key));
+    queue.push(...imported.imports.filter((i) => i.type !== 'library').map((i) => ({ from: target.path, item: i })));
+  }
+  return { keys, unknown };
+}
+
+/** Warnings for variables defined neither in the file, its imports nor (at run time) elsewhere in the project. */
+async function variableMarkers(model, path) {
+  const lines = model.getLinesContent();
+  const unresolved = unresolvedVariables(lines);
+  if (!unresolved.length)
+    return [];
+  const [imported, project] = await Promise.all([importedVariables(path, lines), projectVariables()]);
+  const resource = /\.resource$/i.test(path);
+  if (imported.unknown || !project || (resource && project.dynamicSuite))
+    return [];
+  const known = (key) => imported.keys.has(key) || project.runtime.has(key) || (resource && project.suite.has(key));
+  return unresolved.filter((u) => !u.keys.some(known)).map((u) => ({
+    severity: monaco.MarkerSeverity.Warning,
+    message: `Variable '${u.name}' is not defined in this file${resource ? ', its imports or the project\'s suites' : ' or its imports'}.`,
+    startLineNumber: u.line,
+    startColumn: u.start + 1,
+    endLineNumber: u.line,
+    endColumn: u.end + 1,
+    source: 'variables',
+  }));
+}
+
 async function validate(model, path) {
   if (model.isDisposed() || model.getLanguageId() !== LANGUAGE)
     return;
   monaco.editor.setModelMarkers(model, 'keywords', keywordMarkers(model));
   const version = model.getVersionId();
-  const result = await window.rfide.checkFile(path, model.getValue());
+  const [result, variables] = await Promise.all([
+    window.rfide.checkFile(path, model.getValue()),
+    variableMarkers(model, path).catch(() => []),
+  ]);
   if (model.isDisposed() || model.getVersionId() !== version)
     return; // edited meanwhile: a newer check is scheduled
+  monaco.editor.setModelMarkers(model, 'variables', variables);
   monaco.editor.setModelMarkers(model, 'robot', result.problems.map((problem) => ({
     severity: problem.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
     message: problem.message,

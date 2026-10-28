@@ -102,3 +102,49 @@ test('outline', () => {
     'Keywords 27-31 [keyword:Open ${page} Page@28-31]',
   ]);
 });
+
+test('unresolved variables', () => {
+  const lines = [
+    '*** Settings ***',
+    'Documentation    Uses ${NOT CHECKED} in docs',
+    'Suite Setup    Log    ${MISSING SUITE}',
+    '',
+    '*** Variables ***',
+    '${BASE}    https://x',
+    '${FULL}    ${BASE}/login ${UNDEFINED IN VAR}',
+    '',
+    '*** Test Cases ***',
+    'Uses Variables',
+    '    [Documentation]    About ${doc var}',
+    '    ...    still ${documentation}',
+    '    ${n}=    Set Variable    1',
+    '    Log Many    ${n} ${FULL} ${SPACE * 4} ${CURDIR} %{HOME} ${1} ${TRUE} ${{ 1 + 2 }}',
+    '    Log    ${typo} \\${escaped} ${dict_${n}} ${obj.attr}',
+    '    VAR    ${shared}    x    scope=SUITE',
+    '    # ${in comment}',
+    '',
+    '*** Keywords ***',
+    'Count ${count:\\d+} Items',
+    '    [Arguments]    ${limit}=${count}',
+    '    Log    ${count} ${limit} ${shared} ${n}',
+  ];
+  assert.deepStrictEqual(nav.unresolvedVariables(lines).map((u) => `${u.line}:${u.start}-${u.end} ${u.name}`), [
+    '3:22-38 ${MISSING SUITE}',
+    '7:25-44 ${UNDEFINED IN VAR}',
+    '15:11-18 ${typo}',
+    '15:44-55 ${obj.attr}',
+    '22:39-43 ${n}',
+  ]);
+  assert.deepStrictEqual(nav.unresolvedVariables(lines).find((u) => u.name === '${obj.attr}').keys, ['obj.attr', 'obj']);
+  assert.deepStrictEqual(nav.runtimeVariableKeys(lines), ['shared']);
+  assert.deepStrictEqual(nav.variableUses('${a_${b}} ${{ $x }} \\${c} @{d}[0]').map((u) => u.name), ['${b}', '@{d}']);
+});
+
+test('dynamic and JSON variable files', () => {
+  assert.ok(nav.isDynamicVariableFile('vars.py', ['def get_variables(env):', '    return {}']));
+  assert.ok(nav.isDynamicVariableFile('vars.py', ['from common import *']));
+  assert.ok(nav.isDynamicVariableFile('vars.toml', []));
+  assert.ok(!nav.isDynamicVariableFile('vars.py', ['A = 1']));
+  const json = nav.variableFileDefinitions('vars.json', ['{', '  "base url": "https://x",', '  "users": ["a"]', '}']);
+  assert.deepStrictEqual(json.map((d) => [d.key, d.line, d.start, d.values[0]]), [['baseurl', 2, 2, '"https://x"'], ['users', 3, 2, '["a"]']]);
+});

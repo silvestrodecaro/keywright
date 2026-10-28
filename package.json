@@ -34,7 +34,7 @@
     "files": [
       "package.json",
       "src/**/*",
-      "!src/renderer/editor/**"
+      "!src/renderer/editor/index.js"
     ],
     "asarUnpack": [
       "src/python/**",

@@ -74,6 +74,13 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
 - wrong keyword arguments, with Robot's own messages and rules (named-argument syntax, positional after named,
   multiple values, missing or too many arguments, missing named-only and unexpected named arguments); calls with
   `@{list}`/`&{dict}` arguments, embedded-argument keywords and ambiguous names are not checked
+- undefined variables (warnings): a variable must be defined in the file (with the scoping of tests and keywords)
+  or in its resource and variable files. Not reported: built-in and environment variables, inline Python
+  (`${{ }}`), documentation, and variables set at run time anywhere in the project (`Set Test/Suite/Global
+  Variable`, `VAR ... scope=`). In `.resource` files, variables of the project's suites are accepted too, since
+  keywords run in the scope of the suite that imports them. Nothing is reported for a file when one of its
+  imports cannot be read statically (missing file, path with variables, module name, `get_variables()`).
+  Variables given only on the command line (`--variable`) are reported: define a default in a Variables section
 - Ctrl+S to save, ● on tabs with unsaved changes, confirmation before closing them
 
 **Run from the editor**: in `.robot` files the gutter shows ▶ (or the last result: ✓ ✕ ↷) next to each test and
@@ -146,7 +153,8 @@ src/main/traceServer.js      serves Playwright's trace viewer and the project's 
 src/renderer/editor/         Monaco integration (bundled with esbuild by scripts/build.mjs into src/renderer/dist)
   robotSyntax.js             Robot line analysis shared by highlighting and completion
   argumentCheck.js           keyword calls and argument validation (mirrors Robot's argument resolver)
-  navigation.js              outline, variable definitions and imported files
+  navigation.js              outline, variable definitions, undefined variables and imported files
+src/main/projectVariables.js variables set at run time / defined by suites across the project
 src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project
 src/main/recentProjects.js   recent projects list

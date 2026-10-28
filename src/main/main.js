@@ -17,6 +17,7 @@ const { TraceServer } = require('./traceServer');
 const { generateRobot, generateSteps, DEFAULT_OPTIONS } = require('../generator/robotGenerator');
 const { toBrowserSelector } = require('../generator/selectors');
 const { escapeArg } = require('../generator/escape');
+const { projectVariables } = require('./projectVariables');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -171,6 +172,8 @@ ipcMain.handle('projects:close', async () => {
 });
 
 ipcMain.handle('project:tree', () => (currentProject ? projects.listTree(currentProject.root) : []));
+
+ipcMain.handle('project:variables', () => (currentProject ? projectVariables(currentProject.root) : { runtime: [], suite: [], dynamicSuite: true }));
 
 ipcMain.handle('project:read-file', (_event, relative) => {
   if (!currentProject)

@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('rfide', {
   writeProjectFile: (relative, content) => ipcRenderer.invoke('project:write-file', relative, content),
   createProjectFile: (relative) => ipcRenderer.invoke('project:create-file', relative),
   projectKeywords: () => ipcRenderer.invoke('project:keywords'),
+  projectVariables: () => ipcRenderer.invoke('project:variables'),
   checkFile: (relative, text) => ipcRenderer.invoke('editor:check', relative, text),
   confirmUnsaved: (names) => ipcRenderer.invoke('dialog:unsaved', names),
 
