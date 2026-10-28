@@ -802,3 +802,12 @@ input:disabled, select:disabled { opacity: .55; }
 .results-output-bar > span { flex: 1; }
 .output-frame { flex: 1; width: 100%; border: 0; background: #fff; }
 .output-frame[hidden] { display: none; }
+
+/* Updates */
+.update-banner { position: fixed; z-index: 50; top: 8px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: min(760px, calc(100vw - 32px)); padding: 8px 10px 8px 14px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface-2); box-shadow: 0 6px 24px rgba(0, 0, 0, .45); font-size: 12.5px; }
+.update-banner[hidden] { display: none; }
+.update-banner > span { flex: 1; min-width: 0; }
+.welcome-version { margin-top: 28px; font-size: 12px; }
+.link-button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+.link-button:disabled { color: var(--muted); cursor: default; }
+.update-status:not(:empty)::before { content: " · "; }

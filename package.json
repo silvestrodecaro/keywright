@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "IDE for Robot Framework (Browser library) with a Playwright-style test generator",
+  "author": "Silvestro De Caro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvestrodecaro/robot-ide.git"
+  },
+  "homepage": "https://github.com/silvestrodecaro/robot-ide",
   "main": "src/main/main.js",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -12,10 +18,12 @@
     "test": "node --test \"test/*.test.js\"",
     "install-browsers": "playwright-core install chromium",
     "pack": "npm run build && electron-builder --win --dir",
-    "dist": "npm run build && electron-builder --win"
+    "dist": "npm run build && electron-builder --win",
+    "release": "npm run build && electron-builder --win --publish always"
   },
   "license": "MIT",
   "dependencies": {
+    "electron-updater": "6.8.11",
     "playwright-core": "1.64.1"
   },
   "devDependencies": {
@@ -53,6 +61,14 @@
       "createDesktopShortcut": true,
       "shortcutName": "Robot Framework IDE",
       "artifactName": "RobotFrameworkIDE-Setup-${version}.${ext}"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "silvestrodecaro",
+        "repo": "robot-ide",
+        "releaseType": "release"
+      }
+    ]
   }
 }

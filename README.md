@@ -9,7 +9,21 @@ screen to create a new project, open a folder or pick a recent project.
 Features: projects, a **Robot Framework editor** (Monaco), **Test Generator** (like `playwright codegen`) and
 **UI mode** (like Playwright's UI mode).
 
-## Setup
+## Install (Windows)
+
+1. Download `RobotFrameworkIDE-Setup-<version>.exe` from the
+   [Releases](https://github.com/silvestrodecaro/robot-ide/releases/latest) page.
+2. Run it. The installer is not signed, so Windows may show *"Windows protected your PC"*: click
+   **More info**, then **Run anyway**. It installs for the current user only, no administrator rights needed.
+3. Before creating a project, install **Python 3.10 or later** ([python.org](https://www.python.org/downloads/),
+   with *Add python.exe to PATH* checked) and **Node.js LTS** ([nodejs.org](https://nodejs.org)), which the
+   Browser library needs for `rfbrowser init`. **Git** is optional (new projects become git repositories).
+
+**Updates**: the IDE checks GitHub for a new version a few seconds after it starts (and with *Check for updates*
+on the welcome screen). A banner offers to download it, then to restart and install it; unsaved files are
+handled first. A downloaded update is also installed the next time the IDE is closed.
+
+## Setup (development)
 
 ```sh
 npm install
@@ -33,6 +47,21 @@ The installed IDE needs, on the user's machine:
   *Install chromium* button (downloaded with the app's bundled Playwright, no Node.js needed).
 
 The installer is not code-signed: Windows SmartScreen shows a warning on first run.
+
+### Publishing a release
+
+Releases are published on GitHub (`build.publish` in `package.json`: `silvestrodecaro/robot-ide`, a public
+repository, so the installed IDEs can check for updates without a token).
+
+1. Raise `version` in `package.json` (e.g. 0.1.0 → 0.2.0): the IDE only offers higher versions.
+2. Commit, then either
+   - publish from this machine: create a GitHub token (fine-grained, with *Contents: Read and write* on the
+     repository) and run `set GH_TOKEN=<token>` then `npm run release`; or
+   - build with `npm run dist`, then on GitHub create a release with the tag `v<version>` and upload the three
+     files of `release/`: `RobotFrameworkIDE-Setup-<version>.exe`, its `.blockmap` and `latest.yml`.
+
+`latest.yml` is what the installed IDEs read: without it they do not see the new version. `RFIDE_UPDATE_URL`
+(environment variable) makes the IDE read updates from another http(s) folder with the same files, e.g. a mirror.
 
 ## Projects
 

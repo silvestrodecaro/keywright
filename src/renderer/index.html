@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="update-banner" class="update-banner" hidden>
+    <span id="update-text"></span>
+    <button id="update-action" class="btn btn-sm btn-primary" type="button"></button>
+    <button id="update-later" class="icon-btn" type="button" title="Later">✕</button>
+  </div>
   <!-- Welcome --------------------------------------------------------------->
   <section id="view-welcome" class="view view-welcome">
     <div class="welcome">
@@ -31,6 +36,10 @@
         </div>
       </div>
       <div id="welcome-error" class="error" hidden></div>
+      <p class="welcome-version muted">
+        <span id="app-version"></span> · <button id="update-check" class="link-button" type="button">Check for updates</button>
+        <span id="update-status" class="update-status"></span>
+      </p>
     </div>
   </section>
 
