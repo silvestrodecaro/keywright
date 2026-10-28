@@ -100,6 +100,7 @@
         <div class="sidebar-switch" role="tablist">
           <button type="button" class="sidebar-tab is-active" data-sidebar="explorer">Explorer</button>
           <button type="button" class="sidebar-tab" data-sidebar="testing">Testing</button>
+          <button type="button" class="sidebar-tab" data-sidebar="problems">Problems <span id="problems-badge" class="sidebar-badge" hidden></span></button>
         </div>
 
         <div id="sidebar-explorer" class="sidebar-section">
@@ -116,6 +117,16 @@
             <div id="new-file-error" class="error" hidden></div>
           </form>
           <ul id="tree" class="tree" role="tree"></ul>
+        </div>
+
+        <div id="sidebar-problems" class="sidebar-section" hidden>
+          <div class="panel-header">
+            <span id="problems-summary">Problems</span>
+            <span class="header-actions">
+              <button id="problems-refresh" class="icon-btn" type="button" title="Check all files again">⟳</button>
+            </span>
+          </div>
+          <ul id="problems-list" class="tree problems-list" role="tree"></ul>
         </div>
 
         <div id="sidebar-testing" class="sidebar-section" hidden>
@@ -250,6 +261,7 @@
   <script src="generator.js"></script>
   <script src="watchPlan.js"></script>
   <script src="tests.js"></script>
+  <script src="problems.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -674,3 +674,18 @@ input:disabled, select:disabled { opacity: .55; }
 .btn-pick.is-picking { border-color: var(--accent); color: var(--accent); }
 .picked { display: flex; align-items: center; gap: 10px; margin: 0 16px 12px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
 .picked code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tok-arg); }
+
+/* Problems panel */
+.sidebar-badge { display: inline-block; min-width: 16px; margin-left: 4px; padding: 0 4px; border-radius: 8px; background: #d29922; color: #1d1600; font-size: 10px; line-height: 15px; letter-spacing: 0; text-align: center; }
+.sidebar-badge.has-errors { background: var(--record); color: #fff; }
+#problems-summary { display: flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0; }
+.problems-list { flex: 1; overflow: auto; }
+.problem-counts { display: inline-flex; gap: 8px; margin-left: auto; font-size: 11px; }
+.problem-warning { color: #d29922; }
+.problem-file { gap: 6px; }
+.problem-dir { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.problem-row { gap: 6px; padding-left: 26px; align-items: flex-start; }
+.problem-row > span:first-child { flex: none; width: 14px; text-align: center; }
+.problem-message { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.problem-position { flex: none; font: 11px var(--mono); }
+.sidebar-tab { white-space: nowrap; padding: 0 4px; letter-spacing: .02em; }

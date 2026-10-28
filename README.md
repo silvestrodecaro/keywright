@@ -98,6 +98,11 @@ browser and viewport; the editor is read-only while recording and one Ctrl+Z rem
 
 **＋** in the explorer creates a file (e.g. `tests/login.robot`). Saving a test file refreshes the Testing panel.
 
+The **Problems** tab of the sidebar lists the errors and warnings of every `.robot` and `.resource` file of the
+project, with the same checks as the editor (syntax, unknown keywords, arguments, undefined variables); the badge
+shows how many there are. Open files show their live problems, unsaved edits included; the others are checked
+again when files change. Clicking a problem opens the file at its position.
+
 ## Test Generator
 
 Enter a URL, choose browser and viewport, press **Record** and interact with the page. Use the toolbar
@@ -161,7 +166,8 @@ src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project
 src/main/recentProjects.js   recent projects list
 src/main/main.js, preload.js Electron main process and IPC bridge
-src/renderer/                UI (vanilla JS): app.js (welcome, projects, explorer), generator.js, tests.js
+src/renderer/                UI (vanilla JS): app.js (welcome, projects, explorer), generator.js, tests.js,
+                             problems.js (Problems panel)
 ```
 
 The recorder uses `BrowserContext._startRecording`, a **private** Playwright API. That is why

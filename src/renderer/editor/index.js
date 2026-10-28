@@ -540,7 +540,12 @@ async function validate(model, path) {
   if (model.isDisposed() || model.getVersionId() !== version)
     return; // edited meanwhile: a newer check is scheduled
   monaco.editor.setModelMarkers(model, 'variables', variables);
-  monaco.editor.setModelMarkers(model, 'robot', result.problems.map((problem) => ({
+  monaco.editor.setModelMarkers(model, 'robot', robotMarkers(result));
+}
+
+/** Parser problems from the Python helper (editor:check) as markers. */
+function robotMarkers(result) {
+  return result.problems.map((problem) => ({
     severity: problem.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
     message: problem.message,
     startLineNumber: problem.line,
@@ -548,7 +553,28 @@ async function validate(model, path) {
     endLineNumber: problem.endLine,
     endColumn: problem.endColumn,
     source: 'Robot Framework',
-  })));
+  }));
+}
+
+/** All the editor's checks on the content of a file that is not open (no model needed). */
+async function fileMarkers(path, text) {
+  const lines = text.split(/\r?\n/);
+  const document = { getValue: () => text, getLinesContent: () => lines };
+  const [result, variables] = await Promise.all([
+    window.rfide.checkFile(path, text),
+    variableMarkers(document, path).catch(() => []),
+  ]);
+  return [...robotMarkers(result), ...keywordMarkers(document), ...variables];
+}
+
+function toProblem(marker) {
+  return {
+    severity: marker.severity === monaco.MarkerSeverity.Error ? 'error' : 'warning',
+    message: marker.message,
+    line: marker.startLineNumber,
+    column: marker.startColumn,
+    source: marker.source,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -643,7 +669,7 @@ const RFEditor = (() => {
     return editor;
   }
 
-  function open(path, content, line = null) {
+  function open(path, content, line = null, column = 1) {
     if (current && files.has(current))
       files.get(current).viewState = editor.saveViewState();
     let file = files.get(path);
@@ -670,12 +696,36 @@ const RFEditor = (() => {
       editor.restoreViewState(file.viewState);
     if (line) {
       editor.revealLineInCenter(line);
-      editor.setPosition({ lineNumber: line, column: 1 });
+      editor.setPosition({ lineNumber: line, column: column || 1 });
     }
     editor.focus();
     updateGlyphs();
     for (const listener of problemListeners)
       listener(path, problemCounts(file.model));
+  }
+
+  /**
+   * Problems of project files: live markers for open files (unsaved edits included),
+   * the same checks on the saved content for the others.
+   * @param {string[]} paths .robot/.resource files
+   * @returns {Promise<{ path: string, problems: object[] }[]>}
+   */
+  async function projectProblems(paths) {
+    const results = [];
+    for (const path of paths) {
+      let markers;
+      if (files.has(path)) {
+        markers = monaco.editor.getModelMarkers({ resource: files.get(path).model.uri });
+      } else {
+        const file = await window.rfide.readProjectFile(path).catch(() => null);
+        if (!file || file.content === null)
+          continue;
+        markers = await fileMarkers(path, file.content);
+      }
+      const problems = markers.map(toProblem).sort((a, b) => a.line - b.line || a.column - b.column);
+      results.push({ path, problems });
+    }
+    return results;
   }
 
   function close(path) {
@@ -953,6 +1003,7 @@ const RFEditor = (() => {
     /** Re-runs the syntax check of open files (e.g. after the project's Python changed). */
     revalidate: () => files.forEach((_, path) => scheduleValidation(path, 0)),
     problems: (path) => (files.has(path) ? problemCounts(files.get(path).model) : null),
+    projectProblems,
     focus: () => editor && editor.focus(),
     onDirtyChange: (listener) => dirtyListeners.add(listener),
     onSave: (listener) => saveListeners.add(listener),

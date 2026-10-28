@@ -234,8 +234,8 @@
   function showSidebar(name) {
     for (const button of document.querySelectorAll('.sidebar-tab'))
       button.classList.toggle('is-active', button.dataset.sidebar === name);
-    $('#sidebar-explorer').hidden = name !== 'explorer';
-    $('#sidebar-testing').hidden = name !== 'testing';
+    for (const section of document.querySelectorAll('.sidebar-section'))
+      section.hidden = section.id !== `sidebar-${name}`;
   }
 
   for (const button of document.querySelectorAll('.sidebar-tab'))
@@ -295,7 +295,7 @@
     }
   }
 
-  async function openFile(relative, line = null) {
+  async function openFile(relative, line = null, column = 1) {
     let tab = tabs.find((t) => t.path === relative);
     if (!tab) {
       const file = await api.readProjectFile(relative);
@@ -303,6 +303,7 @@
       tabs.push(tab);
     }
     tab.line = line;
+    tab.column = column;
     shownInEditor = null; // force the editor to (re)show the file and reveal the line
     activate(relative);
   }
@@ -419,7 +420,7 @@
     }
     if (shownInEditor !== file.path) {
       ensureEditor();
-      editor.open(file.path, file.content, file.line);
+      editor.open(file.path, file.content, file.line, file.column);
       file.line = null;
       shownInEditor = file.path;
     }
@@ -618,6 +619,7 @@
     // Unknown keywords are only reported when every imported library could be documented.
     const failedImports = (result.errors || []).filter((e) => e.import);
     editor.setKeywords(result.keywords || [], { complete: result.ok && failedImports.length === 0 });
+    window.dispatchEvent(new CustomEvent('rfide:keywords-loaded'));
     editor.revalidate();
     if (!result.ok) {
       setEditorStatus(result.error, true);
@@ -691,7 +693,7 @@
   });
 
   // Requests from the Testing panel (tests.js).
-  window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line));
+  window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line, event.detail.column));
   window.addEventListener('rfide:show-testing', () => showSidebar('testing'));
 
   // Run glyphs and context menu of the editor: tests run from the saved file.
