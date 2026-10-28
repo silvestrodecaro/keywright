@@ -1,4 +1,7 @@
-# Development
+# Contributing
+
+Bug reports and ideas are welcome in the [issues](https://github.com/silvestrodecaro/robot-ide/issues). For a
+change of more than a few lines, open an issue first so we can agree on the approach.
 
 ## Running from source
 
@@ -65,19 +68,3 @@ npm run dist     # release/RobotFrameworkIDE-Setup-<version>.exe (NSIS, per user
 npm run pack     # release/win-unpacked/, to try the packaged app without installing
 ```
 
-The installer is not code-signed.
-
-## Publishing a release
-
-Installed copies read updates from this repository's GitHub releases.
-
-1. Raise `version` in `package.json`. The IDE only offers versions higher than its own.
-2. Commit, push, and push the tag: `git tag v<version>` and `git push origin v<version>`.
-3. Create the GitHub release for the tag first (with the release notes). Left to itself, `npm run release`
-   can create two releases for the same tag, one of them with only the `.blockmap`.
-4. Either run `npm run release` with `GH_TOKEN` set to a token with *Contents: read and write* on the
-   repository, or run `npm run dist` and attach the three files from `release/` to a GitHub release for the tag:
-   the `.exe`, its `.blockmap` and `latest.yml`.
-
-`latest.yml` is what installed copies look for; without it they don't see the new version. Setting
-`RFIDE_UPDATE_URL` makes the IDE read updates from another folder served over http(s), e.g. a mirror.

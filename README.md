@@ -60,11 +60,11 @@ The [user guide](docs/user-guide.md) covers every feature and shortcut.
 
 ## Status
 
-This is a personal project used by a small team, at version 0.x. It works well for day-to-day Browser library
-work, but expect rough edges. Bug reports and ideas are welcome in the
+The IDE is in early development (0.x) and is used daily on Browser library projects. Until 1.0, settings and
+behavior may still change between versions. Bug reports and ideas are welcome in the
 [issues](https://github.com/silvestrodecaro/robot-ide/issues).
 
-To build it, run the tests or publish a release, see [docs/development.md](docs/development.md).
+To build it from source or run the tests, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
