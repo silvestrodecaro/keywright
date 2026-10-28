@@ -180,7 +180,28 @@ class Debugger:
 
     @staticmethod
     def _parse(breakpoints):
-        return {(_normalize_source(source), int(line)) for source, lines in breakpoints.items() for line in lines}
+        """{source: [line or {"line", "condition"}]} -> {(normalized source, line): condition or None}."""
+        parsed = {}
+        for source, items in breakpoints.items():
+            for item in items:
+                line, condition = (item, None) if isinstance(item, int) else (item.get("line"), item.get("condition"))
+                parsed[(_normalize_source(source), int(line))] = (condition or "").strip() or None
+        return parsed
+
+    def _condition_holds(self, condition):
+        """Evaluates a breakpoint condition like IF does ($var or ${var}); (stop, message).
+        A condition that cannot be evaluated stops, with the error, so it is not silently ignored."""
+        if not condition:
+            return True, None
+        from robot.libraries.BuiltIn import BuiltIn
+
+        self._listener._muted = True
+        try:
+            return bool(BuiltIn().evaluate(condition)), None
+        except Exception as error:
+            return True, _truncate(f"Breakpoint condition '{condition}' failed: {error}")
+        finally:
+            self._listener._muted = False
 
     def _read(self, sock):
         try:
@@ -228,14 +249,18 @@ class Debugger:
         source = _normalize_source(getattr(data, "source", None))
         lineno = getattr(data, "lineno", None)
         mode = self._mode
+        message = None
+        stop = False
         if (source, lineno) in self._breakpoints:
+            stop, message = self._condition_holds(self._breakpoints[(source, lineno)])
+        if stop:
             reason = "breakpoint"
         elif mode in ("pause", "into") or (mode == "over" and depth <= self._depth) or (mode == "out" and depth < self._depth):
             reason = "step" if mode != "pause" else "pause"
         else:
             return
         current = {"name": _describe(result)["name"], "source": _source(data), "lineno": lineno}
-        self._pause(reason, data, result, depth, [current, *reversed(frames)])
+        self._pause(reason, data, result, depth, [current, *reversed(frames)], message=message)
 
     def after(self, data, result, depth, frames, ancestors):
         """Called when a body item ends; stops at the innermost failure that is not expected."""

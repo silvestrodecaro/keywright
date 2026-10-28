@@ -158,3 +158,36 @@ test('stops at unexpected failures and evaluates while paused', { skip: !python 
   assert.match(evaluations.get('error'), /^error: /);
   assert.ok(!stepNames.includes('Catenate'), 'keywords run by evaluations are not reported as steps');
 });
+
+test('conditional breakpoints stop only when the condition holds', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-debug-'));
+  fs.mkdirSync(path.join(dir, 'tests'));
+  fs.writeFileSync(path.join(dir, 'tests', 'loop.robot'), [
+    '*** Test Cases ***',
+    'Loop',
+    '    FOR    ${i}    IN RANGE    5',
+    '        Log    ${i}',
+    '    END',
+    '    Log    after',
+    '',
+  ].join('\n'));
+  const runner = new TestRunner();
+  const pauses = [];
+  const finished = new Promise((resolve) => runner.on('finished', resolve));
+  runner.on('event', (event) => {
+    if (event.type !== 'debug-paused')
+      return;
+    const local = event.variables.flatMap((g) => g.variables).find((v) => v.name === '${i}');
+    pauses.push([event.lineno, local ? local.value : null, event.message || null]);
+    runner.debugCommand({ command: 'continue' });
+  });
+  await runner.run({ root: dir, python, config: { testsDir: 'tests', outputDir: path.join(dir, 'results') } }, { debug: {
+    breakpoints: { 'tests/loop.robot': [{ line: 4, condition: '$i == 3' }, { line: 6, condition: '$nope > 1' }] },
+  } });
+  await finished;
+  assert.deepStrictEqual(pauses.slice(0, 1), [[4, '3', null]]);
+  // A condition that fails to evaluate stops, with the error.
+  assert.strictEqual(pauses.length, 2);
+  assert.strictEqual(pauses[1][0], 6);
+  assert.match(pauses[1][2], /Breakpoint condition '\$nope > 1' failed/);
+});

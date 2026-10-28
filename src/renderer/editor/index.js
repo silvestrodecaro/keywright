@@ -1153,7 +1153,7 @@ const RFEditor = (() => {
         }
       });
       scheduleValidation(path, 0);
-      setBreakpointLines(path, [...(breakpointLines.get(path) || [])]);
+      setBreakpointEntries(path, breakpointLines.get(path) || []);
     }
     current = path;
     editor.setModel(file.model);
@@ -1208,10 +1208,10 @@ const RFEditor = (() => {
     }
     clearTimeout(validationTimers.get(path));
     validationTimers.delete(path);
-    const lines = breakpointsOf(path); // kept for when the file is opened again
+    const entries = breakpointsOf(path); // kept for when the file is opened again
     breakpointDecorations.delete(path);
-    if (lines.length)
-      breakpointLines.set(path, new Set(lines));
+    if (entries.length)
+      breakpointLines.set(path, entries);
     else
       breakpointLines.delete(path);
     file.model.dispose();
@@ -1321,51 +1321,68 @@ const RFEditor = (() => {
   // Breakpoints (left lane of the gutter, F9) and the line where the debugger is paused.
   // Open files track their breakpoints with decorations, so they follow edits.
 
-  const breakpointLines = new Map(); // path -> Set<line>, for files that are not open
-  const breakpointDecorations = new Map(); // path -> decoration ids on the open model
+  const breakpointLines = new Map(); // path -> [{ line, condition }], for files that are not open
+  const breakpointDecorations = new Map(); // path -> [{ id, condition }] on the open model
   const breakpointListeners = new Set();
   let breakpointTimer = null;
   let debugLine = null; // { model, ids }
   let pendingDebugLine = null; // { path, line } until the file is opened
+  let conditionWidget = null;
 
-  function breakpointDecoration(line) {
+  function breakpointDecoration({ line, condition }) {
     return {
       range: new monaco.Range(line, 1, line, 1),
       options: {
-        glyphMarginClassName: 'breakpoint-glyph',
+        glyphMarginClassName: 'breakpoint-glyph' + (condition ? ' is-conditional' : ''),
         glyphMargin: { position: monaco.editor.GlyphMarginLane.Left },
-        glyphMarginHoverMessage: { value: 'Breakpoint: click or F9 to remove' },
+        glyphMarginHoverMessage: { value: condition
+          ? `Breakpoint when \`${escapeMarkdown(condition)}\` · right-click to edit, click or F9 to remove`
+          : 'Breakpoint · right-click to add a condition, click or F9 to remove' },
         stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
       },
     };
   }
 
-  function breakpointsOf(path) {
-    const model = files.get(path)?.model;
-    const ids = breakpointDecorations.get(path);
-    const lines = model && ids ? ids.map((id) => model.getDecorationRange(id)?.startLineNumber).filter(Boolean)
-      : [...(breakpointLines.get(path) || [])];
-    return [...new Set(lines)].sort((a, b) => a - b);
+  /** Breakpoints as [{ line, condition }]: numbers (older saved breakpoints) are accepted too. */
+  function normalizeEntries(items) {
+    const byLine = new Map();
+    for (const item of items || []) {
+      const entry = typeof item === 'number' ? { line: item, condition: '' } : { line: item.line, condition: (item.condition || '').trim() };
+      if (Number.isInteger(entry.line) && entry.line > 0)
+        byLine.set(entry.line, entry);
+    }
+    return [...byLine.values()].sort((a, b) => a.line - b.line);
   }
 
-  function setBreakpointLines(path, lines) {
-    const sorted = [...new Set(lines)].sort((a, b) => a - b);
-    if (sorted.length)
-      breakpointLines.set(path, new Set(sorted));
+  function breakpointsOf(path) {
+    const model = files.get(path)?.model;
+    const decorations = breakpointDecorations.get(path);
+    if (model && decorations) // open: decorations follow the edits
+      return normalizeEntries(decorations.map(({ id, condition }) => ({ line: model.getDecorationRange(id)?.startLineNumber, condition })));
+    return normalizeEntries(breakpointLines.get(path));
+  }
+
+  function setBreakpointEntries(path, items) {
+    const entries = normalizeEntries(items);
+    if (entries.length)
+      breakpointLines.set(path, entries);
     else
       breakpointLines.delete(path);
     const model = files.get(path)?.model;
-    if (model)
-      breakpointDecorations.set(path, model.deltaDecorations(breakpointDecorations.get(path) || [], sorted.map(breakpointDecoration)));
+    if (model) {
+      const old = (breakpointDecorations.get(path) || []).map((d) => d.id);
+      const ids = model.deltaDecorations(old, entries.map(breakpointDecoration));
+      breakpointDecorations.set(path, entries.map((entry, index) => ({ id: ids[index], condition: entry.condition })));
+    }
   }
 
-  /** All breakpoints: { path: [lines] }. */
+  /** All breakpoints: { path: [{ line, condition? }] }. */
   function allBreakpoints() {
     const result = {};
     for (const path of new Set([...breakpointLines.keys(), ...breakpointDecorations.keys()])) {
-      const lines = breakpointsOf(path);
-      if (lines.length)
-        result[path] = lines;
+      const entries = breakpointsOf(path).map(({ line, condition }) => (condition ? { line, condition } : { line }));
+      if (entries.length)
+        result[path] = entries;
     }
     return result;
   }
@@ -1378,15 +1395,64 @@ const RFEditor = (() => {
   }
 
   function toggleBreakpoint(path, line) {
-    const lines = breakpointsOf(path);
-    setBreakpointLines(path, lines.includes(line) ? lines.filter((l) => l !== line) : [...lines, line]);
+    const entries = breakpointsOf(path);
+    setBreakpointEntries(path, entries.some((e) => e.line === line) ? entries.filter((e) => e.line !== line) : [...entries, { line, condition: '' }]);
+    emitBreakpoints();
+  }
+
+  /** Adds a breakpoint with a condition, or changes the condition of an existing one ('' for none). */
+  function setBreakpointCondition(path, line, condition) {
+    setBreakpointEntries(path, [...breakpointsOf(path).filter((e) => e.line !== line), { line, condition }]);
     emitBreakpoints();
   }
 
   /** Replaces all breakpoints (e.g. restored for a project). */
   function setBreakpoints(all) {
     for (const path of new Set([...breakpointLines.keys(), ...breakpointDecorations.keys(), ...Object.keys(all)]))
-      setBreakpointLines(path, all[path] || []);
+      setBreakpointEntries(path, all[path] || []);
+  }
+
+  function closeConditionWidget() {
+    if (conditionWidget)
+      editor.removeContentWidget(conditionWidget);
+    conditionWidget = null;
+  }
+
+  /** An input below the line to add or edit a breakpoint's condition (Enter applies, Escape cancels). */
+  function editBreakpointCondition(line) {
+    const path = current;
+    if (!path || files.get(path)?.model.getLanguageId() !== LANGUAGE)
+      return;
+    closeConditionWidget();
+    const entry = breakpointsOf(path).find((e) => e.line === line);
+    const input = Object.assign(document.createElement('input'), {
+      type: 'text',
+      value: entry?.condition || '',
+      spellcheck: false,
+      placeholder: 'Stop when… e.g. $i == 5 or $status == "FAIL" (Enter; empty: always)',
+    });
+    const node = document.createElement('div');
+    node.className = 'breakpoint-condition';
+    node.append(Object.assign(document.createElement('span'), { textContent: `Line ${line}` }), input);
+    conditionWidget = {
+      getId: () => 'rfide.breakpointCondition',
+      getDomNode: () => node,
+      getPosition: () => ({ position: { lineNumber: line, column: 1 }, preference: [monaco.editor.ContentWidgetPositionPreference.BELOW] }),
+    };
+    editor.addContentWidget(conditionWidget);
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key !== 'Enter' && event.key !== 'Escape')
+        return;
+      // No default action, and focus the editor after the event: otherwise the Enter reaches it.
+      event.preventDefault();
+      if (event.key === 'Enter')
+        setBreakpointCondition(path, line, input.value.trim());
+      closeConditionWidget();
+      setTimeout(() => editor.focus(), 0);
+    });
+    input.addEventListener('blur', () => setTimeout(closeConditionWidget, 0));
+    setTimeout(() => input.focus(), 0);
   }
 
   /** Highlights the line where the debugger is paused (the file must be open). */
@@ -1489,6 +1555,24 @@ const RFEditor = (() => {
         requestRun(glyphLines.get(line));
       else if (current && files.get(current)?.model.getLanguageId() === LANGUAGE)
         toggleBreakpoint(current, line);
+    });
+    editor.onContextMenu((event) => {
+      const type = event.target.type;
+      if (type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS)
+        return;
+      if (event.target.position)
+        editBreakpointCondition(event.target.position.lineNumber);
+    });
+    editor.addAction({
+      id: 'rfide.conditionalBreakpoint',
+      label: 'Add Conditional Breakpoint…',
+      contextMenuGroupId: '1_debug',
+      contextMenuOrder: 1,
+      run: () => {
+        const line = editor.getPosition()?.lineNumber;
+        if (line)
+          editBreakpointCondition(line);
+      },
     });
     editor.addCommand(monaco.KeyCode.F9, () => {
       const line = editor.getPosition()?.lineNumber;

@@ -182,6 +182,9 @@ them: the paused line is highlighted in the editor and the Testing panel shows t
 open it) and the variables by scope (Local, Test, Suite, Global; built-in ones are left out). Continue (F5),
 Step Over (F10), Step Into (F11), Step Out (Shift+F11), Pause and Stop are in the panel. Breakpoints changed
 during a run apply right away (on the saved file: lines of unsaved edits may not match).
+Right-click a breakpoint (or the gutter, or *Add Conditional Breakpoint…* in the editor menu) to give it a
+condition, evaluated like an IF before the step runs: `$i == 5`, `$status == "FAIL"`, `len($items) > 3`.
+Conditional breakpoints are drawn as squares; a condition that cannot be evaluated stops, with the error.
 
 *Stop on failure* (on by default with *Debug*) pauses where a keyword fails, with its error message, before
 teardowns run: the browser page is still there. Failures expected by TRY, `Run Keyword And Ignore Error`,
