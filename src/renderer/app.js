@@ -803,6 +803,63 @@
   });
 
   // -------------------------------------------------------------------------
+  // Sidebar width (drag its right edge; double-click resets it)
+
+  const SIDEBAR_DEFAULT = 290;
+  const SIDEBAR_MIN = 250;
+
+  function setSidebarWidth(width) {
+    const max = Math.max(SIDEBAR_MIN, Math.round(window.innerWidth * 0.6));
+    width = Math.min(max, Math.max(SIDEBAR_MIN, Math.round(width)));
+    document.documentElement.style.setProperty('--sidebar-width', width + 'px');
+    return width;
+  }
+
+  function storeSidebarWidth(width) {
+    try {
+      localStorage.setItem('rfide.sidebarWidth', String(width));
+    } catch {
+      // not kept
+    }
+  }
+
+  (() => {
+    let stored = NaN;
+    try {
+      stored = Number(localStorage.getItem('rfide.sidebarWidth'));
+    } catch {
+      // default width
+    }
+    let width = setSidebarWidth(stored > 0 ? stored : SIDEBAR_DEFAULT);
+    const resizer = $('#sidebar-resizer');
+    resizer.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0)
+        return;
+      event.preventDefault();
+      // Captured, so the pointer is not lost over the trace viewer's or the report's iframe.
+      resizer.setPointerCapture(event.pointerId);
+      resizer.classList.add('is-dragging');
+      const left = $('.sidebar').getBoundingClientRect().left;
+      const move = (e) => { width = setSidebarWidth(e.clientX - left); };
+      const end = () => {
+        resizer.classList.remove('is-dragging');
+        resizer.removeEventListener('pointermove', move);
+        resizer.removeEventListener('pointerup', end);
+        resizer.removeEventListener('pointercancel', end);
+        storeSidebarWidth(width);
+      };
+      resizer.addEventListener('pointermove', move);
+      resizer.addEventListener('pointerup', end);
+      resizer.addEventListener('pointercancel', end);
+    });
+    resizer.addEventListener('dblclick', () => {
+      width = setSidebarWidth(SIDEBAR_DEFAULT);
+      storeSidebarWidth(width);
+    });
+    window.addEventListener('resize', () => setSidebarWidth(width));
+  })();
+
+  // -------------------------------------------------------------------------
 
   (async () => {
     const project = await api.currentProject();

@@ -27,6 +27,8 @@ Creating it runs a few optional steps, with their output shown live: a `.venv` w
 `pip install -r requirements.txt` (Python 3.10+), `rfbrowser init` (Node.js) and `git init` with a first
 commit. If a step fails, the folder is kept and can still be opened.
 
+The sidebar can be resized by dragging its right edge; double-click the edge to reset it.
+
 Any folder can be opened; `rfide.json` is optional. The list of recent projects is kept in the IDE's data
 folder, not in the projects.
 
