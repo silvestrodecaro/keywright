@@ -7,7 +7,9 @@
 * ``python rfide_runner.py serve`` answers editor requests (syntax check of
   unsaved content) as JSON lines on stdin/stdout.
 * ``--listener rfide_runner.Listener`` streams execution events as JSON lines
-  to the TCP port in the ``RFIDE_PORT`` environment variable.
+  to the TCP port in the ``RFIDE_PORT`` environment variable. With
+  ``RFIDE_DEBUG=1`` it also reads debugger commands from that connection and
+  pauses at the breakpoints in ``RFIDE_BREAKPOINTS`` (JSON {source: [lines]}).
 * ``--prerunmodifier rfide_runner.SelectTests`` keeps only the tests whose full
   name, or the full name of one of their suites, is in the JSON list in
   ``RFIDE_SELECT``.
@@ -18,9 +20,11 @@ Robot's own ids (``s1-s2-t1``) are positional and change when tests are filtered
 
 import json
 import os
+import queue
 import re
 import socket
 import sys
+import threading
 
 from robot.api import SuiteVisitor, TestSuiteBuilder
 
@@ -123,20 +127,156 @@ def _describe(result):
     return {"kind": kind.lower(), "name": _truncate(text.strip()), "args": [], "assign": []}
 
 
+# Body items the debugger stops at (not FOR iterations nor IF/TRY branches).
+PAUSABLE = {"KEYWORD", "SETUP", "TEARDOWN", "FOR", "WHILE", "IF/ELSE ROOT", "TRY/EXCEPT ROOT", "VAR", "RETURN",
+            "BREAK", "CONTINUE", "GROUP"}
+BUILTIN_VARIABLES = {"/", ":", "\\n", "space", "empty", "true", "false", "none", "null", "curdir", "tempdir", "execdir",
+                     "options", "outputdir", "outputfile", "logfile", "reportfile", "debugfile", "loglevel",
+                     "prevtestname", "prevteststatus", "prevtestmessage", "suitename", "suitesource",
+                     "suitedocumentation", "suitemetadata", "suitestatus", "suitemessage", "testname",
+                     "testdocumentation", "testtags", "testmetadata", "teststatus", "testmessage", "keywordstatus",
+                     "keywordmessage"}
+
+
+def _normalize_source(path):
+    # realpath: Windows 8.3 short names (NAME~1) and symlinks give the same key as Robot's paths.
+    return os.path.normcase(os.path.realpath(path)) if path else None
+
+
+def _source(data):
+    """The file of a body item, as text (Robot gives a Path)."""
+    source = getattr(data, "source", None)
+    return str(source) if source else None
+
+
+def _variable_key(name):
+    return name[2:-1].lower().replace(" ", "").replace("_", "")
+
+
+def _value(value):
+    text = value if isinstance(value, str) else repr(value)
+    return {"value": _truncate(text), "type": type(value).__name__}
+
+
+class Debugger:
+    """Breakpoints and stepping. Commands arrive on the listener's connection."""
+
+    def __init__(self, listener, sock):
+        self._listener = listener
+        self._commands = queue.Queue()
+        self._breakpoints = self._parse(json.loads(os.environ.get("RFIDE_BREAKPOINTS") or "{}"))
+        self._mode = None  # None (run to breakpoints), "pause", "into", "over", "out"
+        self._depth = 0  # body item depth of the last pause, for stepping
+        threading.Thread(target=self._read, args=(sock,), daemon=True).start()
+
+    @staticmethod
+    def _parse(breakpoints):
+        return {(_normalize_source(source), int(line)) for source, lines in breakpoints.items() for line in lines}
+
+    def _read(self, sock):
+        try:
+            for line in sock.makefile("r", encoding="utf-8"):
+                if line.strip():
+                    self._commands.put(json.loads(line))
+        except (OSError, ValueError):
+            pass
+        self._commands.put({"command": "detach"})  # the IDE went away: never block again
+
+    def _handle(self, command):
+        """Applies a command; returns True when it resumes execution."""
+        name = command.get("command")
+        if name == "breakpoints":
+            self._breakpoints = self._parse(command.get("breakpoints") or {})
+        elif name == "pause":
+            self._mode = "pause"
+        elif name == "detach":
+            self._breakpoints = set()
+            self._mode = None
+            return True
+        elif name in ("continue", "into", "over", "out"):
+            self._mode = None if name == "continue" else name
+            return True
+        return False
+
+    def before(self, data, result, depth, frames):
+        """Called before each body item runs; blocks while paused."""
+        while True:
+            try:
+                self._handle(self._commands.get_nowait())
+            except queue.Empty:
+                break
+        if result.type not in PAUSABLE:
+            return
+        source = _normalize_source(getattr(data, "source", None))
+        lineno = getattr(data, "lineno", None)
+        mode = self._mode
+        if (source, lineno) in self._breakpoints:
+            reason = "breakpoint"
+        elif mode in ("pause", "into") or (mode == "over" and depth <= self._depth) or (mode == "out" and depth < self._depth):
+            reason = "step" if mode != "pause" else "pause"
+        else:
+            return
+        self._depth = depth
+        self._listener._send({"type": "debug-paused", "reason": reason, "test": self._listener._test,
+                              "suite": self._listener._suite(), "source": _source(data),
+                              "lineno": lineno, "step": result.id, **_describe(result),
+                              "frames": self._frames(data, result, frames), "variables": self._variables()})
+        while not self._handle(self._commands.get()):
+            pass
+        self._listener._send({"type": "debug-resumed"})
+
+    def _frames(self, data, result, frames):
+        """Call stack, innermost first: the paused item, then the calls of the enclosing keywords."""
+        current = {"name": _describe(result)["name"], "source": _source(data),
+                   "lineno": getattr(data, "lineno", None)}
+        return [current, *reversed(frames)]
+
+    def _variables(self):
+        """Visible variables grouped by the innermost scope defining them: Local, Test, Suite, Global."""
+        from robot.running.context import EXECUTION_CONTEXTS
+
+        context = EXECUTION_CONTEXTS.current
+        if context is None:
+            return []
+        scopes = context.variables
+        layers = [("Local", scopes.current), ("Test", scopes._test), ("Suite", scopes._suite), ("Global", scopes._global)]
+        dicts = []
+        for name, store in layers:
+            if store is None or any(store is other for _, other, _ in dicts):
+                continue
+            # Outside keywords the current scope is the test's (or the suite's): name it after that one.
+            if name == "Local" and (store is scopes._test or store is scopes._suite):
+                continue
+            dicts.append((name, store, store.as_dict(decoration=True)))
+        groups = []
+        for index, (name, _, values) in enumerate(dicts):
+            outer = dicts[index + 1][2] if index + 1 < len(dicts) else {}
+            items = [{"name": key, **_value(value)} for key, value in values.items()
+                     if _variable_key(key) not in BUILTIN_VARIABLES and (key not in outer or outer[key] is not value)]
+            if items:
+                groups.append({"scope": name, "variables": sorted(items, key=lambda item: item["name"].lower())})
+        return groups
+
+
 class Listener:
     ROBOT_LISTENER_API_VERSION = 3
 
     def __init__(self):
         self._socket = None
         self._stack = []  # ids of running body items, for attaching log messages
+        self._frames = []  # running keyword calls (name, source, lineno), for the debugger's call stack
         self._test = None
         self._suites = []  # full names of the running suites
+        self._debugger = None
         port = os.environ.get("RFIDE_PORT")
         if port:
             try:
                 self._socket = socket.create_connection(("127.0.0.1", int(port)), timeout=5)
+                self._socket.settimeout(None)  # the debugger waits for commands
             except OSError as error:
                 print(f"[rfide] cannot connect to the IDE: {error}", file=sys.__stderr__)
+        if self._socket and os.environ.get("RFIDE_DEBUG") == "1":
+            self._debugger = Debugger(self, self._socket)
 
     def _send(self, event):
         if not self._socket:
@@ -149,6 +289,7 @@ class Listener:
     def start_suite(self, data, result):
         self._suites.append(result.full_name)
         self._stack = []
+        self._frames = []
         self._send({"type": "suite-start", "id": result.full_name, "name": result.name})
 
     def end_suite(self, data, result):
@@ -165,6 +306,7 @@ class Listener:
     def start_test(self, data, result):
         self._test = result.full_name
         self._stack = []
+        self._frames = []
         self._send({"type": "test-start", "id": result.full_name, "name": result.name})
 
     def end_test(self, data, result):
@@ -177,15 +319,22 @@ class Listener:
         return self._suites[-1] if self._suites else None
 
     def start_body_item(self, data, result):
+        if self._debugger:
+            self._debugger.before(data, result, len(self._stack), self._frames)
         item_id = result.id
         parent = self._stack[-1] if self._stack else None
         self._stack.append(item_id)
+        if result.type in ("KEYWORD", "SETUP", "TEARDOWN"):
+            self._frames.append({"name": result.name or "", "source": _source(data),
+                                 "lineno": getattr(data, "lineno", None), "id": item_id})
         self._send({"type": "step-start", "id": item_id, "parent": parent, "test": self._test, "suite": self._suite(),
                     "lineno": getattr(data, "lineno", None), **_describe(result)})
 
     def end_body_item(self, data, result):
         if self._stack and self._stack[-1] == result.id:
             self._stack.pop()
+        if self._frames and self._frames[-1]["id"] == result.id:
+            self._frames.pop()
         self._send({"type": "step-end", "id": result.id, "test": self._test, "suite": self._suite(), "status": result.status,
                     "message": _truncate(getattr(result, "message", "") or ""), "elapsed": _seconds(result)})
 

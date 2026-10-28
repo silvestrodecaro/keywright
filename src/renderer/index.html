@@ -144,10 +144,27 @@
                 <input id="tests-headed" type="checkbox"> <span>Show browser</span></label>
               <label class="check check-sm" title="Record a Playwright trace of every browser context (New Context)">
                 <input id="tests-trace" type="checkbox" checked> <span>Record trace</span></label>
+              <label class="check check-sm" title="Stop at the breakpoints set in the editor (click the gutter or press F9)">
+                <input id="tests-debug" type="checkbox"> <span>Debug</span></label>
             </div>
           </div>
           <div id="tests-summary" class="tests-summary"></div>
           <div id="tests-error" class="error" hidden></div>
+          <div id="debug-panel" class="debug-panel" hidden>
+            <div class="debug-toolbar">
+              <span id="debug-status" class="debug-status"></span>
+              <button id="debug-continue" class="icon-btn" type="button" title="Continue (F5)">▶</button>
+              <button id="debug-over" class="icon-btn" type="button" title="Step Over (F10)">↷</button>
+              <button id="debug-into" class="icon-btn" type="button" title="Step Into (F11)">↓</button>
+              <button id="debug-out" class="icon-btn" type="button" title="Step Out (Shift+F11)">↑</button>
+              <button id="debug-pause" class="icon-btn" type="button" title="Pause at the next step">❚❚</button>
+              <button id="debug-stop" class="icon-btn" type="button" title="Stop">■</button>
+            </div>
+            <div class="debug-section-title">Call stack</div>
+            <ul id="debug-stack" class="debug-stack"></ul>
+            <div class="debug-section-title">Variables</div>
+            <div id="debug-variables" class="debug-variables"></div>
+          </div>
           <ul id="test-tree" class="tree test-tree" role="tree"></ul>
         </div>
       </aside>

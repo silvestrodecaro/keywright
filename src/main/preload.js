@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('rfide', {
   discoverTests: () => ipcRenderer.invoke('tests:discover'),
   runTests: (options) => ipcRenderer.invoke('tests:run', options),
   stopTests: () => ipcRenderer.invoke('tests:stop'),
+  debugCommand: (command) => ipcRenderer.invoke('tests:debug-command', command),
   openTestOutput: (file) => ipcRenderer.invoke('tests:open-output', file),
   traceUrl: (traceFile) => ipcRenderer.invoke('tests:trace-url', traceFile),
   onTestEvent: (callback) => subscribe('tests:event', callback),

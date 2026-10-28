@@ -1063,8 +1063,13 @@ const RFEditor = (() => {
         scheduleValidation(path);
         if (path === current)
           scheduleGlyphs();
+        if (breakpointDecorations.get(path)?.length) { // breakpoints moved with the text
+          clearTimeout(breakpointTimer);
+          breakpointTimer = setTimeout(emitBreakpoints, 500);
+        }
       });
       scheduleValidation(path, 0);
+      setBreakpointLines(path, [...(breakpointLines.get(path) || [])]);
     }
     current = path;
     editor.setModel(file.model);
@@ -1076,6 +1081,8 @@ const RFEditor = (() => {
     }
     editor.focus();
     updateGlyphs();
+    if (pendingDebugLine?.path === path)
+      showDebugLine(path, pendingDebugLine.line);
     for (const listener of problemListeners)
       listener(path, problemCounts(file.model));
   }
@@ -1115,6 +1122,12 @@ const RFEditor = (() => {
     }
     clearTimeout(validationTimers.get(path));
     validationTimers.delete(path);
+    const lines = breakpointsOf(path); // kept for when the file is opened again
+    breakpointDecorations.delete(path);
+    if (lines.length)
+      breakpointLines.set(path, new Set(lines));
+    else
+      breakpointLines.delete(path);
     file.model.dispose();
     files.delete(path);
   }
@@ -1218,6 +1231,101 @@ const RFEditor = (() => {
     return text.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
   }
 
+  // -------------------------------------------------------------------------
+  // Breakpoints (left lane of the gutter, F9) and the line where the debugger is paused.
+  // Open files track their breakpoints with decorations, so they follow edits.
+
+  const breakpointLines = new Map(); // path -> Set<line>, for files that are not open
+  const breakpointDecorations = new Map(); // path -> decoration ids on the open model
+  const breakpointListeners = new Set();
+  let breakpointTimer = null;
+  let debugLine = null; // { model, ids }
+  let pendingDebugLine = null; // { path, line } until the file is opened
+
+  function breakpointDecoration(line) {
+    return {
+      range: new monaco.Range(line, 1, line, 1),
+      options: {
+        glyphMarginClassName: 'breakpoint-glyph',
+        glyphMargin: { position: monaco.editor.GlyphMarginLane.Left },
+        glyphMarginHoverMessage: { value: 'Breakpoint: click or F9 to remove' },
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+    };
+  }
+
+  function breakpointsOf(path) {
+    const model = files.get(path)?.model;
+    const ids = breakpointDecorations.get(path);
+    const lines = model && ids ? ids.map((id) => model.getDecorationRange(id)?.startLineNumber).filter(Boolean)
+      : [...(breakpointLines.get(path) || [])];
+    return [...new Set(lines)].sort((a, b) => a - b);
+  }
+
+  function setBreakpointLines(path, lines) {
+    const sorted = [...new Set(lines)].sort((a, b) => a - b);
+    if (sorted.length)
+      breakpointLines.set(path, new Set(sorted));
+    else
+      breakpointLines.delete(path);
+    const model = files.get(path)?.model;
+    if (model)
+      breakpointDecorations.set(path, model.deltaDecorations(breakpointDecorations.get(path) || [], sorted.map(breakpointDecoration)));
+  }
+
+  /** All breakpoints: { path: [lines] }. */
+  function allBreakpoints() {
+    const result = {};
+    for (const path of new Set([...breakpointLines.keys(), ...breakpointDecorations.keys()])) {
+      const lines = breakpointsOf(path);
+      if (lines.length)
+        result[path] = lines;
+    }
+    return result;
+  }
+
+  function emitBreakpoints() {
+    clearTimeout(breakpointTimer);
+    const all = allBreakpoints();
+    for (const listener of breakpointListeners)
+      listener(all);
+  }
+
+  function toggleBreakpoint(path, line) {
+    const lines = breakpointsOf(path);
+    setBreakpointLines(path, lines.includes(line) ? lines.filter((l) => l !== line) : [...lines, line]);
+    emitBreakpoints();
+  }
+
+  /** Replaces all breakpoints (e.g. restored for a project). */
+  function setBreakpoints(all) {
+    for (const path of new Set([...breakpointLines.keys(), ...breakpointDecorations.keys(), ...Object.keys(all)]))
+      setBreakpointLines(path, all[path] || []);
+  }
+
+  /** Highlights the line where the debugger is paused (the file must be open). */
+  function showDebugLine(path, line) {
+    clearDebugLine();
+    const model = files.get(path)?.model;
+    pendingDebugLine = model ? null : { path, line };
+    if (!model)
+      return;
+    const ids = model.deltaDecorations([], [{
+      range: new monaco.Range(line, 1, line, 1),
+      options: { isWholeLine: true, className: 'debug-current-line', linesDecorationsClassName: 'debug-current-arrow' },
+    }]);
+    debugLine = { model, ids };
+    if (current === path)
+      editor.revealLineInCenterIfOutsideViewport(line);
+  }
+
+  function clearDebugLine() {
+    pendingDebugLine = null;
+    if (debugLine && !debugLine.model.isDisposed())
+      debugLine.model.deltaDecorations(debugLine.ids, []);
+    debugLine = null;
+  }
+
   function glyph(line, status, action, running) {
     const parts = [status ? `**${STATUS_LABELS[status] || status}**` : null,
       running ? 'Tests are running' : `Click to run ${action}`].filter(Boolean);
@@ -1225,6 +1333,7 @@ const RFEditor = (() => {
       range: new monaco.Range(line, 1, line, 1),
       options: {
         glyphMarginClassName: `test-glyph status-${String(status || 'none').toLowerCase().replace(/\s+/g, '-')}`,
+        glyphMargin: { position: monaco.editor.GlyphMarginLane.Right }, // breakpoints use the left lane
         glyphMarginHoverMessage: { value: parts.join(' · ') },
         stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
       },
@@ -1288,8 +1397,17 @@ const RFEditor = (() => {
       if (event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !event.event.leftButton)
         return;
       const line = event.target.position?.lineNumber;
-      if (glyphLines.has(line))
+      if (!line)
+        return;
+      if (glyphLines.has(line) && event.target.element?.classList.contains('test-glyph'))
         requestRun(glyphLines.get(line));
+      else if (current && files.get(current)?.model.getLanguageId() === LANGUAGE)
+        toggleBreakpoint(current, line);
+    });
+    editor.addCommand(monaco.KeyCode.F9, () => {
+      const line = editor.getPosition()?.lineNumber;
+      if (line && current && files.get(current)?.model.getLanguageId() === LANGUAGE)
+        toggleBreakpoint(current, line);
     });
     editor.addAction({
       id: 'rfide.runTestAtCursor',
@@ -1386,6 +1504,12 @@ const RFEditor = (() => {
     onOpenRequest: (listener) => openListeners.add(listener),
     onProblems: (listener) => problemListeners.add(listener),
     onRunTests: (listener) => runListeners.add(listener),
+    breakpoints: allBreakpoints,
+    setBreakpoints,
+    toggleBreakpoint,
+    onBreakpointsChange: (listener) => breakpointListeners.add(listener),
+    showDebugLine,
+    clearDebugLine,
     setTestStates,
     startRecording,
     updateRecording,

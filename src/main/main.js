@@ -272,6 +272,7 @@ ipcMain.handle('tests:run', async (_event, options = {}) => {
       select: options.select || [],
       variables: options.headed ? { HEADLESS: 'False' } : {},
       trace: !!options.trace,
+      debug: options.debug ? { breakpoints: options.debug.breakpoints || {} } : undefined,
     });
     return { ok: true };
   } catch (error) {
@@ -280,6 +281,9 @@ ipcMain.handle('tests:run', async (_event, options = {}) => {
 });
 
 ipcMain.handle('tests:stop', () => runner.stop());
+
+// Debugger: continue / over / into / out / pause, or new breakpoints.
+ipcMain.handle('tests:debug-command', (_event, command) => runner.debugCommand(command));
 
 ipcMain.handle('tests:trace-url', async (_event, traceFile) => {
   if (!traceFile || !existsSync(traceFile))

@@ -31,6 +31,8 @@
   // Playwright traces recorded by the Browser library: test or suite id -> trace file.
   const traces = new Map();
   let traceView = null; // { testId, url } while the trace viewer is shown
+  let debugging = false; // the current run stops at breakpoints
+  let paused = null; // the last debug-paused event, while paused
 
   function el(tag, props = {}, ...children) {
     const node = document.createElement(tag);
@@ -73,6 +75,7 @@
       renderSummary();
       renderDetail();
       renderControls();
+      renderDebug();
       pushEditorStates();
     });
   }
@@ -540,7 +543,10 @@
     scheduleRender();
     if (!background)
       window.dispatchEvent(new CustomEvent('rfide:show-results'));
-    const result = await api.runTests({ select, headed: $('#tests-headed').checked, trace: $('#tests-trace').checked });
+    debugging = $('#tests-debug').checked;
+    paused = null;
+    const debug = debugging ? { breakpoints: window.RFEditor.breakpoints() } : undefined;
+    const result = await api.runTests({ select, headed: $('#tests-headed').checked, trace: $('#tests-trace').checked, debug });
     if (!result.ok) {
       running = false;
       for (const [id, value] of results)
@@ -639,6 +645,18 @@
       case 'trace':
         traces.set(event.test || event.suite, event.path);
         break;
+      case 'debug-paused':
+        paused = event;
+        window.dispatchEvent(new CustomEvent('rfide:show-testing'));
+        if (event.source && !/^([a-z]:)?[\\/]/i.test(event.source)) { // project file
+          window.RFEditor.showDebugLine(event.source, event.lineno); // applied when the file opens
+          window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path: event.source, line: event.lineno } }));
+        }
+        break;
+      case 'debug-resumed':
+        paused = null;
+        window.RFEditor.clearDebugLine();
+        break;
       case 'log': {
         const runData = runDataFor(event);
         if (!runData)
@@ -666,6 +684,9 @@
 
   api.onTestsFinished(({ exitCode, stopped }) => {
     running = false;
+    debugging = false;
+    paused = null;
+    window.RFEditor.clearDebugLine();
     for (const [id, value] of results) {
       if (value.status === 'queued')
         results.delete(id);
@@ -678,6 +699,103 @@
     scheduleRender();
     if (pendingChanges.size)
       processChanges();
+  });
+
+  // -------------------------------------------------------------------------
+  // Debugger: breakpoints come from the editor; while paused the panel shows
+  // the call stack and the variables.
+
+  function sendDebug(command) {
+    if (debugging && (paused || command === 'pause'))
+      api.debugCommand({ command });
+  }
+
+  function openLocation(frame) {
+    if (frame.source && frame.lineno && !/^([a-z]:)?[\\/]/i.test(frame.source))
+      window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path: frame.source, line: frame.lineno } }));
+  }
+
+  function renderVariable(variable) {
+    return el('div', { className: 'debug-variable', title: `${variable.name} (${variable.type}) = ${variable.value}` },
+      el('span', { className: 'tok-var', textContent: variable.name }),
+      el('span', { className: 'debug-value', textContent: variable.value }),
+      el('span', { className: 'debug-type muted', textContent: variable.type }));
+  }
+
+  function renderDebug() {
+    const panel = $('#debug-panel');
+    panel.hidden = !(running && debugging);
+    $('#tests-debug').disabled = running;
+    if (panel.hidden)
+      return;
+    const status = paused ? `Paused${paused.reason === 'breakpoint' ? ' at breakpoint' : ''}: ${paused.name}` : 'Running…';
+    $('#debug-status').textContent = status;
+    $('#debug-status').title = status;
+    for (const id of ['#debug-continue', '#debug-over', '#debug-into', '#debug-out'])
+      $(id).disabled = !paused;
+    $('#debug-pause').disabled = !!paused;
+    const frames = paused ? paused.frames : [];
+    $('#debug-stack').replaceChildren(...frames.map((frame, index) => {
+      const row = el('li', { className: 'debug-frame' + (index === 0 ? ' is-current' : ''), title: frame.source || '' },
+        el('span', { className: 'debug-frame-name', textContent: frame.name }),
+        el('span', { className: 'muted', textContent: frame.source ? `${frame.source.split('/').pop()}:${frame.lineno}` : '' }));
+      row.addEventListener('click', () => openLocation(frame));
+      return row;
+    }));
+    if (paused && paused.test)
+      $('#debug-stack').append(el('li', { className: 'debug-frame muted', textContent: `Test: ${paused.test.split('.').pop()}` }));
+    $('#debug-variables').replaceChildren(...(paused ? paused.variables : []).map((group, index) => {
+      const details = el('details', { className: 'debug-scope', open: index === 0 || group.scope === 'Test' },
+        el('summary', { textContent: `${group.scope} (${group.variables.length})` }),
+        ...group.variables.map(renderVariable));
+      return details;
+    }));
+    if (!paused)
+      $('#debug-variables').append(el('div', { className: 'empty', textContent: 'Variables are shown while paused.' }));
+  }
+
+  $('#debug-continue').addEventListener('click', () => sendDebug('continue'));
+  $('#debug-over').addEventListener('click', () => sendDebug('over'));
+  $('#debug-into').addEventListener('click', () => sendDebug('into'));
+  $('#debug-out').addEventListener('click', () => sendDebug('out'));
+  $('#debug-pause').addEventListener('click', () => sendDebug('pause'));
+  $('#debug-stop').addEventListener('click', () => api.stopTests());
+
+  // F5 / F10 / F11 / Shift+F11, like VS Code, while a debug run is active.
+  document.addEventListener('keydown', (event) => {
+    if (!debugging || !running)
+      return;
+    const command = event.key === 'F5' ? 'continue' : event.key === 'F10' ? 'over'
+      : event.key === 'F11' ? (event.shiftKey ? 'out' : 'into') : null;
+    if (!command)
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    sendDebug(command);
+  }, true);
+
+  // Breakpoints: kept per project in this browser profile, sent to a running debug session.
+  let breakpointsKey = null;
+  window.RFEditor.onBreakpointsChange((breakpoints) => {
+    if (running && debugging)
+      api.debugCommand({ command: 'breakpoints', breakpoints });
+    try {
+      if (breakpointsKey)
+        localStorage.setItem(breakpointsKey, JSON.stringify(breakpoints));
+    } catch {
+      // storage unavailable: breakpoints last for this session only
+    }
+  });
+
+  window.addEventListener('rfide:project-opened', (event) => {
+    breakpointsKey = event.detail && event.detail.root ? `rfide.breakpoints:${event.detail.root}` : null;
+    let saved = {};
+    try {
+      saved = JSON.parse((breakpointsKey && localStorage.getItem(breakpointsKey)) || '{}');
+    } catch {
+      saved = {};
+    }
+    window.RFEditor.setBreakpoints(saved);
   });
 
   // -------------------------------------------------------------------------
@@ -730,6 +848,8 @@
     stepToggles.clear();
     selected = null;
     running = false;
+    debugging = false;
+    paused = null;
     watched.clear();
     watchAll = false;
     traces.clear();

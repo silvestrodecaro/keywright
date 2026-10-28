@@ -155,6 +155,13 @@ the IDE or edited elsewhere. A changed suite file re-runs its own watched tests;
 (`.resource`, `.py`, variable files, ...) re-runs every watched test. The results folder is ignored, changes during
 a run are queued, and watch runs do not switch tab.
 
+**Debugging**: click the gutter left of the line numbers (or press F9) to set a breakpoint on a step of a `.robot`
+or `.resource` file; breakpoints are kept per project. With *Debug* checked in the Testing panel, runs stop at
+them: the paused line is highlighted in the editor and the Testing panel shows the call stack (click a frame to
+open it) and the variables by scope (Local, Test, Suite, Global; built-in ones are left out). Continue (F5),
+Step Over (F10), Step Into (F11), Step Out (Shift+F11), Pause and Stop are in the panel. Breakpoints changed
+during a run apply right away (on the saved file: lines of unsaved edits may not match).
+
 ## How it works
 
 ```

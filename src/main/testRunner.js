@@ -43,6 +43,8 @@ class TestRunner extends EventEmitter {
     super();
     this._child = null;
     this._server = null;
+    this._socket = null; // the listener's connection
+    this._root = null;
     this._stopped = false;
   }
 
@@ -52,8 +54,10 @@ class TestRunner extends EventEmitter {
 
   /**
    * @param {{ root: string, python: string|null, config: object }} project
-   * @param {{ select?: string[], variables?: Record<string,string>, trace?: boolean }} [options]
-   *   select: full names of tests or suites to run (all when empty)
+   * @param {{ select?: string[], variables?: Record<string,string>, trace?: boolean,
+   *           debug?: { breakpoints: Record<string, number[]> } }} [options]
+   *   select: full names of tests or suites to run (all when empty);
+   *   debug: stop at breakpoints (project-relative path -> lines) and accept debugCommand()
    */
   async run(project, options = {}) {
     if (this._child)
@@ -62,6 +66,8 @@ class TestRunner extends EventEmitter {
       throw new Error('This project has no virtual environment (.venv) with Robot Framework.');
 
     const port = await this._listen();
+    this._root = fs.realpathSync.native(project.root); // Robot reports long paths, not 8.3 short names
+    const breakpoints = options.debug ? this._absoluteBreakpoints(options.debug.breakpoints) : null;
     const outputDir = path.resolve(project.root, project.config.outputDir);
     const args = [
       '-m', 'robot',
@@ -84,6 +90,7 @@ class TestRunner extends EventEmitter {
         RFIDE_SELECT: JSON.stringify(options.select || []),
         // Browser library: record a Playwright trace for every `New Context`.
         ...(options.trace ? { ROBOT_FRAMEWORK_BROWSER_TRACING: 'true' } : {}),
+        ...(breakpoints ? { RFIDE_DEBUG: '1', RFIDE_BREAKPOINTS: JSON.stringify(breakpoints) } : {}),
       }),
       windowsHide: true,
       detached: process.platform !== 'win32', // own process group, so killTree can reach the children
@@ -100,6 +107,37 @@ class TestRunner extends EventEmitter {
     });
   }
 
+  /**
+   * Sends a debugger command to the running tests: { command: 'continue' | 'over' | 'into' | 'out' | 'pause' }
+   * or { command: 'breakpoints', breakpoints } with project-relative paths.
+   */
+  debugCommand(command) {
+    if (!this._socket || this._socket.destroyed)
+      return false;
+    const payload = command.command === 'breakpoints'
+      ? { ...command, breakpoints: this._absoluteBreakpoints(command.breakpoints) } : command;
+    this._socket.write(JSON.stringify(payload) + '\n');
+    return true;
+  }
+
+  _absoluteBreakpoints(breakpoints = {}) {
+    return Object.fromEntries(Object.entries(breakpoints).map(([file, lines]) => [path.resolve(this._root, file), lines]));
+  }
+
+  /** Paths in debugger events relative to the project, like the rest of the IDE. */
+  _relative(source) {
+    if (!source || !this._root)
+      return source;
+    let real = source;
+    try {
+      real = fs.realpathSync.native(source); // Robot keeps the form of the path it was given (8.3 or long)
+    } catch {
+      // not a file on disk: keep it as is
+    }
+    const relative = path.relative(this._root, real);
+    return relative.startsWith('..') || path.isAbsolute(relative) ? source : relative.split(path.sep).join('/');
+  }
+
   stop() {
     if (!this._child)
       return;
@@ -110,6 +148,7 @@ class TestRunner extends EventEmitter {
   _listen() {
     return new Promise((resolve, reject) => {
       const server = net.createServer((socket) => {
+        this._socket = socket;
         let buffer = '';
         socket.setEncoding('utf8');
         socket.on('data', (chunk) => {
@@ -121,7 +160,12 @@ class TestRunner extends EventEmitter {
             if (!line.trim())
               continue;
             try {
-              this.emit('event', JSON.parse(line));
+              const event = JSON.parse(line);
+              if (event.type === 'debug-paused') {
+                event.source = this._relative(event.source);
+                event.frames = (event.frames || []).map((frame) => ({ ...frame, source: this._relative(frame.source) }));
+              }
+              this.emit('event', event);
             } catch {
               // ignore malformed lines
             }
@@ -138,6 +182,7 @@ class TestRunner extends EventEmitter {
   }
 
   _closeServer() {
+    this._socket = null;
     if (this._server) {
       this._server.close();
       this._server = null;
