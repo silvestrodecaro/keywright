@@ -49,19 +49,8 @@ h2 { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 600; t
 .view { height: 100%; }
 
 /* Shared controls -------------------------------------------------------- */
-.brand-mark {
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 11px;
-  font-weight: 800;
-}
-.brand-mark-lg { width: 52px; height: 52px; border-radius: 12px; font-size: 20px; }
+.brand-mark { display: block; flex: none; width: 30px; height: 30px; }
+.brand-mark-lg { width: 64px; height: 64px; }
 
 input[type="text"], select {
   height: 32px;

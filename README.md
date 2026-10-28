@@ -1,4 +1,4 @@
-# Robot Framework IDE
+<p align="center"><img src="docs/images/logo.svg" alt="Robot Framework IDE" width="560"></p>
 
 A desktop IDE for [Robot Framework](https://robotframework.org) tests written with the
 [Browser library](https://robotframework-browser.org). It brings the tools Playwright users are used to

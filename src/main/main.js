@@ -530,6 +530,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 560,
     title: 'Robot Framework IDE',
+    icon: path.join(__dirname, '../renderer/images/icon-256.png'),
     backgroundColor: '#16181d',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

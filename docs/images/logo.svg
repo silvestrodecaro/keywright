@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="420" viewBox="0 0 1900 420" role="img" aria-labelledby="brand-title brand-desc">
+<title id="brand-title">Robot Framework IDE</title>
+<desc id="brand-desc">The project's existing teal robot icon followed by Robot Framework IDE, all on one horizontal line.</desc>
+<rect x="0" y="0" width="1900" height="420" rx="38" fill="#16181D"/><g transform="translate(54 42) scale(.65625)">
+  <defs>
+   <linearGradient id="surface" x1="0" x2="1" y1="0" y2="1">
+    <stop offset="0" stop-color="#242832"/>
+    <stop offset=".55" stop-color="#191C23"/>
+    <stop offset="1" stop-color="#11141A"/>
+   </linearGradient>
+   <radialGradient id="glow" cx="50%" cy="78%" r="58%">
+    <stop offset="0" stop-color="#00B0A0" stop-opacity=".12"/>
+    <stop offset="1" stop-color="#00B0A0" stop-opacity="0"/>
+   </radialGradient>
+  </defs>
+  <rect x="12" y="12" width="488" height="488" rx="110" fill="url(#surface)"/>
+  <rect x="12" y="12" width="488" height="488" rx="110" fill="url(#glow)"/>
+  <rect x="13.5" y="13.5" width="485" height="485" rx="108.5" fill="none" stroke="#5A6C78" stroke-opacity=".34" stroke-width="3"/>
+
+  <!-- antenna / signal -->
+  <path d="M256 167 V132" fill="none" stroke="#00B0A0" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="256" cy="110" r="19" fill="#DDFCF7"/>
+  <circle cx="256" cy="110" r="10" fill="#00B0A0"/>
+  <!-- outer side connectors -->
+  <rect x="104" y="243" width="40" height="56" rx="14" fill="#00B0A0"/>
+  <rect x="368" y="243" width="40" height="56" rx="14" fill="#00B0A0"/>
+  <!-- faceted, modern robot housing -->
+  <path d="M184 169 H328 C337 169 346 173 353 180 L373 201 C380 208 384 217 384 228 V329 C384 351 366 368 345 368 H167 C146 368 128 351 128 329 V228 C128 217 132 208 139 201 L159 180 C166 173 175 169 184 169 Z" fill="#242C34" stroke="#00B0A0" stroke-width="18" stroke-linejoin="round"/>
+  <!-- panel's top shine -->
+  <path d="M180 197 H332" stroke="#DDFCF7" stroke-opacity=".14" stroke-width="7" stroke-linecap="round"/>
+  <!-- calm pixel eyes -->
+  <rect x="177" y="237" width="58" height="36" rx="12" fill="#DDFCF7"/>
+  <rect x="277" y="237" width="58" height="36" rx="12" fill="#DDFCF7"/>
+  <!-- terminal prompt as a 'mouth': >_ -->
+  <path d="M213 302 L238 319 L213 336" fill="none" stroke="#00B0A0" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M257 336 H303" fill="none" stroke="#00B0A0" stroke-width="13" stroke-linecap="round"/>
+</g><g fill="#F3F7F8"><g transform="translate(451.000 257.244) scale(0.06445312 -0.06445312)"><path d="M124 0H388V542H688C691 542 693 542 695 542L975 0H1266L955 590C1132 662 1238 811 1238 1014C1238 1306 1033 1490 705 1490H124ZM388 760V1266H690C868 1266 978 1169 978 1014C978 858 868 760 692 760Z"/></g><g transform="translate(536.016 257.244) scale(0.06445312 -0.06445312)"><path d="M584 -24C895 -24 1105 199 1105 527C1105 855 895 1080 584 1080C273 1080 63 855 63 527C63 199 273 -24 584 -24ZM584 187C421 187 318 316 318 527C318 739 422 869 584 869C745 869 849 738 849 527C849 317 746 187 584 187Z"/></g><g transform="translate(608.203 257.244) scale(0.06445312 -0.06445312)"><path d="M682 -21C958 -21 1139 200 1139 529C1139 854 955 1077 683 1077C546 1077 434 1022 366 906H364V1490H112V0H360V161H362C428 39 544 -21 682 -21ZM623 190C458 190 350 323 350 529C350 734 458 868 623 868C779 868 884 747 884 529C884 310 779 190 623 190Z"/></g><g transform="translate(685.672 257.244) scale(0.06445312 -0.06445312)"><path d="M584 -24C895 -24 1105 199 1105 527C1105 855 895 1080 584 1080C273 1080 63 855 63 527C63 199 273 -24 584 -24ZM584 187C421 187 318 316 318 527C318 739 422 869 584 869C745 869 849 738 849 527C849 317 746 187 584 187Z"/></g><g transform="translate(760.891 257.244) scale(0.06445312 -0.06445312)"><path d="M669 1056H454V1344H201V1056H17V853H201V266C201 85 302 0 517 0H669V203H561C479 203 454 228 454 303V853H669Z"/></g><g transform="translate(836.891 257.244) scale(0.06445312 -0.06445312)"><path d="M124 0H388V630H1073V854H388V1261H1126V1490H124Z"/></g><g transform="translate(912.438 257.244) scale(0.06445312 -0.06445312)"><path d="M112 0H364V598C364 763 457 846 577 846C627 846 677 841 696 838V1062C676 1064 648 1066 614 1066C478 1066 397 1002 358 881H355V1056H112Z"/></g><g transform="translate(957.938 257.244) scale(0.06445312 -0.06445312)"><path d="M434 -17C606 -17 695 55 745 149H749V0H997V720C997 940 834 1077 559 1077C283 1077 111 938 99 728H342C349 817 431 881 554 881C675 881 747 817 747 727V719C747 647 680 644 484 622C266 599 69 540 69 300C69 89 224 -17 434 -17ZM496 170C386 170 315 219 315 302C315 398 407 437 515 453C619 469 717 485 748 505V391C748 268 661 170 496 170Z"/></g><g transform="translate(1028.078 257.244) scale(0.06445312 -0.06445312)"><path d="M112 0H364V630C364 781 461 863 575 863C687 863 767 788 767 673V0H1012V648C1012 774 1091 863 1219 863C1327 863 1415 801 1415 661V0H1668V697C1668 945 1514 1077 1314 1077C1160 1077 1034 999 978 877C934 998 817 1077 674 1077C541 1077 420 1009 356 873V1056H112Z"/></g><g transform="translate(1142.734 257.244) scale(0.06445312 -0.06445312)"><path d="M578 -24C825 -24 1021 119 1061 326H825C796 236 711 175 584 175C414 175 316 290 310 462H1074V531C1074 855 872 1080 568 1080C272 1080 63 848 63 527C63 207 261 -24 578 -24ZM312 636C329 787 426 880 572 880C718 880 816 787 832 636Z"/></g><g transform="translate(1215.766 257.244) scale(0.06445312 -0.06445312)"><path d="M344 0H604L734 440C763 538 789 641 815 744C842 641 868 538 896 440L1024 0H1286L1613 1056H1345L1236 655C1203 530 1172 396 1142 265C1109 396 1077 530 1043 655L932 1056H699L587 655C552 529 520 394 487 263C455 394 425 529 392 655L283 1056H18Z"/></g><g transform="translate(1318.891 257.244) scale(0.06445312 -0.06445312)"><path d="M584 -24C895 -24 1105 199 1105 527C1105 855 895 1080 584 1080C273 1080 63 855 63 527C63 199 273 -24 584 -24ZM584 187C421 187 318 316 318 527C318 739 422 869 584 869C745 869 849 738 849 527C849 317 746 187 584 187Z"/></g><g transform="translate(1392.109 257.244) scale(0.06445312 -0.06445312)"><path d="M112 0H364V598C364 763 457 846 577 846C627 846 677 841 696 838V1062C676 1064 648 1066 614 1066C478 1066 397 1002 358 881H355V1056H112Z"/></g><g transform="translate(1439.094 257.244) scale(0.06445312 -0.06445312)"><path d="M112 0H364V353L460 452L806 0H1107L652 600L1081 1056H778L367 628H364V1490H112Z"/></g></g><rect x="1554.47" y="155" width="4" height="110" rx="2" fill="#44535D"/><g fill="#00B0A0"><g transform="translate(1603.470 258.018) scale(0.06445312 -0.06445312)"><path d="M388 1490H124V0H388Z"/></g><g transform="translate(1636.470 258.018) scale(0.06445312 -0.06445312)"><path d="M627 0C1083 0 1356 286 1356 747C1356 1205 1081 1490 638 1490H124V0ZM388 226V1264H621C935 1264 1089 1075 1089 747C1089 416 937 226 613 226Z"/></g><g transform="translate(1728.517 258.018) scale(0.06445312 -0.06445312)"><path d="M124 0H1159V229H388V644H1101V869H388V1261H1159V1490H124Z"/></g></g></svg>
