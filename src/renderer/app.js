@@ -295,7 +295,7 @@
     }
   }
 
-  async function openFile(relative, line = null, column = 1) {
+  async function openFile(relative, line = null, column = 1, length = 0) {
     let tab = tabs.find((t) => t.path === relative);
     if (!tab) {
       const file = await api.readProjectFile(relative);
@@ -304,6 +304,7 @@
     }
     tab.line = line;
     tab.column = column;
+    tab.selectLength = length;
     shownInEditor = null; // force the editor to (re)show the file and reveal the line
     activate(relative);
   }
@@ -420,7 +421,7 @@
     }
     if (shownInEditor !== file.path) {
       ensureEditor();
-      editor.open(file.path, file.content, file.line, file.column);
+      editor.open(file.path, file.content, file.line, file.column, file.selectLength);
       file.line = null;
       shownInEditor = file.path;
     }
@@ -693,7 +694,8 @@
   });
 
   // Requests from the Testing panel (tests.js).
-  window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line, event.detail.column));
+  window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line, event.detail.column, event.detail.length));
+  window.addEventListener('rfide:show-sidebar', (event) => showSidebar(event.detail.name));
   window.addEventListener('rfide:show-testing', () => showSidebar('testing'));
   window.addEventListener('rfide:status', (event) => setEditorStatus(event.detail.text));
 

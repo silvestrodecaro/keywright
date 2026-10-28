@@ -1045,7 +1045,7 @@ const RFEditor = (() => {
     return editor;
   }
 
-  function open(path, content, line = null, column = 1) {
+  function open(path, content, line = null, column = 1, length = 0) {
     if (current && files.has(current))
       files.get(current).viewState = editor.saveViewState();
     let file = files.get(path);
@@ -1078,6 +1078,8 @@ const RFEditor = (() => {
     if (line) {
       editor.revealLineInCenter(line);
       editor.setPosition({ lineNumber: line, column: column || 1 });
+      if (length)
+        editor.setSelection(new monaco.Range(line, column, line, column + length));
     }
     editor.focus();
     updateGlyphs();
@@ -1498,6 +1500,22 @@ const RFEditor = (() => {
     revalidate: () => files.forEach((_, path) => scheduleValidation(path, 0)),
     problems: (path) => (files.has(path) ? problemCounts(files.get(path).model) : null),
     projectProblems,
+    openPaths: () => [...files.keys()],
+    /** Replaces search matches ({ line, column, length, replacement }) in an open file, as one undoable edit. */
+    replaceMatches(path, matches) {
+      const model = files.get(path)?.model;
+      if (!model || !matches.length)
+        return 0;
+      model.pushEditOperations([], matches.map((m) => ({
+        range: new monaco.Range(m.line, m.column, m.line, m.column + m.length),
+        text: m.replacement,
+      })), () => null);
+      return matches.length;
+    },
+    selectedText: () => {
+      const selection = editor?.getSelection();
+      return selection && editor.getModel() ? editor.getModel().getValueInRange(selection) : '';
+    },
     focus: () => editor && editor.focus(),
     onDirtyChange: (listener) => dirtyListeners.add(listener),
     onSave: (listener) => saveListeners.add(listener),

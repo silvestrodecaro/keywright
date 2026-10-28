@@ -18,6 +18,7 @@ const { generateRobot, generateSteps, DEFAULT_OPTIONS } = require('../generator/
 const { toBrowserSelector } = require('../generator/selectors');
 const { escapeArg } = require('../generator/escape');
 const { projectVariables } = require('./projectVariables');
+const { searchProject, replaceInProject } = require('./projectSearch');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -172,6 +173,27 @@ ipcMain.handle('projects:close', async () => {
 });
 
 ipcMain.handle('project:tree', () => (currentProject ? projects.listTree(currentProject.root) : []));
+
+// Search panel: files on disk (open files are searched by the renderer and excluded).
+ipcMain.handle('project:search', (_event, options, exclude) => {
+  if (!currentProject)
+    return { ok: false, error: 'No project is open.' };
+  try {
+    return { ok: true, ...searchProject(currentProject.root, options, { exclude, outputDir: currentProject.config.outputDir }) };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('project:replace', (_event, options, replacement, entries) => {
+  if (!currentProject)
+    return { ok: false, error: 'No project is open.' };
+  try {
+    return { ok: true, ...replaceInProject(currentProject.root, options, replacement, entries) };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
 
 ipcMain.handle('project:variables', () => (currentProject ? projectVariables(currentProject.root) : { runtime: [], suite: [], dynamicSuite: true }));
 

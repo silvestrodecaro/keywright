@@ -110,6 +110,13 @@ browser and viewport; the editor is read-only while recording and one Ctrl+Z rem
 
 **＋** in the explorer creates a file (e.g. `tests/login.robot`). Saving a test file refreshes the Testing panel.
 
+**Search** (Ctrl+Shift+F, with the editor's selection as the query) finds text in all the project's files, with
+match case, whole word and regular expressions, and "files to include" globs (`*.robot, tests/`). The `.venv`,
+`.git` and results folders and binary files are skipped. Click a result to open it with the match selected.
+With a replacement, the results preview it (`$1` groups with regular expressions) and can be replaced one by one
+(↻), per file or all at once (Replace all asks for a second click). Open files are searched with their unsaved
+edits and get the replacements as unsaved, undoable changes; the other files are saved.
+
 The **Problems** tab of the sidebar lists the errors and warnings of every `.robot` and `.resource` file of the
 project, with the same checks as the editor (syntax, unknown keywords, arguments, undefined variables); the badge
 shows how many there are. Open files show their live problems, unsaved edits included; the others are checked
@@ -191,6 +198,7 @@ src/renderer/editor/         Monaco integration (bundled with esbuild by scripts
   rename.js                  occurrences of keywords and variables for F2 rename
   quickFix.js                similar names, new keywords and variables, missing END
 src/main/projectVariables.js variables set at run time / defined by suites across the project
+src/main/projectSearch.js    search and replace in the files on disk (src/renderer/searchCore.js: matching rules)
 src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project
 src/main/recentProjects.js   recent projects list

@@ -99,6 +99,7 @@
       <aside class="sidebar">
         <div class="sidebar-switch" role="tablist">
           <button type="button" class="sidebar-tab is-active" data-sidebar="explorer">Explorer</button>
+          <button type="button" class="sidebar-tab" data-sidebar="search" title="Search in files (Ctrl+Shift+F)">Search</button>
           <button type="button" class="sidebar-tab" data-sidebar="testing">Testing</button>
           <button type="button" class="sidebar-tab" data-sidebar="problems">Problems <span id="problems-badge" class="sidebar-badge" hidden></span></button>
         </div>
@@ -117,6 +118,24 @@
             <div id="new-file-error" class="error" hidden></div>
           </form>
           <ul id="tree" class="tree" role="tree"></ul>
+        </div>
+
+        <div id="sidebar-search" class="sidebar-section" hidden>
+          <form id="search-form" class="search-form" autocomplete="off">
+            <div class="search-row">
+              <input id="search-query" type="text" placeholder="Search" spellcheck="false" aria-label="Search">
+              <button id="search-case" type="button" class="search-toggle" title="Match case" aria-pressed="false">Aa</button>
+              <button id="search-word" type="button" class="search-toggle" title="Match whole word" aria-pressed="false">ab</button>
+              <button id="search-regex" type="button" class="search-toggle" title="Use regular expression ($1 in the replacement)" aria-pressed="false">.*</button>
+            </div>
+            <div class="search-row">
+              <input id="search-replace" type="text" placeholder="Replace" spellcheck="false" aria-label="Replace">
+              <button id="search-replace-all" type="button" class="btn btn-sm" title="Replace all matches">Replace all</button>
+            </div>
+            <input id="search-include" type="text" placeholder="Files to include (e.g. *.robot, tests/)" spellcheck="false" aria-label="Files to include">
+          </form>
+          <div id="search-summary" class="search-summary muted"></div>
+          <ul id="search-results" class="tree search-results" role="tree"></ul>
         </div>
 
         <div id="sidebar-problems" class="sidebar-section" hidden>
@@ -288,8 +307,10 @@
   <script src="highlight.js"></script>
   <script src="generator.js"></script>
   <script src="watchPlan.js"></script>
+  <script src="searchCore.js"></script>
   <script src="tests.js"></script>
   <script src="problems.js"></script>
+  <script src="search.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
