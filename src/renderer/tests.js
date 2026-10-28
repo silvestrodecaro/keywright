@@ -418,6 +418,11 @@
       el('div', { className: 'results-title' }, statusIcon(result?.status), el('h2', { textContent: test.name })),
       actions);
     const nodes = [header, el('div', { className: 'results-meta muted', textContent: meta.join(' · ') })];
+    const trend = window.RFHistory ? window.RFHistory.trend(test.id) : [];
+    if (trend.length > 1) {
+      nodes.push(el('div', { className: 'results-trend', title: 'Status in the last runs, oldest first (History)' },
+        el('span', { className: 'muted', textContent: 'Last runs' }), ...trend.map((status) => statusIcon(status))));
+    }
     if (test.tags.length)
       nodes.push(el('div', { className: 'results-tags' }, ...test.tags.map((tag) => el('span', { className: 'tag', textContent: tag }))));
     nodes.push(el('div', { className: 'trace-notice', hidden: true }));
@@ -621,6 +626,12 @@
   }
 
   window.addEventListener('rfide:run-from-editor', (event) => runFromEditor(event.detail));
+  // From the run history: show a test's details; refresh the trend when a run is recorded.
+  window.addEventListener('rfide:select-test', (event) => {
+    if (testIndex.has(event.detail.id))
+      select(event.detail.id);
+  });
+  window.addEventListener('rfide:history-changed', () => scheduleRender());
 
   // -------------------------------------------------------------------------
   // Runner events

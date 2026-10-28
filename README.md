@@ -171,6 +171,11 @@ Playwright's trace viewer inside the IDE: Robot keywords as groups, DOM snapshot
 console, network and source. A context created in a suite setup gives one trace for the whole suite. Contexts created
 implicitly by `New Page` are not traced (Browser library behavior).
 
+**History** (in the Test Results tab): the last 30 runs of the project, kept in `results/.rfide-history.json`,
+with how they were started (selected tests, tags, dry run, debug). For the selected run it lists what changed since
+the previous one: newly failing, fixed and still failing tests, slower ones and new tests (only tests present in
+both runs are compared). Click a test to see its details, where *Last runs* shows its recent results.
+
 **Watch mode**: ◉ on a test or suite (or *Watch* for all tests) re-runs it when files change, whether saved in
 the IDE or edited elsewhere. A changed suite file re-runs its own watched tests; a change to any other relevant file
 (`.resource`, `.py`, variable files, ...) re-runs every watched test. The results folder is ignored, changes during

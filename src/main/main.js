@@ -20,6 +20,7 @@ const { escapeArg } = require('../generator/escape');
 const { projectVariables } = require('./projectVariables');
 const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
+const { RunHistory } = require('./runHistory');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -287,7 +288,10 @@ ipcMain.handle('project:reveal', (_event, relative) => {
 // ---------------------------------------------------------------------------
 // Test runner (UI mode)
 
+const runHistory = new RunHistory();
+
 runner.on('event', (event) => {
+  runHistory.record(event);
   if (event.type === 'log' && event.html && runOutputDir) {
     const images = screenshotsFromHtml(event.text, runOutputDir).filter((file) => existsSync(file));
     if (images.length)
@@ -296,7 +300,15 @@ runner.on('event', (event) => {
   send('tests:event', event);
 });
 runner.on('output', (text) => send('tests:output', text));
-runner.on('finished', (result) => send('tests:finished', result));
+runner.on('finished', (result) => {
+  const run = runHistory.finish(result);
+  send('tests:finished', result);
+  if (run)
+    send('tests:history-added', run);
+});
+
+ipcMain.handle('tests:history', () => (currentProject
+  ? runHistory.list(path.resolve(currentProject.root, currentProject.config.outputDir)) : []));
 
 ipcMain.handle('tests:discover', () => {
   if (!currentProject)
@@ -312,6 +324,7 @@ ipcMain.handle('tests:run', async (_event, options = {}) => {
   try {
     runOutputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
     traceServer.allow([runOutputDir]);
+    runHistory.start(runOutputDir, { ...options, debug: !!options.debug });
     await runner.run(currentProject, {
       select: options.select || [],
       variables: {

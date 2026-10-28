@@ -288,7 +288,15 @@
 
         <!-- Test results tab -->
         <div id="pane-results" class="pane pane-results" hidden>
+          <div class="results-switch" role="tablist">
+            <button type="button" class="results-switch-btn is-active" data-results-view="test">Test</button>
+            <button type="button" class="results-switch-btn" data-results-view="history" title="Past runs and what changed since the previous one">History <span id="history-count" class="muted"></span></button>
+          </div>
           <div id="results-detail" class="results-detail"></div>
+          <div id="results-history" class="results-history" hidden>
+            <ul id="history-runs" class="history-runs"></ul>
+            <div id="history-detail" class="history-detail"></div>
+          </div>
           <details id="console" class="console">
             <summary>Console output</summary>
             <pre id="console-output" class="console-output"></pre>
@@ -340,7 +348,9 @@
   <script src="watchPlan.js"></script>
   <script src="searchCore.js"></script>
   <script src="tagPatterns.js"></script>
+  <script src="runDiff.js"></script>
   <script src="tests.js"></script>
+  <script src="history.js"></script>
   <script src="problems.js"></script>
   <script src="search.js"></script>
   <script src="app.js"></script>
