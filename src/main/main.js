@@ -321,6 +321,8 @@ ipcMain.handle('tests:discover', () => {
 ipcMain.handle('tests:run', async (_event, options = {}) => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.' };
+  if (runner.running) // before touching the history of the run in progress
+    return { ok: false, error: 'Tests are already running.' };
   try {
     runOutputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
     traceServer.allow([runOutputDir]);
