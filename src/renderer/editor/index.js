@@ -77,6 +77,15 @@ monaco.editor.defineTheme('rfide-dark', {
     'editorWidget.background': '#1d2027',
     'editorSuggestWidget.background': '#1d2027',
     'editorHoverWidget.background': '#1d2027',
+    // Peek views (references, definitions)
+    'peekView.border': '#00b0a0',
+    'peekViewTitle.background': '#1d2027',
+    'peekViewEditor.background': '#1a1c22',
+    'peekViewEditorGutter.background': '#1a1c22',
+    'peekViewEditor.matchHighlightBackground': '#00b0a040',
+    'peekViewResult.background': '#1d2027',
+    'peekViewResult.matchHighlightBackground': '#00b0a040',
+    'peekViewResult.selectionBackground': '#2e3340',
   },
 });
 
@@ -419,8 +428,8 @@ async function projectRobotFiles() {
 /** The files that import `target` (directly or through other resources), `target` included. */
 function filesImporting(target, contents) {
   const importsOf = new Map([...contents].map(([path, lines]) => [path, parseFile(lines).imports
-    .filter((item) => item.type === 'resource')
-    .map((item) => importCandidates(path, item.path).find((candidate) => contents.has(candidate)))
+    .filter((item) => item.type !== 'library')
+    .map((item) => importCandidates(path, item.path).find((candidate) => contents.has(candidate) || candidate === target))
     .filter(Boolean)]));
   const reaches = (path, seen = new Set()) => {
     if (path === target)
@@ -448,8 +457,6 @@ async function renameTarget(model, position) {
     if (!found)
       return { reject: `No definition of ${variable.name} was found in this file or its imports.` };
     const definition = found.definition;
-    if (definition.how === 'variable file')
-      return { reject: `${variable.name} is defined in the variable file ${found.path}: rename it there.` };
     const part = variablePart(variable.name, definition.key);
     if (!part)
       return { reject: `${variable.name} cannot be renamed here.` };
@@ -459,6 +466,8 @@ async function renameTarget(model, position) {
       definitionPath: found.path,
       range: new monaco.Range(line, variable.start + part.start + 1, line, variable.start + part.end + 1),
       text: variable.name.slice(part.start, part.end),
+      // References are found, but the definition is not in a Robot file.
+      reject: definition.how === 'variable file' ? `${variable.name} is defined in the variable file ${found.path}: rename it there.` : undefined,
     };
   }
 
@@ -472,8 +481,17 @@ async function renameTarget(model, position) {
     : keywordsCalled(cell.text);
   const userKeywords = candidates.filter((kw) => kw.user && kw.source);
   if (!userKeywords.length) {
-    return { reject: candidates.length ? `'${cell.text}' comes from the ${candidates[0].library} library: only keywords defined in the project can be renamed.`
-      : `No keyword named '${cell.text}' was found.` };
+    if (candidates.length !== 1 || candidates[0].name.includes('${'))
+      return { reject: candidates.length ? `'${cell.text}' matches ${candidates.length} library keywords.` : `No keyword named '${cell.text}' was found.` };
+    // A library keyword: its calls can be listed (references), not renamed.
+    const part = keywordPart(cell.text, candidates[0]);
+    return part && {
+      kind: 'keyword',
+      keyword: candidates[0],
+      range: new monaco.Range(line, cell.start + part.start + 1, line, cell.start + part.end + 1),
+      text: cell.text.slice(part.start, part.end),
+      reject: `'${cell.text}' comes from the ${candidates[0].library} library: only keywords defined in the project can be renamed.`,
+    };
   }
   const keyword = userKeywords[0];
   const sameName = keywords.filter((kw) => kw.user && normalizeKeyword(kw.name) === normalizeKeyword(keyword.name));
@@ -492,29 +510,35 @@ async function renameTarget(model, position) {
   };
 }
 
-/** Edits of a rename, by file: Map<path, { line, start, end, text }[]>. */
-async function renameEdits(target, newName) {
+/** Lines of every .robot/.resource file of the project (open files with their unsaved edits). */
+async function projectContents() {
   const contents = new Map();
   for (const path of await projectRobotFiles()) {
     const lines = await readLines(path);
     if (lines)
       contents.set(path, lines);
   }
-  const edits = new Map();
-  const add = (path, occurrences, text) => {
-    if (occurrences.length)
-      edits.set(path, occurrences.map((o) => ({ ...o, text: typeof text === 'function' ? text(o) : text })));
+  return contents;
+}
+
+/**
+ * Where the keyword or variable of `target` (from renameTarget) occurs, by file:
+ * Map<path, { line, start, end, expression? }[]>.
+ */
+async function symbolOccurrences(target, contents) {
+  const occurrences = new Map();
+  const add = (path, list) => {
+    if (list.length)
+      occurrences.set(path, list);
   };
 
   if (target.kind === 'keyword') {
     const keyword = target.keyword;
-    const existing = findKeywords(newName).filter((kw) => kw !== keyword && kw.user);
-    if (existing.length && normalizeKeyword(newName) !== normalizeKeyword(keyword.name))
-      throw new Error(`A keyword named '${existing[0].name}' already exists in ${existing[0].source}.`);
-    const scope = /\.resource$/i.test(keyword.source) ? filesImporting(keyword.source, contents) : [keyword.source];
+    const scope = !keyword.user ? [...contents.keys()]
+      : /\.resource$/i.test(keyword.source) ? filesImporting(keyword.source, contents) : [keyword.source];
     for (const path of scope.filter((p) => contents.has(p)))
-      add(path, keywordOccurrences(contents.get(path), keyword, { definition: path === keyword.source }), newName);
-    return edits;
+      add(path, keywordOccurrences(contents.get(path), keyword, { definition: keyword.user && path === keyword.source }));
+    return occurrences;
   }
 
   const { definition, definitionPath } = target;
@@ -534,11 +558,51 @@ async function renameEdits(target, newName) {
       const own = findVariable(parsed, name, line);
       return path === definitionPath ? sameDefinition(own) : !own && imported;
     };
-    // `$name` in Python expressions must stay an identifier.
-    add(path, variableOccurrences(lines, definition.key, accept), (o) => (o.expression ? newName.replace(/ /g, '_') : newName));
+    add(path, variableOccurrences(lines, definition.key, accept));
   }
-  return edits;
+  return occurrences;
 }
+
+/** Edits of a rename, by file: Map<path, { line, start, end, text }[]>. */
+async function renameEdits(target, newName) {
+  if (target.kind === 'keyword') {
+    const existing = findKeywords(newName).filter((kw) => kw !== target.keyword && kw.user);
+    if (existing.length && normalizeKeyword(newName) !== normalizeKeyword(target.keyword.name))
+      throw new Error(`A keyword named '${existing[0].name}' already exists in ${existing[0].source}.`);
+  }
+  const occurrences = await symbolOccurrences(target, await projectContents());
+  // `$name` in Python expressions must stay an identifier.
+  const text = (o) => (o.expression ? newName.replace(/ /g, '_') : newName);
+  return new Map([...occurrences].map(([path, list]) => [path, list.map((o) => ({ ...o, text: text(o) }))]));
+}
+
+// Shift+F12: references of a keyword (library ones too) or a variable.
+monaco.languages.registerReferenceProvider(LANGUAGE, {
+  async provideReferences(model, position, context) {
+    const target = await renameTarget(model, position);
+    if (!target || !target.kind)
+      return [];
+    const occurrences = await symbolOccurrences(target, await projectContents());
+    const isDefinition = (path, o) => (target.kind === 'keyword'
+      ? target.keyword.user && path === target.keyword.source && o.line === target.keyword.lineno
+      : path === target.definitionPath && o.line === target.definition.line && o.start === target.definition.start + 2);
+    const locations = [];
+    for (const [path, list] of occurrences) {
+      await ensureModel(path); // the peek view shows the lines of every file
+      for (const o of list) {
+        if (context.includeDeclaration || !isDefinition(path, o))
+          locations.push({ uri: uriFor(path), range: new monaco.Range(o.line, o.start + 1, o.line, o.end + 1) });
+      }
+    }
+    // Variable files are not Robot files: add their definition.
+    if (context.includeDeclaration && target.kind === 'variable' && target.definition.how === 'variable file') {
+      const d = target.definition;
+      await ensureModel(target.definitionPath);
+      locations.unshift({ uri: uriFor(target.definitionPath), range: new monaco.Range(d.line, d.start + 1, d.line, d.end + 1) });
+    }
+    return locations;
+  },
+});
 
 /** Applies a rename: workspace edits for open files (returned), files written to disk for the others. */
 async function applyRename(edits) {

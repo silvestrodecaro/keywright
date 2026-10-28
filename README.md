@@ -74,6 +74,8 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
   the files importing it, unless they define their own), including the `$name` form of IF/WHILE conditions,
   `Evaluate`-like keywords and inline Python. Open files get the edits as unsaved changes (Ctrl+Z undoes them),
   the others are saved. Library keywords, duplicate names, embedded arguments and variable files are not renamed.
+- Shift+F12 lists the references of a keyword (library keywords too) or a variable in a peek view, with the same
+  rules as F2; the definition is included, also when it is in a Python/YAML variable file.
 - problems while typing: syntax errors from Robot's own parser (missing `END`, unknown settings, invalid
   sections, ...) and warnings for unknown keywords; counts in the tab header, F8 jumps to the next one.
   Unknown keywords are not reported when a library of the project cannot be imported.
