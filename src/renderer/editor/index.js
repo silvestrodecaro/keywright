@@ -848,6 +848,28 @@ function toProblem(marker) {
 }
 
 // ---------------------------------------------------------------------------
+// Format Document (Shift+Alt+F): Robocop's formatter with the project's Python.
+// Monaco turns the whole-file edit into minimal edits, so the cursor stays put.
+
+monaco.languages.registerDocumentFormattingEditProvider(LANGUAGE, {
+  displayName: 'Robocop',
+  async provideDocumentFormattingEdits(model) {
+    const text = model.getValue();
+    const version = model.getVersionId();
+    const result = await window.rfide.formatFile(modelPath(model), text);
+    if (!result.ok) {
+      window.dispatchEvent(new CustomEvent('rfide:format-failed', { detail: result }));
+      return [];
+    }
+    if (model.isDisposed() || model.getVersionId() !== version)
+      return []; // edited while formatting
+    const changed = result.formatted !== text;
+    window.dispatchEvent(new CustomEvent('rfide:status', { detail: { text: changed ? 'Formatted with Robocop' : 'Already formatted' } }));
+    return changed ? [{ range: model.getFullModelRange(), text: result.formatted }] : [];
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Quick fixes (Ctrl+.): similar names, create keyword, define variable, add END
 
 /** A Monaco text edit inserting `insertion` ({ afterLine, lines }) into a model. */
@@ -1501,6 +1523,7 @@ const RFEditor = (() => {
     problems: (path) => (files.has(path) ? problemCounts(files.get(path).model) : null),
     projectProblems,
     openPaths: () => [...files.keys()],
+    formatDocument: () => editor?.getAction('editor.action.formatDocument')?.run(),
     /** Replaces search matches ({ line, column, length, replacement }) in an open file, as one undoable edit. */
     replaceMatches(path, matches) {
       const model = files.get(path)?.model;

@@ -28,7 +28,11 @@ function runHelper(python, args, { cwd } = {}) {
         try {
           resolve(JSON.parse(line));
         } catch {
-          resolve({ ok: false, error: (stderr || (error && error.message) || 'The Python helper failed.').trim() });
+          const output = String(stderr || (error && error.message) || '');
+          const missing = /No module named '?robot'?/.test(output);
+          resolve({ ok: false, error: missing
+            ? 'Robot Framework is not installed in this project\'s virtual environment: run pip install -r requirements.txt'
+            : (output || 'The Python helper failed.').trim() });
         }
       });
   });

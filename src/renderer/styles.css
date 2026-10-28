@@ -746,3 +746,7 @@ input:disabled, select:disabled { opacity: .55; }
 .search-line { flex: none; font: 11px var(--mono); }
 .search-action { flex: none; width: 20px; height: 20px; font-size: 12px; visibility: hidden; }
 .tree-row:hover > .search-action { visibility: visible; }
+
+/* Notices in the file pane (e.g. Robocop missing) */
+.notice { display: flex; align-items: center; gap: 10px; margin: 6px 12px; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--surface); font-size: 12px; }
+.notice > span { flex: 1; }

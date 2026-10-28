@@ -20,7 +20,7 @@ const DEFAULT_CONFIG = {
 function projectFiles(name) {
   return {
     [CONFIG_FILE]: JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n',
-    'requirements.txt': 'robotframework\nrobotframework-browser\n',
+    'requirements.txt': 'robotframework\nrobotframework-browser\nrobotframework-robocop\n',
     '.gitignore': [
       '.venv/',
       'results/',

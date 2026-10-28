@@ -19,6 +19,7 @@ const { toBrowserSelector } = require('../generator/selectors');
 const { escapeArg } = require('../generator/escape');
 const { projectVariables } = require('./projectVariables');
 const { searchProject, replaceInProject } = require('./projectSearch');
+const { formatRobot, installRobocop } = require('./formatter');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -237,6 +238,15 @@ ipcMain.handle('editor:check', async (_event, relative, text) => {
     return { ok: false, problems: [], error: error.message };
   }
 });
+
+// Format Document (Shift+Alt+F) with Robocop.
+ipcMain.handle('editor:format', (_event, relative, text) => {
+  if (!currentProject)
+    return { ok: false, error: 'No project is open.' };
+  return formatRobot(currentProject, relative, text);
+});
+
+ipcMain.handle('project:install-robocop', () => (currentProject ? installRobocop(currentProject) : { ok: false, error: 'No project is open.' }));
 
 ipcMain.handle('dialog:unsaved', async (_event, names) => {
   const { response } = await dialog.showMessageBox(mainWindow, {

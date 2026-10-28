@@ -93,6 +93,10 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
   keywords run in the scope of the suite that imports them. Nothing is reported for a file when one of its
   imports cannot be read statically (missing file, path with variables, module name, `get_variables()`).
   Variables given only on the command line (`--variable`) are reported: define a default in a Variables section.
+- Shift+Alt+F (or Format Document in the right-click menu) formats the file with Robocop's formatter (the former
+  Robotidy), run with the project's Python on the unsaved content; the project's `robocop.toml` (or `[tool.robocop]`
+  in `pyproject.toml`) applies. When Robocop is missing, the editor offers to install it in the `.venv`; new
+  projects get it in `requirements.txt`.
 - Ctrl+S to save, ● on tabs with unsaved changes, confirmation before closing them
 
 **Run from the editor**: in `.robot` files the gutter shows ▶ (or the last result: ✓ ✕ ↷) next to each test and
@@ -199,6 +203,7 @@ src/renderer/editor/         Monaco integration (bundled with esbuild by scripts
   quickFix.js                similar names, new keywords and variables, missing END
 src/main/projectVariables.js variables set at run time / defined by suites across the project
 src/main/projectSearch.js    search and replace in the files on disk (src/renderer/searchCore.js: matching rules)
+src/main/formatter.js        Format Document with Robocop (temporary file outside the project)
 src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project
 src/main/recentProjects.js   recent projects list

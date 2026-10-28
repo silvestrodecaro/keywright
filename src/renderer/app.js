@@ -699,6 +699,37 @@
   window.addEventListener('rfide:show-testing', () => showSidebar('testing'));
   window.addEventListener('rfide:status', (event) => setEditorStatus(event.detail.text));
 
+  // Format Document needs Robocop in the project's virtual environment: offer to install it.
+  window.addEventListener('rfide:format-failed', (event) => {
+    const { error, missing } = event.detail;
+    if (!missing) {
+      setEditorStatus(`Could not format: ${error}`, true);
+      return;
+    }
+    $('#format-notice-text').textContent = `${error} It formats .robot and .resource files (Shift+Alt+F).`;
+    $('#format-install').hidden = false;
+    $('#format-install').disabled = false;
+    $('#format-install').textContent = 'Install Robocop';
+    $('#format-notice').hidden = false;
+  });
+
+  $('#format-install').addEventListener('click', async () => {
+    const button = $('#format-install');
+    button.disabled = true;
+    button.textContent = 'Installing…';
+    const result = await api.installRobocop();
+    if (!result.ok) {
+      button.disabled = false;
+      button.textContent = 'Install Robocop';
+      $('#format-notice-text').textContent = `Could not install Robocop: ${result.error}`;
+      return;
+    }
+    $('#format-notice').hidden = true;
+    editor.formatDocument();
+  });
+
+  $('#format-dismiss').addEventListener('click', () => { $('#format-notice').hidden = true; });
+
   // Run glyphs and context menu of the editor: tests run from the saved file.
   editor.onRunTests(async ({ path, names }) => {
     const saved = editor.isDirty(path);
