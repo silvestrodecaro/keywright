@@ -7,10 +7,7 @@ const os = require('os');
 const path = require('path');
 const projects = require('../src/main/projects');
 const { RecentProjects } = require('../src/main/recentProjects');
-
-function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-projects-'));
-}
+const { tempDir } = require('./helpers/tempDir');
 
 test('validateProjectName', () => {
   assert.strictEqual(projects.validateProjectName('my-web tests_1.0'), null);
@@ -27,7 +24,7 @@ test('checkProjectPathLength only limits Windows projects that install browsers'
 });
 
 test('createProject scaffolds files and reports steps', async () => {
-  const location = tempDir();
+  const location = tempDir('projects');
   const events = [];
   const result = await projects.createProject({ location, name: 'shop tests', initGit: true }, {
     onSteps: (steps) => events.push(['steps', steps.map((s) => s.id)]),
@@ -61,7 +58,7 @@ test('createProject scaffolds files and reports steps', async () => {
 });
 
 test('createProject marks remaining steps as skipped after a failure', async () => {
-  const location = tempDir();
+  const location = tempDir('projects');
   const statuses = {};
   const originalPath = process.env.PATH;
   process.env.PATH = ''; // no python, no git
@@ -79,7 +76,7 @@ test('createProject marks remaining steps as skipped after a failure', async () 
 });
 
 test('RecentProjects keeps existing projects, most recent first', () => {
-  const dir = tempDir();
+  const dir = tempDir('projects');
   const a = fs.mkdirSync(path.join(dir, 'a'), { recursive: true }) || path.join(dir, 'a');
   const b = fs.mkdirSync(path.join(dir, 'b'), { recursive: true }) || path.join(dir, 'b');
   const recent = new RecentProjects(path.join(dir, 'state', 'recent.json'));

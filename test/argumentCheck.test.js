@@ -8,6 +8,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { collectCalls, checkCall, splitFromEquals } = require('../src/renderer/editor/argumentCheck');
 const { runHelper } = require('../src/main/pythonHelper');
+const { tempDir } = require('./helpers/tempDir');
 
 // Argument specs as produced by libdoc (see rfide_runner.py `_args`).
 const arg = (name, kind, required = true) => ({ name, kind, required });
@@ -104,7 +105,7 @@ test('messages match Robot Framework', { skip: !python && 'no Python with robotf
   ];
   const source = ['*** Settings ***', 'Library    Browser', '', '*** Test Cases ***',
     ...calls.flatMap((call, i) => [`Case ${i}`, `    ${call}`])].join('\n');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-args-'));
+  const dir = tempDir('args');
   fs.writeFileSync(path.join(dir, 'args.robot'), source);
   const run = spawnSync(python, ['-m', 'robot', '--dryrun', '--output', 'out.xml', '--log', 'NONE', '--report', 'NONE', 'args.robot'],
     { cwd: dir, encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });

@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { ProjectWatcher } = require('../src/main/projectWatcher');
+const { tempDir } = require('./helpers/tempDir');
 
 function nextChanges(watcher, timeout = 3000) {
   return new Promise((resolve, reject) => {
@@ -31,7 +32,7 @@ test('accepts ignores tool folders, results and run output', () => {
 });
 
 test('reports changed files once, debounced, with project-relative paths', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-watch-'));
+  const root = tempDir('watch');
   fs.mkdirSync(path.join(root, 'tests'));
   fs.mkdirSync(path.join(root, 'results'));
   const watcher = new ProjectWatcher(root, { ignore: ['results'], delay: 150 });

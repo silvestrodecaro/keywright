@@ -10,6 +10,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { formatRobot } = require('../src/main/formatter');
+const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
 const python = process.env.RFIDE_PYTHON || [
@@ -20,7 +21,7 @@ const hasRobocop = python && spawnSync(python, ['-c', 'import robocop']).status 
 const skip = !hasRobocop && 'no Python with robotframework-robocop';
 
 function project(files = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-format-test-'));
+  const dir = tempDir('format-test');
   for (const [name, content] of Object.entries(files))
     fs.writeFileSync(path.join(dir, name), content);
   return { root: dir, python };

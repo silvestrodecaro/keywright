@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const { RunHistory, FILE_NAME, MAX_RUNS } = require('../src/main/runHistory');
 const { compareRuns, counts, trend } = require('../src/renderer/runDiff');
+const { tempDir } = require('./helpers/tempDir');
 
 const run = (tests) => ({ tests: Object.fromEntries(Object.entries(tests).map(([id, [status, elapsed]]) => [id, { status, elapsed }])) });
 
@@ -29,7 +30,7 @@ test('compares a run with the previous one', () => {
 });
 
 test('records runs in the results folder', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-history-'));
+  const dir = tempDir('history');
   const history = new RunHistory();
   history.start(dir, { select: [], include: ['smoke'] });
   history.record({ type: 'test-end', id: 'S.A', status: 'PASS', elapsed: 0.5, message: '' });

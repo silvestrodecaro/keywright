@@ -14,6 +14,7 @@ const { spawnSync } = require('child_process');
 const { pathToFileURL } = require('url');
 const { RecorderSession } = require('../src/main/recorder');
 const { generateRobot } = require('../src/generator/robotGenerator');
+const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
 const python = process.env.RFIDE_PYTHON || [
@@ -69,7 +70,7 @@ test('recorded session replays with the Browser library', { skip: !python && 'no
   );
 
   const robotSource = generateRobot(actions, { testName: 'Replay Recording', headless: true });
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-e2e-'));
+  const dir = tempDir('e2e');
   const file = path.join(dir, 'recorded.robot');
   fs.writeFileSync(file, robotSource);
 

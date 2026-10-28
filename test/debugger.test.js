@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { TestRunner } = require('../src/main/testRunner');
+const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
 const python = process.env.RFIDE_PYTHON || [
@@ -17,7 +18,7 @@ const python = process.env.RFIDE_PYTHON || [
 ].find((p) => fs.existsSync(p));
 
 function project() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-debug-'));
+  const dir = tempDir('debug');
   fs.mkdirSync(path.join(dir, 'tests'));
   fs.writeFileSync(path.join(dir, 'tests', 'helper.resource'), [
     '*** Keywords ***',
@@ -102,7 +103,7 @@ test('breakpoints can change and pause is honoured while running', { skip: !pyth
 });
 
 test('stops at unexpected failures and evaluates while paused', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-debug-'));
+  const dir = tempDir('debug');
   fs.mkdirSync(path.join(dir, 'tests'));
   fs.writeFileSync(path.join(dir, 'tests', 'fail.robot'), [
     '*** Test Cases ***',
@@ -160,7 +161,7 @@ test('stops at unexpected failures and evaluates while paused', { skip: !python 
 });
 
 test('conditional breakpoints stop only when the condition holds', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-debug-'));
+  const dir = tempDir('debug');
   fs.mkdirSync(path.join(dir, 'tests'));
   fs.writeFileSync(path.join(dir, 'tests', 'loop.robot'), [
     '*** Test Cases ***',

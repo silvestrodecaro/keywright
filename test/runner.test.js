@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { discoverTests, TestRunner, screenshotsFromHtml } = require('../src/main/testRunner');
+const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
 const python = process.env.RFIDE_PYTHON || [
@@ -21,7 +22,7 @@ function fixtureProject() {
   return {
     root: path.join(__dirname, 'fixtures', 'runner-project'),
     python,
-    config: { testsDir: 'tests', outputDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-run-')) },
+    config: { testsDir: 'tests', outputDir: tempDir('run') },
   };
 }
 
@@ -115,7 +116,7 @@ test('screenshotsFromHtml resolves Browser library screenshots', () => {
 });
 
 test('streams suite setup and teardown steps and teardown failures', { skip, timeout: 60_000 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-suite-'));
+  const dir = tempDir('suite');
   fs.mkdirSync(path.join(dir, 'tests'));
   fs.writeFileSync(path.join(dir, 'tests', 'setup_fails.robot'),
     '*** Settings ***\nSuite Setup    Fail    setup broke\n\n*** Test Cases ***\nA\n    Log    a\n');

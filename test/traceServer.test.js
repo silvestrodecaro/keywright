@@ -6,9 +6,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { TraceServer } = require('../src/main/traceServer');
+const { tempDir } = require('./helpers/tempDir');
 
 test('serves the trace viewer and only the allowed trace files', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-trace-'));
+  const dir = tempDir('trace');
   const allowed = path.join(dir, 'results');
   fs.mkdirSync(path.join(allowed, 'browser', 'traces'), { recursive: true });
   const trace = path.join(allowed, 'browser', 'traces', 'trace_1.zip');
