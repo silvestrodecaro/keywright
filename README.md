@@ -80,7 +80,7 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
   Variable`, `VAR ... scope=`). In `.resource` files, variables of the project's suites are accepted too, since
   keywords run in the scope of the suite that imports them. Nothing is reported for a file when one of its
   imports cannot be read statically (missing file, path with variables, module name, `get_variables()`).
-  Variables given only on the command line (`--variable`) are reported: define a default in a Variables section
+  Variables given only on the command line (`--variable`) are reported: define a default in a Variables section.
 - Ctrl+S to save, ● on tabs with unsaved changes, confirmation before closing them
 
 **Run from the editor**: in `.robot` files the gutter shows ▶ (or the last result: ✓ ✕ ↷) next to each test and
