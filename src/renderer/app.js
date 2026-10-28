@@ -695,6 +695,7 @@
   // Requests from the Testing panel (tests.js).
   window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line, event.detail.column));
   window.addEventListener('rfide:show-testing', () => showSidebar('testing'));
+  window.addEventListener('rfide:status', (event) => setEditorStatus(event.detail.text));
 
   // Run glyphs and context menu of the editor: tests run from the saved file.
   editor.onRunTests(async ({ path, names }) => {

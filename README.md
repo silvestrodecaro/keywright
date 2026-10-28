@@ -68,6 +68,12 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
 - Ctrl+click / F12 on the path of a `Resource`, `Variables` or `Library` import opens the file (relative to the
   file or to the project root, `${CURDIR}` and `${/}` supported)
 - Ctrl+Shift+O: outline of the file (sections, tests, keywords, variables, imports)
+- F2 renames a keyword defined in the project or a variable: the keyword definition and its calls (BDD and
+  `resource.` prefixes kept, setups/teardowns, `[Template]`, keywords passed to `Run Keyword` and similar) in the
+  files that import it; a variable with its scoping (a local only in its test or keyword, a suite variable also in
+  the files importing it, unless they define their own), including the `$name` form of IF/WHILE conditions,
+  `Evaluate`-like keywords and inline Python. Open files get the edits as unsaved changes (Ctrl+Z undoes them),
+  the others are saved. Library keywords, duplicate names, embedded arguments and variable files are not renamed.
 - problems while typing: syntax errors from Robot's own parser (missing `END`, unknown settings, invalid
   sections, ...) and warnings for unknown keywords; counts in the tab header, F8 jumps to the next one.
   Unknown keywords are not reported when a library of the project cannot be imported.
@@ -161,6 +167,7 @@ src/renderer/editor/         Monaco integration (bundled with esbuild by scripts
   robotSyntax.js             Robot line analysis shared by highlighting and completion
   argumentCheck.js           keyword calls and argument validation (mirrors Robot's argument resolver)
   navigation.js              outline, variable definitions, undefined variables and imported files
+  rename.js                  occurrences of keywords and variables for F2 rename
 src/main/projectVariables.js variables set at run time / defined by suites across the project
 src/main/projects.js         create/open projects, setup steps, file tree
 src/main/projectTemplate.js  files of a new project
