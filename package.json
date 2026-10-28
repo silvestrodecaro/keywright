@@ -1,6 +1,6 @@
 {
   "name": "robotframework-ide",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "IDE for Robot Framework (Browser library) with a Playwright-style test generator",
   "author": "Silvestro De Caro",
