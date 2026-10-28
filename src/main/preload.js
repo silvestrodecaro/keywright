@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('rfide', {
   replaceInProject: (options, replacement, entries) => ipcRenderer.invoke('project:replace', options, replacement, entries),
   checkFile: (relative, text) => ipcRenderer.invoke('editor:check', relative, text),
   formatFile: (relative, text) => ipcRenderer.invoke('editor:format', relative, text),
+  lintFile: (relative, text) => ipcRenderer.invoke('editor:lint', relative, text),
   installRobocop: () => ipcRenderer.invoke('project:install-robocop'),
   confirmUnsaved: (names) => ipcRenderer.invoke('dialog:unsaved', names),
 

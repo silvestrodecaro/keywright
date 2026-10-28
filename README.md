@@ -97,6 +97,10 @@ Files open in [Monaco](https://microsoft.github.io/monaco-editor/) (the VS Code 
   Robotidy), run with the project's Python on the unsaved content; the project's `robocop.toml` (or `[tool.robocop]`
   in `pyproject.toml`) applies. When Robocop is missing, the editor offers to install it in the `.venv`; new
   projects get it in `requirements.txt`.
+- Robocop lint: its style and quality rules (unused variables, naming, missing documentation, ...) are shown as
+  infos (blue; Robocop errors as warnings), in the editor and in the Problems panel, which has a *Robocop* switch.
+  They follow the project's Robocop configuration. Ctrl+. disables a rule on the line or in the file with a
+  `# robocop: off=rule` comment.
 - Ctrl+S to save, ● on tabs with unsaved changes, confirmation before closing them
 
 **Run from the editor**: in `.robot` files the gutter shows ▶ (or the last result: ✓ ✕ ↷) next to each test and

@@ -750,3 +750,6 @@ input:disabled, select:disabled { opacity: .55; }
 /* Notices in the file pane (e.g. Robocop missing) */
 .notice { display: flex; align-items: center; gap: 10px; margin: 6px 12px; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--surface); font-size: 12px; }
 .notice > span { flex: 1; }
+.problem-info { color: #58a6ff; }
+.problems-robocop { margin-right: 4px; }
+#sidebar-problems .notice { margin: 6px 8px; }

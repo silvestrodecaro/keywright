@@ -61,14 +61,18 @@
   function counts(problems) {
     return {
       errors: problems.filter((p) => p.severity === 'error').length,
-      warnings: problems.filter((p) => p.severity !== 'error').length,
+      warnings: problems.filter((p) => p.severity === 'warning').length,
+      infos: problems.filter((p) => p.severity === 'info').length,
     };
   }
 
-  function countLabel({ errors, warnings }) {
+  const ICONS = { error: ['✕', 'status-fail'], warning: ['⚠', 'problem-warning'], info: ['ℹ', 'problem-info'] };
+
+  function countLabel({ errors, warnings, infos }) {
     return el('span', { className: 'problem-counts' },
       errors ? el('span', { className: 'status-fail', textContent: `✕ ${errors}` }) : null,
-      warnings ? el('span', { className: 'problem-warning', textContent: `⚠ ${warnings}` }) : null);
+      warnings ? el('span', { className: 'problem-warning', textContent: `⚠ ${warnings}` }) : null,
+      infos ? el('span', { className: 'problem-info', textContent: `ℹ ${infos}` }) : null);
   }
 
   function renderFile(path, problems) {
@@ -89,9 +93,9 @@
     const item = el('li', {}, row);
     if (open) {
       for (const problem of problems) {
-        const error = problem.severity === 'error';
-        const entry = el('div', { className: 'tree-row problem-row', title: problem.message },
-          el('span', { className: error ? 'status-fail' : 'problem-warning', textContent: error ? '✕' : '⚠' }),
+        const [icon, iconClass] = ICONS[problem.severity] || ICONS.warning;
+        const entry = el('div', { className: 'tree-row problem-row', title: problem.code ? `${problem.message} (${problem.code})` : problem.message },
+          el('span', { className: iconClass, textContent: icon }),
           el('span', { className: 'problem-message', textContent: problem.message }),
           el('span', { className: 'problem-position muted', textContent: `${problem.line}:${problem.column}` }));
         entry.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rfide:open-file',
@@ -105,9 +109,9 @@
   function render() {
     const all = [...results.values()].flat();
     const total = counts(all);
-    const badge = $('#problems-badge');
-    badge.hidden = all.length === 0;
-    badge.textContent = String(all.length);
+    const badge = $('#problems-badge'); // errors and warnings: infos (Robocop) are only listed
+    badge.hidden = total.errors + total.warnings === 0;
+    badge.textContent = String(total.errors + total.warnings);
     badge.classList.toggle('has-errors', total.errors > 0);
 
     const summary = $('#problems-summary');
@@ -148,6 +152,42 @@
     render(); // the first check runs when the keywords are loaded
   });
   window.addEventListener('rfide:keywords-loaded', () => schedule(0));
+
+  // Robocop lint: on by default, remembered in this browser profile.
+  let lintEnabled = true;
+  try {
+    lintEnabled = localStorage.getItem('rfide.lint') !== 'off';
+  } catch {
+    // storage unavailable
+  }
+  $('#problems-robocop').checked = lintEnabled;
+  editor.setLintEnabled(lintEnabled);
+  $('#problems-robocop').addEventListener('change', (event) => {
+    try {
+      localStorage.setItem('rfide.lint', event.target.checked ? 'on' : 'off');
+    } catch {
+      // storage unavailable
+    }
+    $('#problems-robocop-missing').hidden = true;
+    editor.setLintEnabled(event.target.checked);
+    schedule(300);
+  });
+  window.addEventListener('rfide:lint-unavailable', () => { $('#problems-robocop-missing').hidden = false; });
+  $('#problems-robocop-install').addEventListener('click', async () => {
+    const button = $('#problems-robocop-install');
+    button.disabled = true;
+    button.textContent = 'Installing…';
+    const result = await api.installRobocop();
+    button.disabled = false;
+    button.textContent = 'Install';
+    if (!result.ok) {
+      $('#problems-robocop-missing span').textContent = `Could not install Robocop: ${result.error}`;
+      return;
+    }
+    $('#problems-robocop-missing').hidden = true;
+    editor.setLintEnabled(true);
+    schedule(300);
+  });
   window.addEventListener('rfide:files-changed', () => schedule());
   window.addEventListener('rfide:file-saved', () => schedule());
   $('#problems-refresh').addEventListener('click', checkAll);

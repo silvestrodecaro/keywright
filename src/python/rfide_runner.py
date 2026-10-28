@@ -546,9 +546,67 @@ def check(text, path=""):
     return sorted(unique.values(), key=lambda p: (p["line"], p["column"]))
 
 
+# ---------------------------------------------------------------------------
+# Robocop lint of unsaved content (optional: robotframework-robocop in the project)
+
+ROBOCOP_CONFIG_FILES = ("robocop.toml", "pyproject.toml", "robot.toml", ".robocop")
+_linters = {}  # project root -> (config files' mtimes, ConfigManager, RobocopLinter)
+
+
+def _robocop_linter(root):
+    from robocop.config.manager import ConfigManager
+    from robocop.config.schema import RawConfig
+    from robocop.linter.runner import RobocopLinter
+
+    stamp = tuple(os.path.getmtime(os.path.join(root, name)) if os.path.exists(os.path.join(root, name)) else None
+                  for name in ROBOCOP_CONFIG_FILES)
+    cached = _linters.get(root)
+    if cached is None or cached[0] != stamp:  # created again when the configuration changes
+        manager = ConfigManager(sources=[root], overwrite_config=RawConfig(silent=True))
+        cached = (stamp, manager, RobocopLinter(manager))
+        _linters[root] = cached
+    return cached[1], cached[2]
+
+
+def lint(text, path, root):
+    """Robocop diagnostics of unsaved content, with the project's configuration (1-based positions)."""
+    from robot.api import get_init_model, get_model, get_resource_model
+
+    try:
+        from robocop.source_file import SourceFile
+    except ImportError:
+        import importlib
+
+        importlib.invalidate_caches()  # it may have just been installed from the IDE
+        try:
+            from robocop.source_file import SourceFile
+        except ImportError:
+            return {"available": False, "problems": []}
+    from pathlib import Path
+
+    source = Path(path)
+    manager, linter = _robocop_linter(root)
+    if source.suffix.lower() == ".resource":
+        model = get_resource_model(text)
+    elif source.stem.lower() == "__init__":
+        model = get_init_model(text)
+    else:
+        model = get_model(text)
+    source_file = SourceFile(path=source, config=manager.get_config_for_source_file(source), _model=model)
+    problems = [{
+        "line": d.range.start.line, "column": d.range.start.character,
+        "endLine": d.range.end.line, "endColumn": d.range.end.character,
+        "message": d.message, "rule": d.rule.rule_id, "name": d.rule.name, "severity": d.severity.value,
+    } for d in linter.run_check(source_file)]
+    return {"available": True, "problems": problems}
+
+
 def serve():
     """Answers JSON requests, one per line on stdin: {"id", "command", ...}."""
-    commands = {"check": lambda request: {"problems": check(request["text"], request.get("path", ""))}}
+    commands = {
+        "check": lambda request: {"problems": check(request["text"], request.get("path", ""))},
+        "lint": lambda request: lint(request["text"], request["path"], request["root"]),
+    }
     for line in sys.stdin:
         if not line.strip():
             continue

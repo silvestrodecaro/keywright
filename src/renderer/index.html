@@ -142,8 +142,14 @@
           <div class="panel-header">
             <span id="problems-summary">Problems</span>
             <span class="header-actions">
+              <label class="check check-sm problems-robocop" title="Robocop's style and quality rules (configured by the project's robocop.toml); shown as infos">
+                <input id="problems-robocop" type="checkbox" checked> <span>Robocop</span></label>
               <button id="problems-refresh" class="icon-btn" type="button" title="Check all files again">⟳</button>
             </span>
+          </div>
+          <div id="problems-robocop-missing" class="notice" hidden>
+            <span>Robocop is not installed in this project's virtual environment: style checks are off.</span>
+            <button id="problems-robocop-install" class="btn btn-sm btn-primary" type="button">Install</button>
           </div>
           <ul id="problems-list" class="tree problems-list" role="tree"></ul>
         </div>

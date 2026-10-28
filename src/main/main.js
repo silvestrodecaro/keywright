@@ -239,6 +239,18 @@ ipcMain.handle('editor:check', async (_event, relative, text) => {
   }
 });
 
+// Robocop lint of unsaved content, in the language worker.
+ipcMain.handle('editor:lint', async (_event, relative, text) => {
+  const worker = projectLanguageWorker();
+  if (!worker)
+    return { available: false, problems: [] };
+  try {
+    return await worker.request('lint', { path: path.join(currentProject.root, relative), root: currentProject.root, text });
+  } catch (error) {
+    return { available: true, problems: [], error: error.message };
+  }
+});
+
 // Format Document (Shift+Alt+F) with Robocop.
 ipcMain.handle('editor:format', (_event, relative, text) => {
   if (!currentProject)

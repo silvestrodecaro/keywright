@@ -798,18 +798,50 @@ async function variableMarkers(model, path) {
   }));
 }
 
+// Robocop lint (style and quality rules, configured by the project's robocop.toml):
+// errors become warnings, warnings and infos become infos, so they never look like Robot errors.
+let lintEnabled = true;
+let lintUnavailableNotified = false;
+
+async function lintMarkers(path, text) {
+  if (!lintEnabled)
+    return [];
+  const result = await window.rfide.lintFile(path, text);
+  if (!result.available) {
+    if (!lintUnavailableNotified) {
+      lintUnavailableNotified = true;
+      window.dispatchEvent(new CustomEvent('rfide:lint-unavailable'));
+    }
+    return [];
+  }
+  lintUnavailableNotified = false;
+  return result.problems.map((problem) => ({
+    severity: problem.severity === 'E' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Info,
+    message: problem.message,
+    code: `${problem.rule} ${problem.name}`,
+    startLineNumber: problem.line,
+    startColumn: problem.column,
+    endLineNumber: problem.endLine,
+    endColumn: Math.max(problem.endColumn, problem.column + 1),
+    source: 'robocop',
+  }));
+}
+
 async function validate(model, path) {
   if (model.isDisposed() || model.getLanguageId() !== LANGUAGE)
     return;
   monaco.editor.setModelMarkers(model, 'keywords', keywordMarkers(model));
   const version = model.getVersionId();
-  const [result, variables] = await Promise.all([
-    window.rfide.checkFile(path, model.getValue()),
+  const text = model.getValue();
+  const [result, variables, lint] = await Promise.all([
+    window.rfide.checkFile(path, text),
     variableMarkers(model, path).catch(() => []),
+    lintMarkers(path, text).catch(() => []),
   ]);
   if (model.isDisposed() || model.getVersionId() !== version)
     return; // edited meanwhile: a newer check is scheduled
   monaco.editor.setModelMarkers(model, 'variables', variables);
+  monaco.editor.setModelMarkers(model, 'robocop', lint);
   monaco.editor.setModelMarkers(model, 'robot', robotMarkers(result));
 }
 
@@ -830,20 +862,23 @@ function robotMarkers(result) {
 async function fileMarkers(path, text) {
   const lines = text.split(/\r?\n/);
   const document = { getValue: () => text, getLinesContent: () => lines };
-  const [result, variables] = await Promise.all([
+  const [result, variables, lint] = await Promise.all([
     window.rfide.checkFile(path, text),
     variableMarkers(document, path).catch(() => []),
+    lintMarkers(path, text).catch(() => []),
   ]);
-  return [...robotMarkers(result), ...keywordMarkers(document), ...variables];
+  return [...robotMarkers(result), ...keywordMarkers(document), ...variables, ...lint];
 }
 
 function toProblem(marker) {
   return {
-    severity: marker.severity === monaco.MarkerSeverity.Error ? 'error' : 'warning',
+    severity: marker.severity === monaco.MarkerSeverity.Error ? 'error'
+      : marker.severity === monaco.MarkerSeverity.Warning ? 'warning' : 'info',
     message: marker.message,
     line: marker.startLineNumber,
     column: marker.startColumn,
     source: marker.source,
+    code: marker.code ? String(marker.code) : undefined,
   };
 }
 
@@ -958,6 +993,31 @@ async function variableFixes(model, marker, name) {
   return actions;
 }
 
+// Robocop rules can be disabled with comments: `# robocop: off=rule` at the end of a line, or
+// before the first section for the whole file. Rules are added to an existing disabler.
+const ROBOCOP_DISABLER = /# robocop: off=[\w-]+(?:, ?[\w-]+)*/;
+
+function robocopFixes(model, marker, rule) {
+  if (!rule)
+    return [];
+  const disable = (line, title, preferred) => {
+    const text = model.getLineContent(line);
+    const existing = ROBOCOP_DISABLER.exec(text);
+    if (existing) {
+      const column = existing.index + existing[0].length + 1;
+      return quickFix(title, model, marker, [{ range: new monaco.Range(line, column, line, column), text: `, ${rule}` }], preferred);
+    }
+    const end = text.trimEnd().length + 1;
+    return quickFix(title, model, marker, [{ range: new monaco.Range(line, end, line, text.length + 1), text: `    # robocop: off=${rule}` }], preferred);
+  };
+  const actions = [disable(marker.startLineNumber, `Disable ${rule} on this line`, false)];
+  if (ROBOCOP_DISABLER.test(model.getLineContent(1)) && /^#/.test(model.getLineContent(1)))
+    actions.push(disable(1, `Disable ${rule} in this file`, false));
+  else
+    actions.push(quickFix(`Disable ${rule} in this file`, model, marker, [insertionEdit(model, { afterLine: 0, lines: [`# robocop: off=${rule}`] })]));
+  return actions;
+}
+
 monaco.languages.registerCodeActionProvider(LANGUAGE, {
   async provideCodeActions(model, _range, context) {
     const actions = [];
@@ -968,6 +1028,8 @@ monaco.languages.registerCodeActionProvider(LANGUAGE, {
         actions.push(...await keywordFixes(model, marker, keyword[1]));
       else if (variable)
         actions.push(...await variableFixes(model, marker, variable[1]));
+      else if (marker.source === 'robocop' && marker.code)
+        actions.push(...robocopFixes(model, marker, String(marker.code).split(' ')[1]));
       else if (/must have closing END/.test(marker.message))
         actions.push(quickFix('Add END', model, marker, [insertionEdit(model, endInsertion(model.getLinesContent(), marker.startLineNumber))], true));
     }
@@ -1520,6 +1582,12 @@ const RFEditor = (() => {
     },
     /** Re-runs the syntax check of open files (e.g. after the project's Python changed). */
     revalidate: () => files.forEach((_, path) => scheduleValidation(path, 0)),
+    /** Turns Robocop lint on or off (open files are checked again). */
+    setLintEnabled(enabled) {
+      lintEnabled = enabled;
+      lintUnavailableNotified = false;
+      files.forEach((_, path) => scheduleValidation(path, 0));
+    },
     problems: (path) => (files.has(path) ? problemCounts(files.get(path).model) : null),
     projectProblems,
     openPaths: () => [...files.keys()],

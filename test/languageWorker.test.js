@@ -39,3 +39,32 @@ test('checks unsaved Robot content and survives a crash', { skip: !python && 'no
     worker.dispose();
   }
 });
+
+test('lints unsaved content with Robocop and the project configuration', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
+  const os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-lint-'));
+  fs.mkdirSync(path.join(dir, 'tests'));
+  const worker = new LanguageWorker(python, dir);
+  const lint = (text, file = 'tests/a.robot') => worker.request('lint', { path: path.join(dir, file), root: dir, text });
+  try {
+    const text = '*** Test Cases ***\nmy test\n    ${unused}=    Set Variable    1\n';
+    const result = await lint(text);
+    if (!result.available)
+      return; // robotframework-robocop is not installed in this Python
+    const rules = result.problems.map((p) => p.rule);
+    assert.ok(rules.includes('VAR02') && rules.includes('NAME07'), rules.join());
+    const unused = result.problems.find((p) => p.rule === 'VAR02');
+    assert.deepStrictEqual([unused.line, unused.column, unused.endLine, unused.endColumn, unused.name], [3, 5, 3, 14, 'unused-variable']);
+
+    // A disabler comment on the line (the quick fix) silences the rule there.
+    const disabled = await lint(text.replace('Set Variable    1', 'Set Variable    1    # robocop: off=unused-variable'));
+    assert.ok(!disabled.problems.some((p) => p.rule === 'VAR02'));
+
+    // The project's configuration applies, and is reloaded when it changes.
+    fs.writeFileSync(path.join(dir, 'robocop.toml'), '[tool.robocop.lint]\nignore = ["NAME07"]\n');
+    const configured = await lint(text);
+    assert.ok(!configured.problems.some((p) => p.rule === 'NAME07'));
+  } finally {
+    worker.dispose();
+  }
+});
