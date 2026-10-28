@@ -162,7 +162,7 @@ The recorder uses `BrowserContext._startRecording`, a **private** Playwright API
 | navigate / open page | `New Page`, `Go To` |
 | click, double click, modifiers | `Click`, `Click With Options` |
 | fill, press, select, check | `Fill Text`, `Press Keys`, `Select Options By`, `Check Checkbox` |
-| assert text / value / checked / visible / snapshot | `Get Text`, `Get Property`, `Get Checkbox State`, `Get Element States`, `Get Aria Snapshot` |
+| assert text / value / checked / visible / snapshot | `Get Text`, `Get Property`, `Get Checkbox State`, `Wait For Elements State`, `Get Aria Snapshot` |
 | popup, dialog, download | `Switch Page`, `Handle Future Dialogs`, `Promise To Wait For Download` |
 
 ## Tests

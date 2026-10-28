@@ -93,3 +93,11 @@ test('generateSteps returns only the keyword calls', () => {
   ]);
   assert.deepStrictEqual(generateSteps([]), []);
 });
+
+test('visibility assertions wait for the visible state', () => {
+  assert.deepStrictEqual(generateSteps([
+    at({ name: 'assertVisible', selector: 'internal:text="Please enter a valid e-mail"i' }),
+  ]), [
+    'Wait For Elements State    text=Please enter a valid e-mail    visible',
+  ]);
+});

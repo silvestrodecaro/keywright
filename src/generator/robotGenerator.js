@@ -80,7 +80,7 @@ function actionLines(action) {
     case 'assertChecked':
       return [line('Get Checkbox State', sel(action), '==', action.checked ? 'checked' : 'unchecked')];
     case 'assertVisible':
-      return [line('Get Element States', sel(action), 'contains', 'visible')];
+      return [line('Wait For Elements State', sel(action), 'visible')];
     case 'assertValue':
       return [line('Get Property', sel(action), 'value', '==', arg(action.value || ''))];
     case 'assertSnapshot':
