@@ -100,3 +100,61 @@ test('breakpoints can change and pause is honoured while running', { skip: !pyth
   await finished;
   assert.deepStrictEqual(pauses.map((p) => p.lineno), [9, 12]);
 });
+
+test('stops at unexpected failures and evaluates while paused', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-debug-'));
+  fs.mkdirSync(path.join(dir, 'tests'));
+  fs.writeFileSync(path.join(dir, 'tests', 'fail.robot'), [
+    '*** Test Cases ***',
+    'Fails',
+    '    ${ok}=    Run Keyword And Return Status    Fail    expected',
+    '    TRY',
+    '        Fail    in try',
+    '    EXCEPT',
+    '        No Operation',
+    '    END',
+    '    Checker',
+    '',
+    '*** Keywords ***',
+    'Checker',
+    '    @{items}=    Create List    a    b',
+    '    Should Be Equal    1    2',
+    '',
+  ].join('\n'));
+  const runner = new TestRunner();
+  const pauses = [];
+  const evaluations = new Map();
+  const stepNames = [];
+  const finished = new Promise((resolve) => runner.on('finished', resolve));
+  const expressions = {
+    variable: ['${items}[1]'],
+    python: ['len($items) + 1'],
+    keyword: ['Catenate    a    b'],
+    watchKeyword: ['Catenate    a    b', false],
+    error: ['nope +'],
+  };
+  runner.on('event', (event) => {
+    if (event.type === 'step-start')
+      stepNames.push(event.name);
+    if (event.type === 'debug-paused') {
+      pauses.push(event);
+      for (const [id, [expression, keywords]] of Object.entries(expressions))
+        runner.debugCommand({ command: 'evaluate', id, expression, keywords });
+      runner.debugCommand({ command: 'continue' });
+    }
+    if (event.type === 'debug-evaluated')
+      evaluations.set(event.id, event.ok ? `${event.value} (${event.valueType})` : `error: ${event.error}`);
+  });
+  await runner.run({ root: dir, python, config: { testsDir: 'tests', outputDir: path.join(dir, 'results') } },
+    { debug: { breakpoints: {}, pauseOnFailure: true } });
+  await finished;
+
+  assert.deepStrictEqual(pauses.map((p) => [p.reason, p.name, p.lineno, p.message]), [['failure', 'Should Be Equal', 14, '1 != 2']]);
+  assert.deepStrictEqual(pauses[0].frames.map((f) => [f.name, f.lineno]), [['Should Be Equal', 14], ['Checker', 9]]);
+  assert.strictEqual(evaluations.get('variable'), 'b (str)');
+  assert.strictEqual(evaluations.get('python'), '3 (int)');
+  assert.strictEqual(evaluations.get('keyword'), 'a b (str)');
+  assert.match(evaluations.get('watchKeyword'), /^error: Watches do not run keywords/);
+  assert.match(evaluations.get('error'), /^error: /);
+  assert.ok(!stepNames.includes('Catenate'), 'keywords run by evaluations are not reported as steps');
+});

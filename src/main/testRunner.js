@@ -55,7 +55,7 @@ class TestRunner extends EventEmitter {
   /**
    * @param {{ root: string, python: string|null, config: object }} project
    * @param {{ select?: string[], variables?: Record<string,string>, trace?: boolean,
-   *           debug?: { breakpoints: Record<string, number[]> } }} [options]
+   *           debug?: { breakpoints: Record<string, number[]>, pauseOnFailure?: boolean } }} [options]
    *   select: full names of tests or suites to run (all when empty);
    *   debug: stop at breakpoints (project-relative path -> lines) and accept debugCommand()
    */
@@ -90,7 +90,11 @@ class TestRunner extends EventEmitter {
         RFIDE_SELECT: JSON.stringify(options.select || []),
         // Browser library: record a Playwright trace for every `New Context`.
         ...(options.trace ? { ROBOT_FRAMEWORK_BROWSER_TRACING: 'true' } : {}),
-        ...(breakpoints ? { RFIDE_DEBUG: '1', RFIDE_BREAKPOINTS: JSON.stringify(breakpoints) } : {}),
+        ...(breakpoints ? {
+          RFIDE_DEBUG: '1',
+          RFIDE_BREAKPOINTS: JSON.stringify(breakpoints),
+          RFIDE_PAUSE_ON_FAILURE: options.debug.pauseOnFailure ? '1' : '0',
+        } : {}),
       }),
       windowsHide: true,
       detached: process.platform !== 'win32', // own process group, so killTree can reach the children

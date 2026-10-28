@@ -645,7 +645,8 @@ input:disabled, select:disabled { opacity: .55; }
 .status-watching { color: var(--accent); }
 
 /* Trace viewer ------------------------------------------------------------ */
-.testing-checks { display: flex; gap: 16px; }
+.testing-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.testing-checks .check-sm { white-space: nowrap; }
 .results-detail.is-trace { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .trace-bar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--border); }
 .trace-frame { flex: 1; width: 100%; border: 0; background: #fff; }
@@ -713,3 +714,12 @@ input:disabled, select:disabled { opacity: .55; }
 .debug-variable { display: flex; gap: 8px; padding: 0 10px 0 26px; white-space: nowrap; }
 .debug-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--tok-arg); }
 .debug-type { font-size: 11px; }
+.debug-message { margin: 6px 10px 2px; padding: 6px 8px; max-height: 90px; overflow: auto; border-left: 3px solid var(--record); background: var(--error-bg); color: var(--error-text); font: 12px/1.4 var(--mono); white-space: pre-wrap; }
+.debug-watches, .debug-console { font: 12px/1.6 var(--mono); }
+.debug-evaluation.is-error .debug-value { color: var(--error-text); }
+.debug-row-action { width: 18px; height: 18px; font-size: 10px; visibility: hidden; }
+.debug-evaluation:hover .debug-row-action { visibility: visible; }
+.debug-eval { padding: 4px 10px; }
+.debug-eval input { width: 100%; font: 12px var(--mono); }
+.debug-console { padding-bottom: 6px; }
+.debug-evaluation .tok-var { white-space: pre; }

@@ -272,7 +272,7 @@ ipcMain.handle('tests:run', async (_event, options = {}) => {
       select: options.select || [],
       variables: options.headed ? { HEADLESS: 'False' } : {},
       trace: !!options.trace,
-      debug: options.debug ? { breakpoints: options.debug.breakpoints || {} } : undefined,
+      debug: options.debug ? { breakpoints: options.debug.breakpoints || {}, pauseOnFailure: !!options.debug.pauseOnFailure } : undefined,
     });
     return { ok: true };
   } catch (error) {
@@ -282,7 +282,7 @@ ipcMain.handle('tests:run', async (_event, options = {}) => {
 
 ipcMain.handle('tests:stop', () => runner.stop());
 
-// Debugger: continue / over / into / out / pause, or new breakpoints.
+// Debugger: continue / over / into / out / pause, new breakpoints or options, evaluate.
 ipcMain.handle('tests:debug-command', (_event, command) => runner.debugCommand(command));
 
 ipcMain.handle('tests:trace-url', async (_event, traceFile) => {

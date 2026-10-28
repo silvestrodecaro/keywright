@@ -545,7 +545,7 @@
       window.dispatchEvent(new CustomEvent('rfide:show-results'));
     debugging = $('#tests-debug').checked;
     paused = null;
-    const debug = debugging ? { breakpoints: window.RFEditor.breakpoints() } : undefined;
+    const debug = debugging ? { breakpoints: window.RFEditor.breakpoints(), pauseOnFailure: $('#tests-debug-failures').checked } : undefined;
     const result = await api.runTests({ select, headed: $('#tests-headed').checked, trace: $('#tests-trace').checked, debug });
     if (!result.ok) {
       running = false;
@@ -645,8 +645,12 @@
       case 'trace':
         traces.set(event.test || event.suite, event.path);
         break;
+      case 'debug-evaluated':
+        onEvaluated(event);
+        break;
       case 'debug-paused':
         paused = event;
+        evaluateWatches();
         window.dispatchEvent(new CustomEvent('rfide:show-testing'));
         if (event.source && !/^([a-z]:)?[\\/]/i.test(event.source)) { // project file
           window.RFEditor.showDebugLine(event.source, event.lineno); // applied when the file opens
@@ -728,7 +732,10 @@
     $('#tests-debug').disabled = running;
     if (panel.hidden)
       return;
-    const status = paused ? `Paused${paused.reason === 'breakpoint' ? ' at breakpoint' : ''}: ${paused.name}` : 'Running…';
+    const where = { breakpoint: ' at breakpoint', failure: ' on failure' }[paused?.reason] || '';
+    const status = paused ? `Paused${where}: ${paused.name}` : 'Running…';
+    $('#debug-message').hidden = !paused?.message;
+    $('#debug-message').textContent = paused?.message || '';
     $('#debug-status').textContent = status;
     $('#debug-status').title = status;
     for (const id of ['#debug-continue', '#debug-over', '#debug-into', '#debug-out'])
@@ -752,7 +759,109 @@
     }));
     if (!paused)
       $('#debug-variables').append(el('div', { className: 'empty', textContent: 'Variables are shown while paused.' }));
+    renderEvaluations();
   }
+
+  // Watch and evaluate. Watches are evaluated at every pause (never running keywords);
+  // the input evaluates once (variables, Python, or a keyword call) and keeps a history.
+  let watches = loadWatches();
+  const evaluations = []; // { expression, result }, newest last
+  const pendingEvaluations = new Map(); // id -> entry waiting for its result
+  let evaluationId = 0;
+
+  function loadWatches() {
+    try {
+      return JSON.parse(localStorage.getItem('rfide.watches') || '[]').map((expression) => ({ expression, result: null }));
+    } catch {
+      return [];
+    }
+  }
+
+  function saveWatches() {
+    try {
+      localStorage.setItem('rfide.watches', JSON.stringify(watches.map((w) => w.expression)));
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  function evaluate(entry, keywords) {
+    const id = `e${++evaluationId}`;
+    entry.result = { pending: true };
+    pendingEvaluations.set(id, entry);
+    api.debugCommand({ command: 'evaluate', id, expression: entry.expression, keywords });
+  }
+
+  function evaluateWatches() {
+    for (const watch of watches)
+      evaluate(watch, false);
+  }
+
+  function onEvaluated(event) {
+    const entry = pendingEvaluations.get(event.id);
+    if (!entry)
+      return;
+    pendingEvaluations.delete(event.id);
+    entry.result = event;
+  }
+
+  function evaluationRow(entry, actions) {
+    const result = entry.result;
+    const value = !result ? (paused ? '' : 'not paused') : result.pending ? '…' : result.ok ? result.value : result.error;
+    return el('div', { className: 'debug-variable debug-evaluation' + (result && !result.pending && !result.ok ? ' is-error' : ''),
+      title: result && result.ok ? `${entry.expression} (${result.valueType}) = ${result.value}` : value },
+    el('span', { className: 'tok-var', textContent: entry.expression }),
+    el('span', { className: 'debug-value', textContent: value }),
+    ...actions);
+  }
+
+  function renderEvaluations() {
+    $('#debug-watches').replaceChildren(...watches.map((watch) => {
+      const remove = el('button', { type: 'button', className: 'icon-btn debug-row-action', title: 'Remove watch', textContent: '✕' });
+      remove.addEventListener('click', () => {
+        watches = watches.filter((w) => w !== watch);
+        saveWatches();
+        scheduleRender();
+      });
+      return evaluationRow(watch, [remove]);
+    }));
+    if (!watches.length)
+      $('#debug-watches').append(el('div', { className: 'empty', textContent: 'Add watches from the results below (👁).' }));
+    $('#debug-console').replaceChildren(...[...evaluations].reverse().map((entry) => {
+      const watch = el('button', { type: 'button', className: 'icon-btn debug-row-action', title: 'Watch: evaluate at every pause', textContent: '👁' });
+      watch.addEventListener('click', () => {
+        if (!watches.some((w) => w.expression === entry.expression)) {
+          watches.push({ expression: entry.expression, result: entry.result });
+          saveWatches();
+          scheduleRender();
+        }
+      });
+      return evaluationRow(entry, [watch]);
+    }));
+  }
+
+  $('#debug-eval-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = $('#debug-eval-input');
+    const expression = input.value.trim();
+    if (!expression || !paused)
+      return;
+    const entry = { expression, result: null };
+    evaluations.push(entry);
+    if (evaluations.length > 50)
+      evaluations.shift();
+    evaluate(entry, true);
+    input.value = '';
+    scheduleRender();
+  });
+
+  $('#tests-debug').addEventListener('change', (event) => {
+    $('#tests-debug-failures').disabled = !event.target.checked;
+  });
+  $('#tests-debug-failures').addEventListener('change', (event) => {
+    if (running && debugging)
+      api.debugCommand({ command: 'options', pauseOnFailure: event.target.checked });
+  });
 
   $('#debug-continue').addEventListener('click', () => sendDebug('continue'));
   $('#debug-over').addEventListener('click', () => sendDebug('over'));

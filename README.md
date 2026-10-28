@@ -162,6 +162,14 @@ open it) and the variables by scope (Local, Test, Suite, Global; built-in ones a
 Step Over (F10), Step Into (F11), Step Out (Shift+F11), Pause and Stop are in the panel. Breakpoints changed
 during a run apply right away (on the saved file: lines of unsaved edits may not match).
 
+*Stop on failure* (on by default with *Debug*) pauses where a keyword fails, with its error message, before
+teardowns run: the browser page is still there. Failures expected by TRY, `Run Keyword And Ignore Error`,
+`Run Keyword And Return Status`, `Run Keyword And Expect Error` and `Wait Until Keyword Succeeds` are skipped.
+While paused, the *Watch* input evaluates a variable (`${user}[name]`, `${obj.attr}`), a Python expression as in
+`Evaluate` (`$count + 1`) or a keyword call with its arguments separated by two spaces (`Get Text    h1`);
+results can be pinned (👁) as watches, evaluated again at every pause. Watches never run keywords. Keywords run
+from the debugger are not shown in the IDE's results tree (Robot's log.html may list them).
+
 ## How it works
 
 ```

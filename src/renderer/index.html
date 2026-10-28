@@ -146,6 +146,8 @@
                 <input id="tests-trace" type="checkbox" checked> <span>Record trace</span></label>
               <label class="check check-sm" title="Stop at the breakpoints set in the editor (click the gutter or press F9)">
                 <input id="tests-debug" type="checkbox"> <span>Debug</span></label>
+              <label class="check check-sm" title="While debugging, stop where a keyword fails (not inside TRY or Run Keyword And Ignore Error and similar)">
+                <input id="tests-debug-failures" type="checkbox" checked disabled> <span>Stop on failure</span></label>
             </div>
           </div>
           <div id="tests-summary" class="tests-summary"></div>
@@ -160,10 +162,19 @@
               <button id="debug-pause" class="icon-btn" type="button" title="Pause at the next step">❚❚</button>
               <button id="debug-stop" class="icon-btn" type="button" title="Stop">■</button>
             </div>
+            <pre id="debug-message" class="debug-message" hidden></pre>
             <div class="debug-section-title">Call stack</div>
             <ul id="debug-stack" class="debug-stack"></ul>
             <div class="debug-section-title">Variables</div>
             <div id="debug-variables" class="debug-variables"></div>
+            <div class="debug-section-title">Watch</div>
+            <div id="debug-watches" class="debug-watches"></div>
+            <form id="debug-eval-form" class="debug-eval">
+              <input id="debug-eval-input" type="text" spellcheck="false" autocomplete="off"
+                placeholder="${var}, $var + 1 or Keyword    args (Enter)" aria-label="Evaluate"
+                title="A variable (${x}[0]), a Python expression as in Evaluate ($x), or a keyword call with its arguments separated by two spaces (e.g. Get Text    h1)">
+            </form>
+            <div id="debug-console" class="debug-console"></div>
           </div>
           <ul id="test-tree" class="tree test-tree" role="tree"></ul>
         </div>

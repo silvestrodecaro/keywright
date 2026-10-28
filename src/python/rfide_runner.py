@@ -138,6 +138,12 @@ BUILTIN_VARIABLES = {"/", ":", "\\n", "space", "empty", "true", "false", "none",
                      "keywordmessage"}
 
 
+# Keywords that run others expecting them to fail: failures inside are not stopped at.
+EXPECTED_FAILURES = {"runkeywordandignoreerror", "runkeywordandreturnstatus", "runkeywordandexpecterror",
+                     "waituntilkeywordsucceeds", "runkeywordandwarnonfailure"}
+SINGLE_VARIABLE = re.compile(r"^[$@&%]\{.+\}(\[[^\]]*\])*$")
+
+
 def _normalize_source(path):
     # realpath: Windows 8.3 short names (NAME~1) and symlinks give the same key as Robot's paths.
     return os.path.normcase(os.path.realpath(path)) if path else None
@@ -159,14 +165,17 @@ def _value(value):
 
 
 class Debugger:
-    """Breakpoints and stepping. Commands arrive on the listener's connection."""
+    """Breakpoints, stepping, stop on failure and evaluation while paused.
+    Commands arrive on the listener's connection."""
 
     def __init__(self, listener, sock):
         self._listener = listener
         self._commands = queue.Queue()
         self._breakpoints = self._parse(json.loads(os.environ.get("RFIDE_BREAKPOINTS") or "{}"))
+        self._pause_on_failure = os.environ.get("RFIDE_PAUSE_ON_FAILURE") == "1"
         self._mode = None  # None (run to breakpoints), "pause", "into", "over", "out"
         self._depth = 0  # body item depth of the last pause, for stepping
+        self._failure_stopped = False  # stopped at a failure: its parents fail too, do not stop again
         threading.Thread(target=self._read, args=(sock,), daemon=True).start()
 
     @staticmethod
@@ -187,6 +196,11 @@ class Debugger:
         name = command.get("command")
         if name == "breakpoints":
             self._breakpoints = self._parse(command.get("breakpoints") or {})
+        elif name == "options":
+            self._pause_on_failure = bool(command.get("pauseOnFailure"))
+        elif name == "evaluate":
+            self._listener._send({"type": "debug-evaluated", "id": command.get("id"),
+                                  **self._evaluate(command.get("expression") or "", command.get("keywords", True))})
         elif name == "pause":
             self._mode = "pause"
         elif name == "detach":
@@ -198,13 +212,17 @@ class Debugger:
             return True
         return False
 
-    def before(self, data, result, depth, frames):
-        """Called before each body item runs; blocks while paused."""
+    def _poll(self):
         while True:
             try:
                 self._handle(self._commands.get_nowait())
             except queue.Empty:
                 break
+
+    def before(self, data, result, depth, frames):
+        """Called before each body item runs; blocks while paused."""
+        self._poll()
+        self._failure_stopped = False
         if result.type not in PAUSABLE:
             return
         source = _normalize_source(getattr(data, "source", None))
@@ -216,20 +234,60 @@ class Debugger:
             reason = "step" if mode != "pause" else "pause"
         else:
             return
+        current = {"name": _describe(result)["name"], "source": _source(data), "lineno": lineno}
+        self._pause(reason, data, result, depth, [current, *reversed(frames)])
+
+    def after(self, data, result, depth, frames, ancestors):
+        """Called when a body item ends; stops at the innermost failure that is not expected."""
+        if (not self._pause_on_failure or self._failure_stopped or result.status != "FAIL"
+                or result.type not in ("KEYWORD", "SETUP", "TEARDOWN")):
+            return
+        self._failure_stopped = True
+        if any(kind == "TRY" or name.lower().replace(" ", "").replace("_", "") in EXPECTED_FAILURES
+               for kind, name in ancestors):
+            return
+        self._poll()
+        self._pause("failure", data, result, depth, list(reversed(frames)), message=_truncate(result.message))
+
+    def _pause(self, reason, data, result, depth, frames, message=None):
         self._depth = depth
-        self._listener._send({"type": "debug-paused", "reason": reason, "test": self._listener._test,
-                              "suite": self._listener._suite(), "source": _source(data),
-                              "lineno": lineno, "step": result.id, **_describe(result),
-                              "frames": self._frames(data, result, frames), "variables": self._variables()})
+        self._listener._send({"type": "debug-paused", "reason": reason, "message": message,
+                              "test": self._listener._test, "suite": self._listener._suite(),
+                              "source": _source(data), "lineno": getattr(data, "lineno", None), "step": result.id,
+                              **_describe(result), "frames": frames, "variables": self._variables()})
         while not self._handle(self._commands.get()):
             pass
         self._listener._send({"type": "debug-resumed"})
 
-    def _frames(self, data, result, frames):
-        """Call stack, innermost first: the paused item, then the calls of the enclosing keywords."""
-        current = {"name": _describe(result)["name"], "source": _source(data),
-                   "lineno": getattr(data, "lineno", None)}
-        return [current, *reversed(frames)]
+    def _evaluate(self, expression, keywords=True):
+        """A variable (${x}[0], ${obj.attr}), a keyword call (cells separated by two spaces) or a
+        Python expression as in Evaluate ($x for variables). Events of keywords run here are muted."""
+        from robot.libraries.BuiltIn import BuiltIn
+        from robot.running.context import EXECUTION_CONTEXTS
+
+        context = EXECUTION_CONTEXTS.current
+        text = expression.strip()
+        if context is None or not text:
+            return {"ok": False, "error": "Nothing to evaluate."}
+        self._listener._muted = True
+        try:
+            if SINGLE_VARIABLE.match(text):
+                value = context.variables.replace_scalar(text)
+            else:
+                cells = [cell for cell in re.split(r"\s{2,}|\t", text) if cell]
+                runner = context.namespace.get_runner(cells[0], recommend_on_failure=False)
+                if type(runner).__name__ != "InvalidKeywordRunner":
+                    if not keywords:
+                        return {"ok": False, "error": "Watches do not run keywords: evaluate it from the input instead."}
+                    value = BuiltIn().run_keyword(cells[0], *cells[1:])
+                else:
+                    value = BuiltIn().evaluate(text)
+            described = _value(value)  # "type" would clash with the event type
+            return {"ok": True, "value": described["value"], "valueType": described["type"]}
+        except Exception as error:
+            return {"ok": False, "error": _truncate(str(error) or type(error).__name__)}
+        finally:
+            self._listener._muted = False
 
     def _variables(self):
         """Visible variables grouped by the innermost scope defining them: Local, Test, Suite, Global."""
@@ -265,6 +323,8 @@ class Listener:
         self._socket = None
         self._stack = []  # ids of running body items, for attaching log messages
         self._frames = []  # running keyword calls (name, source, lineno), for the debugger's call stack
+        self._kinds = []  # (type, name) of the running body items, to recognize expected failures
+        self._muted = False  # the debugger is running keywords for an evaluation
         self._test = None
         self._suites = []  # full names of the running suites
         self._debugger = None
@@ -290,6 +350,7 @@ class Listener:
         self._suites.append(result.full_name)
         self._stack = []
         self._frames = []
+        self._kinds = []
         self._send({"type": "suite-start", "id": result.full_name, "name": result.name})
 
     def end_suite(self, data, result):
@@ -307,6 +368,7 @@ class Listener:
         self._test = result.full_name
         self._stack = []
         self._frames = []
+        self._kinds = []
         self._send({"type": "test-start", "id": result.full_name, "name": result.name})
 
     def end_test(self, data, result):
@@ -319,11 +381,14 @@ class Listener:
         return self._suites[-1] if self._suites else None
 
     def start_body_item(self, data, result):
+        if self._muted:
+            return
         if self._debugger:
             self._debugger.before(data, result, len(self._stack), self._frames)
         item_id = result.id
         parent = self._stack[-1] if self._stack else None
         self._stack.append(item_id)
+        self._kinds.append((result.type, result.name if result.type in ("KEYWORD", "SETUP", "TEARDOWN") else ""))
         if result.type in ("KEYWORD", "SETUP", "TEARDOWN"):
             self._frames.append({"name": result.name or "", "source": _source(data),
                                  "lineno": getattr(data, "lineno", None), "id": item_id})
@@ -331,14 +396,21 @@ class Listener:
                     "lineno": getattr(data, "lineno", None), **_describe(result)})
 
     def end_body_item(self, data, result):
+        if self._muted:
+            return
+        if self._debugger and self._stack and self._stack[-1] == result.id:
+            self._debugger.after(data, result, len(self._stack) - 1, self._frames, self._kinds[:-1])
         if self._stack and self._stack[-1] == result.id:
             self._stack.pop()
+            self._kinds.pop()
         if self._frames and self._frames[-1]["id"] == result.id:
             self._frames.pop()
         self._send({"type": "step-end", "id": result.id, "test": self._test, "suite": self._suite(), "status": result.status,
                     "message": _truncate(getattr(result, "message", "") or ""), "elapsed": _seconds(result)})
 
     def log_message(self, message):
+        if self._muted:
+            return
         trace = TRACE_MESSAGE.search(message.message or "")
         if trace:
             # The trace belongs to the test, or to the suite when the context is
