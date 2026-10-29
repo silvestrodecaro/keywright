@@ -27,7 +27,9 @@ test('serves the trace viewer and only the allowed trace files', async () => {
     const index = await fetch(url);
     assert.strictEqual(index.status, 200);
     assert.match(index.headers.get('content-type'), /text\/html/);
-    assert.match(await index.text(), /<div id="root">|id=root/);
+    const html = await index.text();
+    assert.match(html, /<div id="root">|id=root/);
+    assert.match(html, /::-webkit-scrollbar-thumb[^<]*<\/style>\s*<\/head>/);
     assert.strictEqual((await fetch(new URL('/trace/sw.bundle.js', url))).status, 200);
 
     const file = (p) => fetch(new URL(`/trace/file?path=${encodeURIComponent(p)}`, url));

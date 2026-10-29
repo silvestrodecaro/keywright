@@ -25,6 +25,16 @@ const CONTENT_TYPES = {
   '.zip': 'application/zip',
 };
 
+// The IDE's thin scrollbars (see styles.css), added to the viewer's page: the IDE's stylesheet does not
+// reach into the frame. Snapshots of the recorded pages are separate documents and keep their own.
+const VIEWER_STYLE = `<style>
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 5px; background: #38424a padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #4e5a63; }
+::-webkit-scrollbar-button { display: none; }
+</style>`;
+
 function isInside(dir, file) {
   const relative = path.relative(dir, file);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
@@ -105,7 +115,23 @@ class TraceServer {
     const file = path.resolve(VIEWER_ROOT, relative || 'index.html');
     if (!isInside(VIEWER_ROOT, file))
       return this._send(response, 403);
+    if (file === path.join(VIEWER_ROOT, 'index.html'))
+      return this._sendViewerPage(response, file);
     return this._sendFile(response, file);
+  }
+
+  _sendViewerPage(response, file) {
+    fs.readFile(file, 'utf8', (error, html) => {
+      if (error)
+        return this._send(response, 404);
+      const body = Buffer.from(html.replace('</head>', `${VIEWER_STYLE}</head>`));
+      response.writeHead(200, {
+        'Content-Type': CONTENT_TYPES['.html'],
+        'Content-Length': body.length,
+        'Cache-Control': 'no-store',
+      });
+      response.end(body);
+    });
   }
 
   _sendFile(response, file) {
