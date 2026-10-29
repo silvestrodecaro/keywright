@@ -2,7 +2,7 @@
 <!-- SignPath artifact configuration "installer": the NSIS installer. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="RobotFrameworkIDE-Setup-*.exe">
+    <pe-file path="Keywright-Setup-*.exe">
       <authenticode-sign />
     </pe-file>
   </zip-file>

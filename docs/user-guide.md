@@ -193,7 +193,7 @@ Breakpoints are kept per project. Changes to them during a run apply immediately
 
 ## Updates
 
-The installed IDE checks the [GitHub releases](https://github.com/silvestrodecaro/robotframework-ide/releases) a few
+The installed IDE checks the [GitHub releases](https://github.com/silvestrodecaro/keywright/releases) a few
 seconds after it starts, and again with *Check for updates* on the welcome screen. A banner offers to download
 the new version, then to restart and install it; unsaved files are handled first. A downloaded update is also
 installed the next time the IDE is closed.

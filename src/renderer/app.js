@@ -721,9 +721,9 @@
     if (!shown)
       return;
     $('#update-text').textContent = state.status === 'available'
-      ? `Robot Framework IDE ${state.version} is available (you have ${state.current}).${state.notes ? ` ${state.notes}` : ''}`
-      : state.status === 'downloading' ? `Downloading Robot Framework IDE ${state.version}… ${state.percent || 0}%`
-        : `Robot Framework IDE ${state.version} has been downloaded.`;
+      ? `Keywright ${state.version} is available (you have ${state.current}).${state.notes ? ` ${state.notes}` : ''}`
+      : state.status === 'downloading' ? `Downloading Keywright ${state.version}… ${state.percent || 0}%`
+        : `Keywright ${state.version} has been downloaded.`;
     $('#update-action').hidden = state.status === 'downloading';
     $('#update-action').textContent = state.status === 'available' ? 'Download' : 'Restart and update';
   }

@@ -2,7 +2,7 @@
 <!-- SignPath artifact configuration "app": the packaged app (release/win-unpacked) before the installer is built. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="Robot Framework IDE.exe" product-name="Robot Framework IDE">
+    <pe-file path="Keywright.exe" product-name="Keywright">
       <authenticode-sign />
     </pe-file>
   </zip-file>

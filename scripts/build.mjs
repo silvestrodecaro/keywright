@@ -21,7 +21,7 @@ const options = {
   target: 'chrome130',
   minify: !watch,
   sourcemap: watch,
-  loader: { '.ttf': 'file' },
+  loader: { '.ttf': 'file', '.woff': 'file', '.woff2': 'file' },
   logLevel: 'info',
 };
 

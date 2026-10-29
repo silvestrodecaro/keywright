@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/images/logo.svg" alt="Robot Framework IDE" width="560"></p>
+<p align="center"><img src="docs/images/logo.svg" alt="Keywright" width="560"></p>
 
 A desktop IDE for [Robot Framework](https://robotframework.org) tests written with the
 [Browser library](https://robotframework-browser.org). It brings the tools Playwright users are used to
@@ -24,8 +24,8 @@ screenshots and the locator picker come from its Playwright backend. SeleniumLib
 
 Windows 10/11 only for now.
 
-1. Download `RobotFrameworkIDE-Setup-<version>.exe` from the
-   [latest release](https://github.com/silvestrodecaro/robotframework-ide/releases/latest).
+1. Download `Keywright-Setup-<version>.exe` from the
+   [latest release](https://github.com/silvestrodecaro/keywright/releases/latest).
 2. Run it. It installs for the current user, without administrator rights. The installer is not signed, so
    SmartScreen will say *"Windows protected your PC"*: choose *More info*, then *Run anyway*.
 3. Install [Python 3.10 or later](https://www.python.org/downloads/) (tick *Add python.exe to PATH*) and
@@ -62,7 +62,7 @@ The [user guide](docs/user-guide.md) covers every feature and shortcut.
 
 The IDE is in early development (0.x) and is used daily on Browser library projects. Until 1.0, settings and
 behavior may still change between versions. Bug reports and ideas are welcome in the
-[issues](https://github.com/silvestrodecaro/robotframework-ide/issues).
+[issues](https://github.com/silvestrodecaro/keywright/issues).
 
 To build it from source or run the tests, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -74,7 +74,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 Releases are built from this repository by GitHub Actions ([release.yml](.github/workflows/release.yml)) and
 signed only after a manual approval.
 
-- Committers and reviewers: [members of this repository](https://github.com/silvestrodecaro/robotframework-ide/graphs/contributors)
+- Committers and reviewers: [members of this repository](https://github.com/silvestrodecaro/keywright/graphs/contributors)
 - Approvers: [Silvestro De Caro](https://github.com/silvestrodecaro)
 
 ## Privacy

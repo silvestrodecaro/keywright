@@ -1,6 +1,14 @@
 // Monaco editor integration, bundled by scripts/build.mjs into dist/editor.js.
 // Exposes window.RFEditor for the (non-bundled) renderer scripts.
 import * as monaco from 'monaco-editor';
+// The UI fonts (IBM Plex, the type of the Browser library's site) ride along in dist/editor.css.
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-400-italic.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
 import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
 import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
@@ -52,41 +60,44 @@ monaco.languages.setLanguageConfiguration(LANGUAGE, {
   wordPattern: /[^\s|]+(?: [^\s|]+)*/,
 });
 
+// Monaco measures the font when an editor is created; IBM Plex Mono may still be loading then.
+document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+
 monaco.editor.defineTheme('rfide-dark', {
   base: 'vs-dark',
   inherit: true,
   rules: [
-    { token: 'section.rf', foreground: 'c792ea', fontStyle: 'bold' },
-    { token: 'name.rf', foreground: 'ffcb6b' },
-    { token: 'setting.rf', foreground: 'c792ea' },
-    { token: 'keyword.rf', foreground: '82aaff' },
-    { token: 'control.rf', foreground: 'c792ea', fontStyle: 'bold' },
-    { token: 'variable.rf', foreground: 'f78c6c' },
-    { token: 'argument.rf', foreground: 'c3e88d' },
-    { token: 'param.rf', foreground: '89ddff' },
-    { token: 'operator.rf', foreground: 'ff9cac' },
-    { token: 'continuation.rf', foreground: '6b7385' },
-    { token: 'comment.rf', foreground: '6b7385', fontStyle: 'italic' },
+    { token: 'section.rf', foreground: 'c9a6e9', fontStyle: 'bold' },
+    { token: 'name.rf', foreground: 'e0d3a3' },
+    { token: 'setting.rf', foreground: 'c9a6e9' },
+    { token: 'keyword.rf', foreground: '2bd9cc' },
+    { token: 'control.rf', foreground: 'c9a6e9', fontStyle: 'bold' },
+    { token: 'variable.rf', foreground: 'ffb86b' },
+    { token: 'argument.rf', foreground: 'b5d99c' },
+    { token: 'param.rf', foreground: '9fc7d9' },
+    { token: 'operator.rf', foreground: 'ff8a7e' },
+    { token: 'continuation.rf', foreground: '7a868c' },
+    { token: 'comment.rf', foreground: '7a868c', fontStyle: 'italic' },
   ],
   colors: {
-    'editor.background': '#16181d',
-    'editor.lineHighlightBackground': '#1d2027',
-    'editorLineNumber.foreground': '#4b5263',
-    'editorLineNumber.activeForeground': '#8a91a0',
-    'editorWhitespace.foreground': '#2e3340',
-    'editorIndentGuide.background1': '#262a33',
-    'editorWidget.background': '#1d2027',
-    'editorSuggestWidget.background': '#1d2027',
-    'editorHoverWidget.background': '#1d2027',
+    'editor.background': '#1c2227',
+    'editor.lineHighlightBackground': '#232a30',
+    'editorLineNumber.foreground': '#5a666e',
+    'editorLineNumber.activeForeground': '#a3afb5',
+    'editorWhitespace.foreground': '#38424a',
+    'editorIndentGuide.background1': '#2b333a',
+    'editorWidget.background': '#232a30',
+    'editorSuggestWidget.background': '#232a30',
+    'editorHoverWidget.background': '#232a30',
     // Peek views (references, definitions)
-    'peekView.border': '#00b0a0',
-    'peekViewTitle.background': '#1d2027',
-    'peekViewEditor.background': '#1a1c22',
-    'peekViewEditorGutter.background': '#1a1c22',
-    'peekViewEditor.matchHighlightBackground': '#00b0a040',
-    'peekViewResult.background': '#1d2027',
-    'peekViewResult.matchHighlightBackground': '#00b0a040',
-    'peekViewResult.selectionBackground': '#2e3340',
+    'peekView.border': '#00c0b5',
+    'peekViewTitle.background': '#232a30',
+    'peekViewEditor.background': '#1f262b',
+    'peekViewEditorGutter.background': '#1f262b',
+    'peekViewEditor.matchHighlightBackground': '#00c0b540',
+    'peekViewResult.background': '#232a30',
+    'peekViewResult.matchHighlightBackground': '#00c0b540',
+    'peekViewResult.selectionBackground': '#38424a',
   },
 });
 
@@ -1093,7 +1104,7 @@ const RFEditor = (() => {
       model: null,
       theme: 'rfide-dark',
       automaticLayout: true,
-      fontFamily: '"Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace',
+      fontFamily: '"IBM Plex Mono", "Cascadia Code", Consolas, monospace',
       fontSize: 13,
       lineHeight: 21,
       tabSize: 4,

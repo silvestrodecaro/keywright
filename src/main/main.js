@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs = require('fs/promises');
-const { existsSync } = require('fs');
+const { existsSync, cpSync } = require('fs');
 const { pathToFileURL } = require('url');
 const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
 const { RecorderSession } = require('./recorder');
@@ -43,6 +43,27 @@ let runOutputDir = null;
 let generatorOptions = { ...DEFAULT_OPTIONS };
 let recentProjects = null;
 
+// Up to 0.1.3 the app was called Robot Framework IDE, and its data folder had that name. On the first
+// start as Keywright, bring over the recent projects and the renderer's settings (breakpoints, watches,
+// run options) before the window opens. Electron creates the new folder itself, so only its content
+// tells whether Keywright has run before.
+function migrateUserData() {
+  const userData = app.getPath('userData');
+  const oldUserData = path.join(app.getPath('appData'), 'Robot Framework IDE');
+  const kept = ['recent-projects.json', 'Local Storage'];
+  if (!existsSync(oldUserData) || kept.some((name) => existsSync(path.join(userData, name))))
+    return;
+  try {
+    for (const name of kept) {
+      if (existsSync(path.join(oldUserData, name)))
+        cpSync(path.join(oldUserData, name), path.join(userData, name), { recursive: true });
+    }
+  } catch (error) {
+    console.error('Could not copy the settings of Robot Framework IDE:', error);
+  }
+}
+migrateUserData();
+
 // Browser choices offered in the UI: the Playwright browser to record with and
 // the matching `New Browser` arguments of the generated test.
 const BROWSERS = {
@@ -70,7 +91,7 @@ function projectInfo() {
 
 function setWindowTitle() {
   if (mainWindow)
-    mainWindow.setTitle(currentProject ? `${currentProject.name} — Robot Framework IDE` : 'Robot Framework IDE');
+    mainWindow.setTitle(currentProject ? `${currentProject.name} — Keywright` : 'Keywright');
 }
 
 /** The syntax-check worker of the open project (recreated when its Python changes). */
@@ -529,9 +550,9 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 560,
-    title: 'Robot Framework IDE',
+    title: 'Keywright',
     icon: path.join(__dirname, '../renderer/images/icon-256.png'),
-    backgroundColor: '#16181d',
+    backgroundColor: '#1c2227',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
