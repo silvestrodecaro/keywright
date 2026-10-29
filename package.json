@@ -6,9 +6,9 @@
   "author": "Silvestro De Caro",
   "repository": {
     "type": "git",
-    "url": "https://github.com/silvestrodecaro/robot-ide.git"
+    "url": "https://github.com/silvestrodecaro/robotframework-ide.git"
   },
-  "homepage": "https://github.com/silvestrodecaro/robot-ide",
+  "homepage": "https://github.com/silvestrodecaro/robotframework-ide",
   "main": "src/main/main.js",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -66,7 +66,7 @@
       {
         "provider": "github",
         "owner": "silvestrodecaro",
-        "repo": "robot-ide",
+        "repo": "robotframework-ide",
         "releaseType": "release"
       }
     ]

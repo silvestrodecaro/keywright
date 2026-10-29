@@ -11,7 +11,7 @@ permissions:
   actions: read
 
 env:
-  SIGNPATH_PROJECT: robot-ide
+  SIGNPATH_PROJECT: robotframework-ide
   SIGNPATH_POLICY: release-signing
 
 jobs:

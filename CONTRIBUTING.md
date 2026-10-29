@@ -1,6 +1,6 @@
 # Contributing
 
-Bug reports and ideas are welcome in the [issues](https://github.com/silvestrodecaro/robot-ide/issues). For a
+Bug reports and ideas are welcome in the [issues](https://github.com/silvestrodecaro/robotframework-ide/issues). For a
 change of more than a few lines, open an issue first so we can agree on the approach.
 
 ## Running from source
