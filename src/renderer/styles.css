@@ -59,6 +59,13 @@ h2, .panel-header, .sidebar-tab, .results-switch-btn, .pane-results h3, .steps-s
 .muted { color: var(--muted); }
 [hidden] { display: none !important; }
 
+/* Thin scrollbars in the palette, like the editor's, instead of the system ones. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 5px; background: var(--border) padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--border-strong); }
+::-webkit-scrollbar-button { display: none; }
+
 .view { height: 100%; }
 
 /* Shared controls -------------------------------------------------------- */
