@@ -16,6 +16,8 @@ env:
 
 jobs:
   release:
+    # Until SignPath is set up, releases are built and uploaded by hand (see RELEASING.md).
+    if: vars.SIGNPATH_ORGANIZATION_ID != ''
     runs-on: windows-latest
     defaults:
       run:
