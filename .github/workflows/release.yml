@@ -1,0 +1,103 @@
+# Builds the installer for a v<version> tag, has SignPath sign the app and then the installer, and
+# uploads the signed files to the GitHub release of the tag (created as a draft if it doesn't exist).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  SIGNPATH_PROJECT: robot-ide
+  SIGNPATH_POLICY: release-signing
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check the version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "package.json has version $version, the tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package the app
+        run: npx electron-builder --win --dir --publish never
+
+      - name: Upload the app for signing
+        id: upload-app
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-unsigned
+          path: release/win-unpacked/
+
+      - name: Sign the app
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY }}
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.upload-app.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: release/app-signed
+
+      - name: Build the installer
+        run: npx electron-builder --win nsis --prepackaged release/app-signed --publish never
+
+      - name: Upload the installer for signing
+        id: upload-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-unsigned
+          path: release/RobotFrameworkIDE-Setup-${{ steps.version.outputs.version }}.exe
+
+      - name: Sign the installer
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ env.SIGNPATH_POLICY }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: release/installer-signed
+
+      - name: Update latest.yml and the block map
+        run: |
+          mv release/installer-signed/RobotFrameworkIDE-Setup-${{ steps.version.outputs.version }}.exe release/
+          node scripts/update-info.mjs release/RobotFrameworkIDE-Setup-${{ steps.version.outputs.version }}.exe release/latest.yml
+
+      # latest.yml goes last: installed copies only see the new version once the installer is there.
+      - name: Upload to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          installer=release/RobotFrameworkIDE-Setup-${{ steps.version.outputs.version }}.exe
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes ""
+          gh release upload "$GITHUB_REF_NAME" "$installer" "$installer.blockmap" --clobber
+          gh release upload "$GITHUB_REF_NAME" release/latest.yml --clobber
