@@ -66,17 +66,6 @@ behavior may still change between versions. Bug reports and ideas are welcome in
 
 To build it from source or run the tests, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
-
-Releases are built from this repository by GitHub Actions ([release.yml](.github/workflows/release.yml)) and
-signed only after a manual approval.
-
-- Committers and reviewers: [members of this repository](https://github.com/silvestrodecaro/keywright/graphs/contributors)
-- Approvers: [Silvestro De Caro](https://github.com/silvestrodecaro)
-
 ## Privacy
 
 The IDE does not collect or send any data about you or your projects. It connects to the internet only to:
