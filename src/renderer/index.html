@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; font-src 'self' data:; worker-src 'self' blob:; frame-src http://127.0.0.1:*">
+  <title>Keywright</title>
+  <link rel="stylesheet" href="dist/editor.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="update-banner" class="update-banner" hidden>
+    <span id="update-text"></span>
+    <button id="update-action" class="btn btn-sm btn-primary" type="button"></button>
+    <button id="update-later" class="icon-btn" type="button" title="Later">✕</button>
+  </div>
+  <!-- Welcome --------------------------------------------------------------->
+  <section id="view-welcome" class="view view-welcome">
+    <div class="welcome">
+      <div class="welcome-head">
+        <img class="brand-mark brand-mark-lg" src="images/icon.svg" alt="">
+        <div>
+          <h1>Keywright</h1>
+          <p class="muted">Browser library test generator and runner</p>
+        </div>
+      </div>
+      <div class="welcome-grid">
+        <div>
+          <h2>Start</h2>
+          <button id="welcome-new" class="link-action" type="button"><span class="link-icon">＋</span> New project…</button>
+          <button id="welcome-open" class="link-action" type="button"><span class="link-icon">▤</span> Open folder…</button>
+        </div>
+        <div>
+          <h2>Recent</h2>
+          <ul id="recent" class="recent"></ul>
+          <p id="recent-empty" class="muted">No recent projects.</p>
+        </div>
+      </div>
+      <div id="welcome-error" class="error" hidden></div>
+      <p class="welcome-version muted">
+        <span id="app-version"></span> · <button id="update-check" class="link-button" type="button">Check for updates</button>
+        <span id="update-status" class="update-status"></span>
+      </p>
+    </div>
+  </section>
+
+  <!-- New project ----------------------------------------------------------->
+  <section id="view-create" class="view view-create" hidden>
+    <div class="create">
+      <h1>New Robot Framework project</h1>
+
+      <form id="create-form" class="create-form" novalidate>
+        <label class="field">
+          <span>Project name</span>
+          <input id="create-name" type="text" spellcheck="false" autocomplete="off" placeholder="my-web-tests" required>
+        </label>
+        <label class="field">
+          <span>Location</span>
+          <div class="field-row">
+            <input id="create-location" type="text" spellcheck="false" autocomplete="off" required>
+            <button id="create-browse" class="btn" type="button">Browse…</button>
+          </div>
+        </label>
+        <p class="muted path-preview">Folder: <code id="create-path"></code></p>
+
+        <fieldset class="options">
+          <legend>Setup</legend>
+          <label class="check"><input id="opt-venv" type="checkbox" checked>
+            <span>Create a virtual environment and install <code>robotframework</code> + <code>robotframework-browser</code>
+              <small id="tool-python" class="tool"></small></span></label>
+          <label class="check nested"><input id="opt-browsers" type="checkbox" checked>
+            <span>Install the Browser library browsers (<code>rfbrowser init</code>, large download)
+              <small id="tool-node" class="tool"></small></span></label>
+          <label class="check"><input id="opt-git" type="checkbox" checked>
+            <span>Initialize a git repository <small id="tool-git" class="tool"></small></span></label>
+        </fieldset>
+
+        <div id="create-error" class="error" hidden></div>
+
+        <div class="form-actions">
+          <button id="create-cancel" class="btn" type="button">Cancel</button>
+          <button id="create-submit" class="btn btn-primary" type="submit">Create project</button>
+        </div>
+      </form>
+
+      <div id="setup" class="setup" hidden>
+        <ol id="setup-steps" class="setup-steps"></ol>
+        <pre id="setup-log" class="setup-log"></pre>
+        <div id="setup-result" class="setup-result" hidden></div>
+        <div class="form-actions">
+          <button id="setup-back" class="btn" type="button" hidden>Back</button>
+          <button id="setup-open" class="btn btn-primary" type="button" hidden>Open project</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Project --------------------------------------------------------------->
+  <section id="view-project" class="view view-project" hidden>
+    <header class="titlebar">
+      <img class="brand-mark" src="images/symbol.svg" alt="">
+      <span id="project-name" class="project-name"></span>
+      <span id="project-root" class="muted project-root"></span>
+      <span class="spacer"></span>
+      <button id="project-close" class="btn" type="button">Close project</button>
+    </header>
+
+    <div class="project-body">
+      <aside class="sidebar">
+        <div class="sidebar-switch" role="tablist" aria-label="Project tools">
+          <button id="sidebar-tab-explorer" role="tab" aria-selected="true" aria-controls="sidebar-explorer" type="button" class="sidebar-tab is-active" data-sidebar="explorer">Explorer</button>
+          <button id="sidebar-tab-search" role="tab" aria-selected="false" aria-controls="sidebar-search" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="search" title="Search in files (Ctrl+Shift+F)">Search</button>
+          <button id="sidebar-tab-testing" role="tab" aria-selected="false" aria-controls="sidebar-testing" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="testing">Testing</button>
+          <button id="sidebar-tab-problems" role="tab" aria-selected="false" aria-controls="sidebar-problems" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="problems">Problems <span id="problems-badge" class="sidebar-badge" hidden></span></button>
+        </div>
+
+        <div id="sidebar-explorer" class="sidebar-section" role="tabpanel" aria-labelledby="sidebar-tab-explorer">
+          <div class="panel-header">
+            <span>Files</span>
+            <span class="header-actions">
+              <button id="tree-new-file" class="icon-btn" type="button" title="New file">＋</button>
+              <button id="tree-reveal" class="icon-btn" type="button" title="Open in file manager">↗</button>
+              <button id="tree-refresh" class="icon-btn" type="button" title="Refresh">⟳</button>
+            </span>
+          </div>
+          <form id="new-file" class="new-file" hidden>
+            <input id="new-file-name" type="text" spellcheck="false" autocomplete="off" aria-label="New file path">
+            <div id="new-file-error" class="error" hidden></div>
+          </form>
+          <ul id="tree" class="tree" role="tree" aria-label="Project files"></ul>
+        </div>
+
+        <div id="sidebar-search" class="sidebar-section" role="tabpanel" aria-labelledby="sidebar-tab-search" hidden>
+          <form id="search-form" class="search-form" autocomplete="off">
+            <div class="search-row">
+              <input id="search-query" type="text" placeholder="Search" spellcheck="false" aria-label="Search">
+              <button id="search-case" type="button" class="search-toggle" title="Match case" aria-pressed="false">Aa</button>
+              <button id="search-word" type="button" class="search-toggle" title="Match whole word" aria-pressed="false">ab</button>
+              <button id="search-regex" type="button" class="search-toggle" title="Use regular expression ($1 in the replacement)" aria-pressed="false">.*</button>
+            </div>
+            <div class="search-row">
+              <input id="search-replace" type="text" placeholder="Replace" spellcheck="false" aria-label="Replace">
+              <button id="search-replace-all" type="button" class="btn btn-sm" title="Replace all matches">Replace all</button>
+            </div>
+            <input id="search-include" type="text" placeholder="Files to include (e.g. *.robot, tests/)" spellcheck="false" aria-label="Files to include">
+          </form>
+          <div id="search-summary" class="search-summary muted"></div>
+          <ul id="search-results" class="tree search-results" role="tree"></ul>
+        </div>
+
+        <div id="sidebar-problems" class="sidebar-section" role="tabpanel" aria-labelledby="sidebar-tab-problems" hidden>
+          <div class="panel-header">
+            <span id="problems-summary">Problems</span>
+            <span class="header-actions">
+              <label class="check check-sm problems-robocop" title="Robocop's style and quality rules (configured by the project's robocop.toml); shown as infos">
+                <input id="problems-robocop" type="checkbox" checked> <span>Robocop</span></label>
+              <button id="problems-refresh" class="icon-btn" type="button" title="Check all files again">⟳</button>
+            </span>
+          </div>
+          <div id="problems-robocop-missing" class="notice" hidden>
+            <span>Robocop is not installed in this project's virtual environment: style checks are off.</span>
+            <button id="problems-robocop-install" class="btn btn-sm btn-primary" type="button">Install</button>
+          </div>
+          <ul id="problems-list" class="tree problems-list" role="tree"></ul>
+        </div>
+
+        <div id="sidebar-testing" class="sidebar-section" role="tabpanel" aria-labelledby="sidebar-tab-testing" hidden>
+          <div class="testing-toolbar">
+            <button id="tests-run-all" class="btn btn-primary btn-sm" type="button" title="Run all tests">▶ Run all</button>
+            <button id="tests-stop" class="btn btn-sm" type="button" title="Stop" disabled>■ Stop</button>
+            <button id="tests-watch" class="btn btn-sm btn-watch" type="button">◉ Watch</button>
+            <span class="spacer"></span>
+            <button id="tests-refresh" class="icon-btn" type="button" title="Reload tests">⟳</button>
+          </div>
+          <div class="testing-options">
+            <input id="tests-filter" type="text" placeholder="Filter tests or tags" aria-label="Filter tests or tags" spellcheck="false" autocomplete="off">
+            <div class="testing-checks">
+              <label class="check check-sm" title="Runs with --variable HEADLESS:False (used by the project template)">
+                <input id="tests-headed" type="checkbox"> <span>Show browser</span></label>
+              <label class="check check-sm" title="Record a Playwright trace of every browser context (New Context)">
+                <input id="tests-trace" type="checkbox" checked> <span>Record trace</span></label>
+              <label class="check check-sm" title="Stop at the breakpoints set in the editor (click the gutter or press F9)">
+                <input id="tests-debug" type="checkbox"> <span>Debug</span></label>
+              <label class="check check-sm" title="While debugging, stop where a keyword fails (not inside TRY or Run Keyword And Ignore Error and similar)">
+                <input id="tests-debug-failures" type="checkbox" checked disabled> <span>Stop on failure</span></label>
+            </div>
+          </div>
+          <details id="run-options" class="run-options">
+            <summary>Run options <span id="run-options-active" class="muted"></span></summary>
+            <div class="run-options-fields">
+              <label title="Robot tag patterns, comma-separated: smoke, fastANDui, reg*, NOTslow (Run all and suites only)">Include tags
+                <input id="run-include" type="text" placeholder="smoke, fastANDui" spellcheck="false" autocomplete="off"></label>
+              <label title="Tests matching any of these patterns are not run">Exclude tags
+                <input id="run-exclude" type="text" placeholder="slow, NOTready" spellcheck="false" autocomplete="off"></label>
+              <label title="Passed as --variable BROWSER:... (the project template uses ${BROWSER} in New Browser)">Browser
+                <select id="run-browser">
+                  <option value="">Project default</option>
+                  <option value="chromium">Chromium</option>
+                  <option value="firefox">Firefox</option>
+                  <option value="webkit">WebKit</option>
+                </select></label>
+              <label title="Other robot options, e.g. --loglevel DEBUG or --variable ENV:staging">Arguments
+                <input id="run-args" type="text" placeholder="--loglevel DEBUG" spellcheck="false" autocomplete="off"></label>
+              <label class="check check-sm" title="robot --dryrun: checks keywords and their arguments without running them">
+                <input id="run-dryrun" type="checkbox"> <span>Dry run</span></label>
+            </div>
+          </details>
+          <div id="tests-summary" class="tests-summary"></div>
+          <div id="tests-notice" class="notice" role="status" hidden></div>
+          <div id="tests-error" class="error" role="alert" hidden></div>
+          <div id="debug-panel" class="debug-panel" hidden>
+            <div class="debug-toolbar">
+              <span id="debug-status" class="debug-status"></span>
+              <button id="debug-continue" class="icon-btn" type="button" title="Continue (F5)">▶</button>
+              <button id="debug-over" class="icon-btn" type="button" title="Step Over (F10)">↷</button>
+              <button id="debug-into" class="icon-btn" type="button" title="Step Into (F11)">↓</button>
+              <button id="debug-out" class="icon-btn" type="button" title="Step Out (Shift+F11)">↑</button>
+              <button id="debug-pause" class="icon-btn" type="button" title="Pause at the next step">❚❚</button>
+              <button id="debug-stop" class="icon-btn" type="button" title="Stop">■</button>
+            </div>
+            <pre id="debug-message" class="debug-message" hidden></pre>
+            <div class="debug-section-title">Call stack</div>
+            <ul id="debug-stack" class="debug-stack"></ul>
+            <div class="debug-section-title">Variables</div>
+            <div id="debug-variables" class="debug-variables"></div>
+            <div class="debug-section-title">Watch</div>
+            <div id="debug-watches" class="debug-watches"></div>
+            <form id="debug-eval-form" class="debug-eval">
+              <input id="debug-eval-input" type="text" spellcheck="false" autocomplete="off"
+                placeholder="${var}, $var + 1 or Keyword    args (Enter)" aria-label="Evaluate"
+                title="A variable (${x}[0]), a Python expression as in Evaluate ($x), or a keyword call with its arguments separated by two spaces (e.g. Get Text    h1)">
+            </form>
+            <div id="debug-console" class="debug-console"></div>
+          </div>
+          <ul id="test-tree" class="tree test-tree" role="tree"></ul>
+        </div>
+        <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-orientation="vertical"
+          title="Drag to resize, double-click to reset"></div>
+      </aside>
+
+      <div class="editor-area">
+        <nav id="tabs" class="tabs" role="tablist" aria-label="Workspace"></nav>
+
+        <!-- Test generator tab -->
+        <div id="pane-generator" class="pane pane-generator" role="tabpanel">
+          <form id="record-form" class="record-form">
+            <input id="url" type="text" placeholder="https://example.com" spellcheck="false" autocomplete="off" aria-label="Start URL">
+            <select id="browser" aria-label="Browser">
+              <option value="chromium">Chromium</option>
+              <option value="chrome">Google Chrome</option>
+              <option value="msedge">Microsoft Edge</option>
+              <option value="firefox">Firefox</option>
+              <option value="webkit">WebKit</option>
+            </select>
+            <select id="viewport" aria-label="Viewport">
+              <option value="">1280 × 720</option>
+              <option value="1920x1080">1920 × 1080</option>
+              <option value="1366x768">1366 × 768</option>
+              <option value="768x1024">768 × 1024 (tablet)</option>
+              <option value="390x844">390 × 844 (phone)</option>
+            </select>
+            <button id="record" type="submit" class="btn btn-record"><span class="dot"></span><span class="label">Record</span></button>
+            <button id="pick" type="button" class="btn btn-pick" title="Click an element in the browser to get its Browser library selector">◎ Pick locator</button>
+          </form>
+
+          <div id="error" class="error" hidden></div>
+          <div id="picked" class="picked" hidden>
+            <span class="muted">Locator</span>
+            <code id="picked-selector"></code>
+            <button id="picked-copy" class="btn btn-sm" type="button">Copy</button>
+          </div>
+
+          <div class="workspace">
+            <section class="panel steps-panel">
+              <div class="panel-header">
+                <span>Steps</span>
+                <span id="step-count" class="badge">0</span>
+              </div>
+              <ol id="steps" class="steps"></ol>
+              <div id="steps-empty" class="empty">
+                Press <strong>Record</strong>, then interact with the page.<br>
+                Use the toolbar inside the recorded browser to add assertions.
+              </div>
+            </section>
+
+            <section class="panel code-panel">
+              <div class="panel-header">
+                <label class="test-name">Test name
+                  <input id="test-name" type="text" value="Recorded Test" spellcheck="false">
+                </label>
+                <div class="actions">
+                  <button id="copy" class="btn" type="button">Copy</button>
+                  <button id="save" class="btn" type="button">Save…</button>
+                  <button id="clear" class="btn" type="button">Clear</button>
+                </div>
+              </div>
+              <pre id="code" class="code" aria-label="Generated Robot Framework code"></pre>
+            </section>
+          </div>
+        </div>
+
+        <!-- Test results tab -->
+        <div id="pane-results" class="pane pane-results" role="tabpanel" hidden>
+          <div class="results-switch" role="tablist" aria-label="Results views">
+            <button id="results-tab-test" role="tab" aria-selected="true" aria-controls="results-detail" type="button" class="results-switch-btn is-active" data-results-view="test">Test</button>
+            <button id="results-tab-history" role="tab" aria-selected="false" aria-controls="results-history" tabindex="-1" type="button" class="results-switch-btn" data-results-view="history" title="Past runs and what changed since the previous one">History <span id="history-count" class="muted"></span></button>
+            <button id="results-tab-report" role="tab" aria-selected="false" aria-controls="results-output" tabindex="-1" type="button" class="results-switch-btn" data-results-view="report" title="Robot Framework's report.html of the last run">Report</button>
+            <button id="results-tab-log" role="tab" aria-selected="false" aria-controls="results-output" tabindex="-1" type="button" class="results-switch-btn" data-results-view="log" title="Robot Framework's log.html of the last run">Log</button>
+          </div>
+          <div id="results-detail" class="results-detail" role="tabpanel" aria-labelledby="results-tab-test"></div>
+          <div id="results-output" class="results-output" role="tabpanel" hidden>
+            <div class="results-output-bar">
+              <span id="output-info" class="muted"></span>
+              <button id="output-reload" class="btn btn-sm" type="button">Reload</button>
+              <button id="output-external" class="btn btn-sm" type="button">Open in browser</button>
+            </div>
+            <div id="output-empty" class="empty results-empty" hidden></div>
+            <iframe id="output-frame" class="output-frame" title="Robot Framework report"></iframe>
+          </div>
+          <div id="results-history" class="results-history" role="tabpanel" aria-labelledby="results-tab-history" hidden>
+            <ul id="history-runs" class="history-runs"></ul>
+            <div id="history-detail" class="history-detail"></div>
+          </div>
+          <details id="console" class="console">
+            <summary>Console output</summary>
+            <pre id="console-output" class="console-output"></pre>
+          </details>
+        </div>
+
+        <!-- File editor tab -->
+        <div id="pane-file" class="pane pane-file" role="tabpanel" hidden>
+          <div class="file-header">
+            <span id="file-path" class="muted"></span>
+            <span class="file-header-right">
+              <button id="pick-at-cursor" class="btn btn-sm btn-pick" type="button" title="Click an element in the browser and insert its selector at the cursor">◎ Pick locator</button>
+              <button id="record-at-cursor" class="btn btn-sm" type="button" title="Record browser interactions and insert the steps at the cursor">● Record at cursor</button>
+              <span id="file-problems" class="file-problems" title="F8: next problem"></span>
+              <span class="muted">Ctrl+S save · Ctrl+Space keywords · Ctrl+Shift+O outline · F8 next problem</span>
+            </span>
+          </div>
+          <form id="record-bar" class="record-bar" hidden>
+            <span id="record-label" class="record-label"></span>
+            <input id="record-url" type="text" placeholder="Start URL (optional)" spellcheck="false" autocomplete="off" aria-label="Start URL">
+            <button id="record-start" class="btn btn-sm btn-primary" type="submit">● Record</button>
+            <button id="record-stop" class="btn btn-sm btn-record is-recording" type="button" hidden>■ Stop</button>
+            <button id="record-cancel" class="btn btn-sm" type="button">Cancel</button>
+          </form>
+          <div id="record-error" class="error" hidden></div>
+          <div id="format-notice" class="notice" hidden>
+            <span id="format-notice-text"></span>
+            <button id="format-install" class="btn btn-sm btn-primary" type="button">Install Robocop</button>
+            <button id="format-dismiss" class="icon-btn" type="button" title="Close">✕</button>
+          </div>
+          <div id="editor" class="editor-host"></div>
+          <div id="file-message" class="empty" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="statusbar">
+      <span id="status"><span class="status-dot"></span><span class="status-text">Idle</span></span>
+      <span class="statusbar-right">
+        <span id="editor-status" class="muted"></span>
+        <span id="python-status" class="muted"></span>
+      </span>
+    </footer>
+  </section>
+
+  <script src="dist/editor.js"></script>
+  <script src="highlight.js"></script>
+  <script src="generator.js"></script>
+  <script src="watchPlan.js"></script>
+  <script src="searchCore.js"></script>
+  <script src="tagPatterns.js"></script>
+  <script src="runDiff.js"></script>
+  <script src="treeNavigation.js"></script>
+  <script src="workspaceFiles.js"></script>
+  <script src="tests.js"></script>
+  <script src="history.js"></script>
+  <script src="problems.js"></script>
+  <script src="search.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

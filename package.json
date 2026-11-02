@@ -1,0 +1,82 @@
+{
+  "name": "keywright",
+  "version": "0.2.0",
+  "private": true,
+  "description": "IDE for Robot Framework (Browser library) with a Playwright-style test generator",
+  "author": "Silvestro De Caro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvestrodecaro/keywright.git"
+  },
+  "homepage": "https://github.com/silvestrodecaro/keywright",
+  "main": "src/main/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:watch": "node scripts/build.mjs --watch",
+    "prestart": "npm run build",
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "install-browsers": "playwright-core install chromium",
+    "pack": "npm run build && electron-builder --win --dir",
+    "dist": "npm run build && electron-builder --win",
+    "release": "npm run build && electron-builder --win --publish always"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "electron-updater": "6.8.11",
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "dompurify": "3.4.17",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "monaco-editor": "^0.57.0"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "$dompurify"
+    }
+  },
+  "build": {
+    "appId": "io.github.rfide",
+    "productName": "Keywright",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/**/*",
+      "!src/renderer/editor/index.js"
+    ],
+    "asarUnpack": [
+      "src/python/**",
+      "node_modules/playwright-core/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Keywright",
+      "artifactName": "Keywright-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "silvestrodecaro",
+        "repo": "keywright",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

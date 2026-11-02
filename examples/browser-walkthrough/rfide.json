@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "testsDir": "tests",
+  "resourcesDir": "resources",
+  "outputDir": "results"
+}

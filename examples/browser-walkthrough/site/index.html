@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Access request demo</title>
+<style>
+  body { max-width: 34rem; margin: 4rem auto; padding: 0 1.5rem; font: 1rem/1.5 system-ui, sans-serif; color: #182b32; background: #f6f8f7; }
+  label, input, button { display: block; }
+  input { box-sizing: border-box; width: 100%; padding: .6rem; margin: .3rem 0 1rem; font: inherit; }
+  button { padding: .6rem 1rem; font: inherit; color: white; background: #166453; border: 1px solid #166453; cursor: pointer; }
+  :focus-visible { outline: 3px solid #874c0d; outline-offset: 3px; }
+  .note { margin-top: 2rem; font-size: .9rem; color: #43565d; }
+</style>
+<main>
+  <h1>Request access</h1>
+  <form id="access-form">
+    <label for="email">Work email</label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+    <button type="submit">Request code</button>
+  </form>
+  <p id="confirmation" role="status"></p>
+  <p class="note">This local test page does not send email or contact a server.</p>
+</main>
+<script>
+  document.querySelector('#access-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    document.querySelector('h1').textContent = 'Check your inbox';
+    document.querySelector('#confirmation').textContent =
+      `We prepared a demo code for ${document.querySelector('#email').value}.`;
+  });
+</script>
+</html>

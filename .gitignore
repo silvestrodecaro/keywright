@@ -1,0 +1,13 @@
+node_modules/
+.venv/
+out/
+dist/
+*.log
+log.html
+report.html
+output.xml
+src/renderer/dist/
+release/
+__pycache__/
+*.pyc
+.robocop_cache/

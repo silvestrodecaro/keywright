@@ -1,0 +1,47 @@
+name: Verify
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      RFIDE_PYTHON: ${{ github.workspace }}\.venv\Scripts\python.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: npm ci
+      - name: Install the Electron runtime
+        run: npm exec -- install-electron
+      - name: Verify the Electron runtime
+        run: node node_modules/electron/cli.js --version
+      - name: Create the project Python environment
+        run: python -m venv .venv
+      - name: Install the Python test baseline
+        run: .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+      - name: Install the recorder browser
+        run: npm run install-browsers
+      - name: Install the Browser library browser
+        run: .\.venv\Scripts\python.exe -m Browser.entry init chromium
+      - name: Verify Python test dependencies
+        run: .\.venv\Scripts\python.exe -c "import robot, Browser, robocop"
+      - run: npm test
+      - name: Run the documented browser walkthrough
+        run: .\.venv\Scripts\python.exe -m robot --outputdir examples/browser-walkthrough/results examples/browser-walkthrough/tests
+      - run: npm run build
