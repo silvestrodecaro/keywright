@@ -1,6 +1,6 @@
 # Record a test and investigate a failure
 
-This walkthrough uses the [browser walkthrough project](../examples/browser-walkthrough/).
+This walkthrough uses the [Keywright example project](../examples/browser-walkthrough/).
 Its local access-request form works without a server, account or network connection.
 Dependency and browser installation require downloads. The form does not send email.
 

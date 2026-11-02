@@ -42,6 +42,6 @@ jobs:
       - name: Verify Python test dependencies
         run: .\.venv\Scripts\python.exe -c "import robot, Browser, robocop"
       - run: npm test
-      - name: Run the documented browser walkthrough
+      - name: Run the example Robot Framework tests
         run: .\.venv\Scripts\python.exe -m robot --outputdir examples/browser-walkthrough/results examples/browser-walkthrough/tests
       - run: npm run build

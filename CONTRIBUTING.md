@@ -78,9 +78,10 @@ If a failure is intermittent, capture its output and determine the cause; a pass
 retry does not establish that it is fixed.
 
 The [Verify workflow](.github/workflows/verify.yml) prepares both browser toolchains,
-runs the test suite, checks the walkthrough project and builds the editor on Windows
-for pushes and pull requests. GitHub branch protection must separately require
-the check if merges should depend on it.
+runs the test suite, executes the example's Robot Framework tests from the command
+line and builds the editor on Windows for pushes and pull requests. The example
+step does not launch Keywright or exercise its UI. GitHub branch protection must
+separately require the check if merges should depend on it.
 
 ## Verified environment
 
@@ -100,7 +101,7 @@ that every version accepted by the project creator is compatible.
 | Electron | 45.2.1 |
 | Recorder Playwright | 1.64.1 |
 
-The [walkthrough project](examples/browser-walkthrough/) has two local browser tests.
+The [Keywright example project](examples/browser-walkthrough/) has two local browser tests.
 From the repository root, use the prepared integration-test Python to verify it:
 
 ```powershell
