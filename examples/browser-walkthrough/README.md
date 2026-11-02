@@ -4,18 +4,9 @@ A local access-request form and two Robot Framework tests for the
 [Keywright walkthrough](../../docs/walkthrough.md). The page does not send email
 or need an application server.
 
-First [install and launch Keywright](../../README.md#run-from-source). Open a
-second PowerShell window in this example directory
-(`keywright/examples/browser-walkthrough`) and prepare its Python environment:
-
-```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m Browser.entry init chromium
-```
-
-These commands use Python 3.13 directly through the Windows launcher, then the
-environment's own executable; activation is unnecessary.
+Run [setup.bat](../../README.md#run-from-source) from the repository root.
+It prepares this example's `.venv`, installs its dependencies and browser, and
+checks both supplied tests. No separate environment setup is needed afterwards.
 
 In Keywright, choose **Open folder…** and select this directory, then select
 **Testing → Run all**. Both tests should pass. After installation, the local page
@@ -25,8 +16,13 @@ and investigate an intentional assertion failure.
 To run the same tests from PowerShell:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 .\.venv\Scripts\python.exe -m robot --outputdir results tests
 ```
+
+Use your custom browser cache instead if `PLAYWRIGHT_BROWSERS_PATH` was explicitly
+configured during setup. Set it in each new terminal session when running tests
+outside Keywright.
 
 CI checks the supplied tests directly and through Keywright's UI. The UI checks
 also cover a failing assertion, its screenshot and navigation back to the source.

@@ -2,7 +2,8 @@
 
 Start by checking which environment failed: the Test Generator uses Keywright's
 Playwright installation; test execution uses the selected project's Python and
-Browser library. Their browser installations are separate.
+Browser library. They can require different browser revisions even when they use
+the same shared cache.
 
 Use **PowerShell**. Run `npm.cmd` commands from the **Keywright source folder**,
 which contains `package.json`. Run Python commands from the **Robot test project
@@ -20,6 +21,17 @@ Installer releases are on hold. Follow [Run from source](../README.md#run-from-s
 to launch the app. Run `npm.cmd ci` after dependency changes and use `npm.cmd start`,
 which builds the editor before opening Electron. Setup for working on Keywright's
 code and running its test suite is documented in [Contributing](../CONTRIBUTING.md).
+
+For the guided route, rerun `setup.bat`. It stops at the failed step and records
+the full command output under `out/setup/`. If WinGet is unavailable or an
+installation is blocked by company policy, install the named prerequisite using
+your approved software channel, then rerun setup. The launcher does not change
+permanent PowerShell or machine security settings.
+
+The setup reports npm audit counts but does not apply `audit fix --force` or
+change dependency versions outside the lockfile. The known packaging-tool
+findings still need a compatible upstream fix; see the
+[dependency review](dependency-review.md).
 
 ### PowerShell says `npm.ps1` cannot be loaded
 
@@ -65,7 +77,7 @@ retrying. Current dependency audit findings are recorded in the
 ## Python or Node.js is not detected during project creation
 
 Keywright probes the tools available on its process `PATH`. On Windows it tries
-`py -3`, `python`, then `python3` for Python, and checks Node separately.
+`py -3.13`, `py -3`, `python`, then `python3` for Python, and checks Node separately.
 
 ```powershell
 py -3.13 --version
@@ -74,8 +86,8 @@ node --version
 ```
 
 Python 3.13 is the documented setup version. With multiple Python installations,
-`py -3` can select a different version from `py -3.13`; the creator uses `py -3`
-first. To select 3.13 explicitly, prepare the project environment using
+`py -3` can select a different version from `py -3.13`; the creator prefers
+`py -3.13`. To prepare an environment manually, use
 [the existing-project instructions](user-guide.md#open-an-existing-project).
 The creator's probe accepts 3.10 or later, while installed packages can have
 additional version requirements. If a tool was installed while Keywright was open,
@@ -90,6 +102,7 @@ The setup view retains the command output and marks later steps as skipped. The
 folder is deliberately kept. Run only the missing steps, from that folder:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m Browser.entry init
@@ -100,9 +113,11 @@ browsers fails, inspect the command output for proxy, certificate, network or
 package-compatibility errors. Use your organization's approved package and proxy
 configuration rather than disabling certificate checks.
 
-If Windows cannot launch Browser's downloaded executables from a deep path, choose
-a shorter project location and recreate its virtual environment there. A copied
-virtual environment can retain paths from its old location.
+Browser binaries are now installed outside `.venv`, in the shared cache. If the
+error names a missing executable, rerun Browser initialization with the same
+`PLAYWRIGHT_BROWSERS_PATH` used for execution. With a custom cache, use its path
+instead of the default above. A copied virtual environment can still retain paths
+from its old location; recreate that environment rather than copying it.
 
 ## No project virtual environment is found
 
@@ -142,6 +157,7 @@ The recorder's successful launch verifies its own browser installation only.
 Prepare Browser in the project's selected Python:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 .\.venv\Scripts\python.exe -m Browser.entry init chromium
 ```
 

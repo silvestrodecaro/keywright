@@ -28,6 +28,12 @@ The recorder's Playwright runs in the app's Node environment. Test execution and
 library inspection use the selected project Python. These are distinct toolchains
 and can require different browser binaries.
 
+`browserEnvironment.js` selects Playwright's user cache unless
+`PLAYWRIGHT_BROWSERS_PATH` is explicitly configured. `pythonHelper.js` applies this
+environment to Robot processes, and project setup uses it for Browser initialization.
+On Windows the default cache is `%LOCALAPPDATA%\ms-playwright`. Keeping browser
+executables out of `.venv` makes their paths independent of the project directory depth.
+
 ## Source ownership
 
 | Area | Source | Responsibility |

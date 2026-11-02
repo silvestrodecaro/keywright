@@ -6,29 +6,13 @@ const { resolveInside } = require('./pathBoundary');
 const { createHash, randomUUID } = require('crypto');
 const { spawn } = require('child_process');
 const { projectFiles, CONFIG_FILE, DEFAULT_CONFIG } = require('./projectTemplate');
+const { pythonEnv } = require('./pythonHelper');
 
 const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]*$/;
 const IS_WINDOWS = process.platform === 'win32';
 
 // Folders never shown in the explorer.
 const HIDDEN_DIRS = new Set(['.git', '.venv', 'venv', 'node_modules', '__pycache__', '.pytest_cache', '.idea', '.vscode']);
-
-// The Browser library installs its browsers deep inside the virtual environment
-// (~170 characters below the project root) and Windows cannot start executables
-// whose path is longer than 260 characters, even with long paths enabled.
-const MAX_WINDOWS_ROOT_WITH_BROWSERS = 85;
-
-/**
- * Returns an error message when the project path is too long for the Browser
- * library browsers on Windows, otherwise null.
- */
-function checkProjectPathLength(root, { installBrowsers, platform = process.platform } = {}) {
-  if (platform !== 'win32' || !installBrowsers || root.length <= MAX_WINDOWS_ROOT_WITH_BROWSERS)
-    return null;
-  return `The project path is ${root.length} characters long. On Windows the Browser library browsers `
-    + `cannot start from paths this deep: choose a location so that the project path is at most `
-    + `${MAX_WINDOWS_ROOT_WITH_BROWSERS} characters (e.g. C:\\Projects\\<name>).`;
-}
 
 /** Returns an error message, or null when `name` can be used as a project folder. */
 function validateProjectName(name) {
@@ -48,7 +32,7 @@ function run(command, args, { cwd, onLog = () => {} } = {}) {
     onLog(`> ${[command, ...args].join(' ')}\n`);
     const child = spawn(command, args, {
       cwd,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' },
+      env: pythonEnv(),
       windowsHide: true,
     });
     child.stdout.on('data', (chunk) => onLog(chunk.toString()));
@@ -82,7 +66,7 @@ function probe(command, args) {
  */
 async function findPython() {
   const candidates = IS_WINDOWS
-    ? [['py', ['-3']], ['python', []], ['python3', []]]
+    ? [['py', ['-3.13']], ['py', ['-3']], ['python', []], ['python3', []]]
     : [['python3', []], ['python', []]];
   for (const [command, args] of candidates) {
     const output = await probe(command, [...args, '--version']);
@@ -128,10 +112,6 @@ async function createProject(request, callbacks = {}) {
   const root = path.join(request.location, name);
   if (fs.existsSync(root))
     throw new Error(`A file or folder named "${name}" already exists in ${request.location}.`);
-  const pathError = checkProjectPathLength(root, { installBrowsers: request.createVenv && request.installBrowsers });
-  if (pathError)
-    throw new Error(pathError);
-
   const steps = [{ id: 'files', title: 'Create project files' }];
   if (request.createVenv) {
     steps.push({ id: 'venv', title: 'Create virtual environment (.venv)' });
@@ -325,7 +305,6 @@ function createProjectFile(root, relative) {
 
 module.exports = {
   validateProjectName,
-  checkProjectPathLength,
   detectTools,
   findPython,
   createProject,

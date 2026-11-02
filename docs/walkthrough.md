@@ -9,19 +9,9 @@ into a resource, then inspect an intentional failure and its Playwright trace.
 
 ## Prepare the example
 
-First [install and launch Keywright](../README.md#run-from-source). Then open a
-second PowerShell window in the cloned `keywright` folder and run:
-
-```powershell
-cd examples/browser-walkthrough
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m Browser.entry init chromium
-```
-
-This prepares the example's own Python environment. It uses Python 3.13 and Node.js
-24, as in the [tested environment](../CONTRIBUTING.md#verified-environment).
-Activation is unnecessary: the commands use `.venv`'s Python directly.
+Run [setup.bat](../README.md#run-from-source) from the cloned repository.
+It prepares this example's Python environment and browsers, then checks that both
+supplied tests pass. If setup already completed, the example is ready to open.
 
 In Keywright, choose **Open folder…** and select `examples/browser-walkthrough`
 inside your clone. If another project is open, choose **Close project** first.
@@ -138,6 +128,7 @@ other context lifetimes and history limits.
 From the example directory:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 .\.venv\Scripts\python.exe -m robot --outputdir results tests
 .\.venv\Scripts\python.exe -m robot --include smoke --outputdir results tests
 ```
@@ -145,3 +136,5 @@ From the example directory:
 The first command runs all saved tests, including your recorded file. The second
 runs the two supplied tests tagged `smoke`. The files remain ordinary Robot
 Framework source and use the same project Python as Keywright.
+Set the browser path in each new terminal session so Browser uses the same cache
+as Keywright. If you configured a custom cache, use that path instead.

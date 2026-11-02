@@ -7,12 +7,12 @@ credentials and private application data from attached artifacts.
 
 ## Development setup
 
-Development and integration tests currently target Windows. Use Node.js 24 and
-Python 3.13, as in CI. Install and check the prerequisites in
+Development and integration tests currently target Windows. CI covers Node.js 24
+and 26 with Python 3.13. For the guided setup, use `setup.bat` as described in
 [Run from source](README.md#run-from-source) first. The lockfile records the
 JavaScript dependency tree.
 
-From the repository root:
+For manual app setup, run these commands from the repository root:
 
 ```powershell
 npm.cmd ci
@@ -20,6 +20,18 @@ npm.cmd exec -- install-electron
 npm.cmd run install-browsers
 npm.cmd start
 ```
+
+`setup.bat --check` only checks prerequisites. `setup.bat --non-interactive`
+performs the setup without prompts and fails if a system prerequisite is missing.
+Use `--no-pause` when invoking it from another script. The batch launcher uses
+Windows PowerShell for prerequisite checks; it does not change the system's
+execution policy. Interactive installations through WinGet require confirmation.
+The setup prepares the included example, not the repository's integration-test
+environment described below.
+
+The npm install-script policy permits the reviewed `esbuild@0.28.2` hook and denies
+the unused `electron-winstaller@5.4.0` hook. This avoids broad script approval.
+Review the policy when changing either version or adding a Squirrel packaging target.
 
 `npm.cmd start` builds the editor bundle before launching Electron. To open a test
 project directly, use `npm.cmd start -- "C:\Projects\my-web-tests"`. The test project
@@ -47,6 +59,7 @@ it is separate from the environments in your Robot projects. Install the Chromiu
 versions needed by both toolchains:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m Browser.entry init chromium
@@ -110,9 +123,12 @@ results. The HTML report is in `out/ui-report/`. Inspect it with
 
 The [Verify workflow](.github/workflows/verify.yml) prepares both browser toolchains,
 runs the component and integration tests, executes the example's Robot Framework
-tests from the command line, then builds and tests Keywright's UI on Windows for
-pushes and pull requests. Failed UI runs upload their evidence as the
-`keywright-ui-failure` artifact for seven days. GitHub branch protection must
+tests from the command line, and runs `setup.bat` from a long directory containing
+spaces. The UI tests then use that setup's Python environment, so Browser runs
+from the nested location while finding executables in the shared cache. Both
+Node.js versions run these checks on pushes and pull requests. Failed runs upload
+their evidence as `keywright-failure-node-24` or `keywright-failure-node-26` for
+seven days. GitHub branch protection must
 separately require the check if merges should depend on it.
 
 ## Verified environment
@@ -137,6 +153,7 @@ The [Keywright example project](examples/browser-walkthrough/) has two local bro
 From the repository root, use the prepared integration-test Python to verify it:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 .\.venv\Scripts\python.exe -m robot --outputdir examples/browser-walkthrough/results examples/browser-walkthrough/tests
 ```
 

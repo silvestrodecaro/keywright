@@ -5,7 +5,7 @@ using [Browser library](https://robotframework-browser.org/). Record a browser i
 as Robot keywords, edit the test, run it, and inspect the failed keyword, screenshot
 or Playwright trace from the same project.
 
-[Run from source](#run-from-source) · [First run](#first-run) · [User guide](docs/user-guide.md) ·
+[Setup](#run-from-source) · [First run](#first-run) · [User guide](docs/user-guide.md) ·
 [Troubleshooting](docs/troubleshooting.md) · [Development](CONTRIBUTING.md)
 
 ![A failed Robot test with its executed keywords and screenshot](docs/images/test-results.png)
@@ -48,16 +48,17 @@ execution and trace availability.
 
 ### Prerequisites
 
-Use Windows 10/11 and install these tools:
+Use Windows 10/11. The setup checks these tools before installing app dependencies:
 
 | Tool | Version to use | Check in PowerShell |
 | --- | --- | --- |
-| [Node.js](https://nodejs.org/en/download) with npm | 24.x | `node --version` and `npm.cmd --version` |
+| [Node.js](https://nodejs.org/en/download) with npm | 24.x or 26.x LTS | `node --version` and `npm.cmd --version` |
 | [Python](https://www.python.org/downloads/windows/) | 3.13.x, available through the Windows `py` launcher | `py -3.13 --version` |
-| [Git](https://git-scm.com/install/windows) | A current Windows version | `git --version` |
+| [Git](https://git-scm.com/install/windows) | Optional for the app; used to clone and update the repository | `git --version` |
 
-Close and reopen PowerShell after installing the tools. These are the Node and
-Python versions used by CI; exact tested package versions are listed in
+If Node.js or Python is missing or unsupported, setup offers to install a supported
+version through WinGet and asks for confirmation with `y/n`. If WinGet is
+unavailable, it shows the official download link. Exact tested package versions are listed in
 [Contributing](CONTRIBUTING.md#verified-environment).
 
 ### Install and launch
@@ -67,29 +68,36 @@ Open PowerShell in the folder where you want to clone Keywright, then run:
 ```powershell
 git clone https://github.com/silvestrodecaro/keywright.git
 cd keywright
-npm.cmd ci
-npm.cmd exec -- install-electron
-npm.cmd run install-browsers
-npm.cmd start
+.\setup.bat
 ```
 
-The install commands download the app's dependencies, Electron and the recorder's
-Chromium browser. `npm.cmd start` builds the editor and opens the Keywright welcome
-screen. If a command fails, see [startup troubleshooting](docs/troubleshooting.md#starting-keywright-from-source)
-before continuing. The `.cmd` spelling also works when PowerShell blocks `npm.ps1`.
+Without Git, use **Code → Download ZIP** on GitHub, extract the archive and open
+`setup.bat` in the extracted folder. The setup works from another terminal folder
+too: it finds its own repository directory.
 
-These commands prepare the IDE. Each Robot Framework project has its own Python
-environment and Browser installation, prepared in the next step.
+Setup installs the locked app dependencies, Electron and Chromium, prepares the
+included example's Python environment, builds the editor and runs its two browser
+tests. It also reports dependency audit findings. The full output is saved under
+`out/setup/`; a failed step stops setup and shows the error and log path.
+
+When setup finishes, choose whether to open Keywright. To try the prepared example,
+choose **Open folder…**, select `examples/browser-walkthrough` inside the clone,
+then select **Testing → Run all**. Both tests should pass.
+
+Browser executables are stored in the user cache, outside project virtual
+environments. Projects can stay in their chosen folders, including nested paths
+and paths containing spaces. Each Robot project still has its own Python environment.
 
 For later launches, open PowerShell in the same `keywright` folder and run
-`npm.cmd start`. After pulling changes that update dependencies, repeat the three
-install commands before starting the app.
+`npm.cmd start`. After pulling changes that update dependencies, run `setup.bat`
+again. See [manual setup](CONTRIBUTING.md#development-setup) for the individual commands.
 
 ## First run
 
-1. Choose **New project**, enter a name such as `my-web-tests` and select a short,
-   writable parent folder. Your user folder is usually suitable. The full project
-   path must be at most 85 characters when installing browsers on Windows.
+To create your own test project after trying the included example:
+
+1. Choose **New project**, enter a name such as `my-web-tests` and select a writable
+   parent folder.
 2. Keep virtual environment and browser installation enabled, then choose
    **Create project**. The wizard creates `.venv`, installs the Python packages and
    downloads Browser's browsers. Wait for the setup steps to finish, then choose

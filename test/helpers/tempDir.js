@@ -13,7 +13,10 @@ const created = [];
 after(() => {
   for (const dir of created) {
     try {
-      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      const resolved = fs.realpathSync(dir);
+      if (path.dirname(resolved) !== fs.realpathSync(os.tmpdir()) || !path.basename(resolved).startsWith('keywright-'))
+        throw new Error(`Refusing to remove an unexpected test directory: ${resolved}`);
+      fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     } catch {
       // still in use (e.g. by a process that has not exited yet): left to the system
     }

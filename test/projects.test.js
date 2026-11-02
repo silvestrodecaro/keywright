@@ -15,14 +15,6 @@ test('validateProjectName', () => {
     assert.ok(projects.validateProjectName(bad), `expected "${bad}" to be rejected`);
 });
 
-test('checkProjectPathLength only limits Windows projects that install browsers', () => {
-  const long = 'C:\\' + 'x'.repeat(100);
-  assert.match(projects.checkProjectPathLength(long, { installBrowsers: true, platform: 'win32' }), /at most 85 characters/);
-  assert.strictEqual(projects.checkProjectPathLength(long, { installBrowsers: false, platform: 'win32' }), null);
-  assert.strictEqual(projects.checkProjectPathLength(long, { installBrowsers: true, platform: 'linux' }), null);
-  assert.strictEqual(projects.checkProjectPathLength('C:\\Projects\\shop', { installBrowsers: true, platform: 'win32' }), null);
-});
-
 test('project configuration selects its test layout and Python', () => {
   const root = tempDir('project-config');
   fs.writeFileSync(path.join(root, 'python.exe'), 'test interpreter placeholder');
@@ -156,6 +148,50 @@ test('createProject marks remaining steps as skipped after a failure', async () 
   }
   assert.deepStrictEqual(statuses, { files: 'done', venv: 'failed', deps: 'skipped', git: 'skipped' });
   assert.ok(fs.existsSync(path.join(location, 'broken', 'tests', 'example.robot')));
+});
+
+test('project setup accepts a long path and supplies shared browser storage to initialization', async (t) => {
+  const childProcess = require('node:child_process');
+  const { EventEmitter } = require('node:events');
+  const { PassThrough } = require('node:stream');
+  const location = path.join(tempDir('deep-project'), 'OneDrive - Test Company', 'Desktop', 'Robot projects');
+  fs.mkdirSync(location, { recursive: true });
+  assert.ok(location.length > 85);
+  const previous = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+  // Only external tool installation is replaced; scaffold and setup sequencing run normally.
+  t.mock.method(childProcess, 'spawn', (command, args, options) => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    process.nextTick(() => {
+      let code = 0;
+      if (args.includes('--version')) {
+        child.stdout.end(command === 'node' ? 'v24.16.0' : 'Python 3.13.14');
+      } else if (args.includes('Browser.entry')) {
+        const cache = options.env.PLAYWRIGHT_BROWSERS_PATH;
+        if (!cache || !path.isAbsolute(cache) || cache.startsWith(location)) {
+          child.stderr.end('Browser initialization did not receive shared storage');
+          code = 1;
+        }
+      }
+      child.emit('close', code);
+    });
+    return child;
+  });
+  const modulePath = require.resolve('../src/main/projects');
+  const cached = require.cache[modulePath];
+  delete require.cache[modulePath];
+  const isolated = require('../src/main/projects');
+  require.cache[modulePath] = cached;
+  try {
+    const result = await isolated.createProject({ location, name: 'web tests', createVenv: true, installBrowsers: true });
+    assert.strictEqual(result.ok, true, result.error);
+    assert.ok(fs.existsSync(path.join(result.root, 'keywright.json')));
+  } finally {
+    if (previous === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+    else process.env.PLAYWRIGHT_BROWSERS_PATH = previous;
+  }
 });
 
 test('RecentProjects keeps existing projects, most recent first', () => {

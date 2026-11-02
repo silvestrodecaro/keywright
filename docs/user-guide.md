@@ -57,12 +57,14 @@ generated suite has one test that opens `https://example.com`; it needs network
 access and should pass. Check that the footer names this project's Python.
 
 With several Python versions installed, review the version shown in the setup
-form. On Windows the creator tries `py -3` first, then `python` and `python3`.
+form. On Windows the creator tries `py -3.13` first, then `py -3`, `python` and `python3`.
 For a specific Python version, prepare an environment as described below and open
 its project folder.
 
-On Windows, new projects that install Browser's browsers are checked against an
-85-character project-root limit. Prefer a short location such as `C:\Projects`.
+Browser executables use the shared user cache rather than the project's `.venv`.
+On Windows the default is `%LOCALAPPDATA%\ms-playwright`; the installer and test
+runner use the same location. An explicit `PLAYWRIGHT_BROWSERS_PATH` is respected.
+The project folder no longer needs to contain those browser executables.
 
 ### Open an existing project
 
@@ -80,6 +82,7 @@ For a project with `requirements.txt` that needs a new `.venv`, open PowerShell
 in the **test project folder** and run:
 
 ```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m Browser.entry init chromium
@@ -89,7 +92,8 @@ This assumes the requirements include Robot Framework and Browser. The last
 command installs Chromium; initialize Firefox or WebKit too if the tests use them.
 For another dependency manager, use the project's own setup instructions and
 select its Python in `keywright.json`. These commands use the environment's
-executable directly, so activation is unnecessary.
+executable directly, so activation is unnecessary. If you already use a custom
+`PLAYWRIGHT_BROWSERS_PATH`, keep that value for installation and execution.
 
 If your repository uses another layout or environment, create `keywright.json` at its
 root. For example, a repository with suites at the root and a shared environment:
@@ -292,7 +296,7 @@ create a browser and context. Provide those in your test or its setup.
 
 ### Browser installations
 
-There are two independent installations:
+There are two toolchains, each with its own Playwright version:
 
 - **Test Generator:** uses Keywright's pinned `playwright-core`. When a launch fails
   because a downloadable browser is missing, the generator offers an installation
@@ -300,6 +304,10 @@ There are two independent installations:
 - **Project tests:** use Browser installed in the selected Python environment.
   Keywright's project creator prepares it with `rfbrowser init` and requires Node.js
   for that setup route.
+
+Both use the shared browser cache by default. Different Playwright versions may
+need different revisions in that cache; initialize Browser using the project's
+Python when its required revision is missing.
 
 A recorder that launches successfully does not prove the test environment is ready.
 
