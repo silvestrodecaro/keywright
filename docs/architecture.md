@@ -238,16 +238,11 @@ an upstream import change cannot silently bypass the replacement. Recheck this
 replacement when upgrading Monaco; remove it when Monaco uses a maintained,
 patched dependency directly.
 
-Electron Builder produces the Windows NSIS installer. Python helper files and
-`playwright-core` are unpacked from ASAR because external Python and Playwright's
-CLI need filesystem paths. Keep the unpacked-path rewrites in `pythonHelper.js`
-and `browserInstall.js` consistent with `package.json`.
+Keywright currently runs from source. Packaging and publishing commands are not
+provided; Electron Builder is excluded from the dependency tree while installer
+distribution is deferred. Source runs disable `electron-updater`.
 
-Packaged builds use `electron-updater`; source runs disable it. Public installer
-releases are on hold. The repository's CI verifies component and integration tests,
-the editor build and desktop UI flows in the source app. Packaging is available
-as a separate local check. See
-[Contributing](../CONTRIBUTING.md).
-
-Dependency findings and the remaining packaging-tool advisories are recorded in
-the dated [dependency review](dependency-review.md).
+The repository's CI verifies the dependency audit, component and integration tests,
+the guided Windows setup, the editor build and desktop UI flows. See
+[Contributing](../CONTRIBUTING.md) and the dated
+[dependency review](dependency-review.md).

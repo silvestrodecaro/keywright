@@ -1,62 +1,63 @@
-# Dependency review — 2026-11-01
+# Dependency review — 2026-11-02
 
-## Changes
+## Audit scope
 
-Electron was updated from 45.0.0 to 45.2.1. This stable release includes upstream
-Chromium fixes; see the [Electron release notes](https://releases.electronjs.org/release/v45.2.1).
-The recorder remains on Playwright 1.64.1 because its integration uses private
-recorder APIs and requires separate compatibility testing.
+`npm audit` reports zero known vulnerabilities in the current lockfile, including
+development dependencies. CI runs `npm audit --audit-level=moderate` on Node.js 24
+and 26 and fails for moderate or higher findings.
 
-DOMPurify is pinned to 3.4.17, the patched version listed in
+Audit results describe the advisories available at the time of the check. They do
+not cover the project's Python packages or every possible defect in the app.
+Review the complete npm tree when changing dependencies: `--omit=dev` excludes
+Monaco and DOMPurify even though their code is bundled into the editor.
+
+## Removed packaging dependency chain
+
+The previous audit reported 15 moderate package findings, all propagated from
+the [minimatch pattern amplification advisory](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249)
+through Electron Builder. These were affected packages in one dependency chain,
+not 15 separate advisories.
+
+Electron Builder 26.18.0 remains the current npm release checked for this review.
+Its dependency tree still contains affected minimatch versions. The fix proposed
+by npm downgrades Electron Builder to 20.23.1; forcing minimatch 11 across older
+consumers also changes their API contract.
+
+Installer distribution is deferred while Keywright is developed and tested from
+source. Electron Builder and its transitive dependencies have therefore been
+removed from `package.json` and the lockfile. The packaging configuration,
+`pack`, `dist` and `release` commands, and installer metadata script were removed
+with them. The source app, renderer build and tests do not use these tools.
+
+The audit runs on the full remaining tree. No advisories are suppressed and no
+dependency overrides were added for minimatch. Reintroducing packaging requires
+a new dependency review and checks of the packaged app, signing and update path.
+
+## Editor dependencies
+
+Electron remains on 45.2.1, which includes upstream Chromium fixes; see the
+[release notes](https://releases.electronjs.org/release/v45.2.1). The recorder uses
+Playwright 1.64.1 because its private recorder API integration requires separate
+compatibility testing before an upgrade.
+
+DOMPurify remains pinned to 3.4.17, the patched version listed in
 [GHSA-cg2g-xh64-v4q7](https://github.com/cure53/DOMPurify/security/advisories/GHSA-cg2g-xh64-v4q7).
-The advisory describes a combination of template sanitization, DOM return modes,
-attached shadow roots and downstream template evaluation. This review did not
-establish that combination in Keywright. Replacing the affected dependency still
-removes the old sanitizer from the shipped editor.
-
-Monaco's vendored sanitizer needs a build-time replacement as well as an npm
-dependency update. [Architecture](architecture.md#build-and-packaging) describes
-the replacement and its regression check.
-
-## Open findings
-
-After these changes, `npm audit` reports 15 moderate package findings in the
-Electron Builder dependency chain. They propagate from the
-[minimatch globparts amplification advisory](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249).
-They concern packaging tools rather than Keywright's production Node dependencies.
-`npm audit --omit=dev` reports no findings; that result alone does not cover code
-bundled from development dependencies, such as Monaco.
-
-Electron Builder 26.18.0 is the current upstream release checked for this review.
-The npm audit fix proposes downgrading it to 20.23.1. That downgrade was not applied.
-Forcing minimatch 11 across the tree was also rejected: its
-[changelog](https://github.com/isaacs/minimatch/blob/v11.0.3/changelog.md) removes
-methods and changes the types stored in parsed patterns. Older consumers use
-different APIs. A successful package build would not cover every affected path.
-
-Keep these findings open until compatible upstream releases are available, then
-repeat the full audit, editor bundle check, tests and Windows packaging checks.
-Build patterns and package configuration should come from the reviewed repository.
-This review does not establish the absence of other vulnerabilities.
+Monaco imports a vendored sanitizer, so updating the npm dependency alone would
+leave that copy in the editor. The build replaces the vendored import with the
+pinned package. `editorBuild.test.js` inspects the actual bundle inputs to verify
+the replacement. See [Architecture](architecture.md#build-and-packaging).
 
 ## Verification
 
-The local test suite passed all 116 tests with no skips, including recording real
-form interactions and replaying the generated test with Browser library. The
-renderer build passed. Inspection of the resulting Windows ASAR confirmed
-DOMPurify 3.4.17 in the editor bundle, no copy of Electron Builder in the app, and
-unpacked Python helpers and Playwright CLI files.
+The Windows checks on 2026-11-02 passed:
 
-The unsigned Windows app was launched with a disposable project and a separate
-user-data directory. The checks covered suite discovery, two passing browser
-tests, Report and Log rendering, a completed trace with its DOM snapshot, and
-keyword documentation in Monaco. An unsaved assertion change prompted for saving
-before execution and produced the intended failure message. Restoring the
-assertion and adding a saved recorder navigation produced three passing tests.
-Cancelling a dirty-file close preserved the buffer; discarding the temporary
-comment returned to the welcome screen without saving it.
+- A clean `npm ci` installed 37 packages; the complete audit and
+  `npm audit --omit=dev` both reported zero findings.
+- `setup.bat --non-interactive --no-pause` prepared the example, built the editor
+  and ran its two browser tests successfully.
+- `npm test` passed all 140 tests with no skips, including the recorder integration
+  and the editor sanitizer check.
+- `npm run test:ui` passed all three desktop tests using the example environment
+  prepared by setup.
 
-The packaged recorder check covered launch, navigation, stop, save and replay.
-Form input and clicks were exercised by the automated integration test; they were
-not verified manually in the packaged recorder. Code
-signing, installer execution and update installation were not verified.
+The remaining locked package versions are unchanged from the preceding revision.

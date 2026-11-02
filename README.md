@@ -124,7 +124,7 @@ folder reads its files; environment setup is a separate step.
 | [Walkthrough](docs/walkthrough.md) | Run the supplied example, record a test, reuse a resource and inspect a failure |
 | [User guide](docs/user-guide.md) | Projects, editor, recording, execution, debugging, configuration and shortcuts |
 | [Troubleshooting](docs/troubleshooting.md) | Environment setup, discovery, browser launch, missing traces and editor issues |
-| [Contributing](CONTRIBUTING.md) | Development setup, tests, integration prerequisites and packaging |
+| [Contributing](CONTRIBUTING.md) | Development setup, tests, integration prerequisites and dependency review |
 | [Architecture](docs/architecture.md) | Electron/Python boundaries, application flows, persistence and integration contracts |
 
 ## Local data and network access

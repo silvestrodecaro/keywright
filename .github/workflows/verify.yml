@@ -37,6 +37,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: npm ci
+      - name: Audit app and development dependencies
+        run: npm audit --audit-level=moderate
       - name: Install the Electron runtime
         run: npm exec -- install-electron
       - name: Verify the Electron runtime

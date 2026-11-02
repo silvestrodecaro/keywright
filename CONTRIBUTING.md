@@ -29,9 +29,8 @@ execution policy. Interactive installations through WinGet require confirmation.
 The setup prepares the included example, not the repository's integration-test
 environment described below.
 
-The npm install-script policy permits the reviewed `esbuild@0.28.2` hook and denies
-the unused `electron-winstaller@5.4.0` hook. This avoids broad script approval.
-Review the policy when changing either version or adding a Squirrel packaging target.
+The npm install-script policy permits the reviewed `esbuild@0.28.2` hook.
+Review the policy when changing that version or adding another install script.
 
 `npm.cmd start` builds the editor bundle before launching Electron. To open a test
 project directly, use `npm.cmd start -- "C:\Projects\my-web-tests"`. The test project
@@ -170,44 +169,22 @@ integration contracts. The main areas are:
 | `src/renderer/` | UI panels, styles and shared browser/Node-compatible logic |
 | `src/renderer/editor/` | Monaco providers and Robot analysis helpers |
 | `test/` | Node tests, local fixtures and Python/Browser integration checks |
-| `scripts/` | Renderer build and signed-installer update metadata |
+| `scripts/` | Renderer build and guided Windows setup |
 
 Keep public documentation and UI copy in English. Use real UI labels, explain
 failure recovery and keep examples aligned with the implementation. Update the
 user guide when a user-visible behavior changes.
 
-## Local packaging checks
+## Dependency review and distribution
 
-Installer releases are on hold while the source project is being stabilized.
-CI runs tests and builds the editor. Packaging remains available for checking
-Electron's bundled paths and runtime behavior locally.
-
-```powershell
-npm.cmd run pack
-npm.cmd run dist
-```
-
-`pack` produces `release/win-unpacked/`; `dist` produces the NSIS installer under
-`release/`. Both build the renderer first. Python helpers and `playwright-core`
-must remain accessible outside ASAR in the packaged app.
-
-Before distributing a build, check the packaged app with an existing project:
-launch, load suites, record and replay a small interaction, inspect a failure,
-open Report/Log and a completed trace, and confirm dirty-file handling on close.
-An unsigned local package does not verify signing or the update path.
-
-For an isolated check, use
-`npx.cmd electron-builder --win --dir --publish never --config.directories.output=out/package-check`
-after building the renderer, then launch `Keywright.exe` with
-`--user-data-dir=<temporary-profile>` and a disposable project path. This keeps
-the check's recent projects and editor settings separate from the normal profile.
+Keywright currently runs from source. Installer distribution is deferred, and the
+repository has no packaging or publishing commands. Electron Builder and its
+dependency chain are excluded from the app's development setup.
 
 Review both `npm audit` and `npm audit --omit=dev` when updating dependencies.
 The second command excludes Monaco and DOMPurify because they are build
 dependencies, even though their code is bundled into the app. The editor build
-test checks which sanitizer actually reaches that bundle. See the dated
-[dependency review](docs/dependency-review.md) for unresolved findings.
-
-`npm run release` publishes artifacts to GitHub. It is separate from development
-and local verification; public installer releases are not part of the current
-workflow.
+test checks which sanitizer actually reaches that bundle. CI runs
+`npm audit --audit-level=moderate` on the complete npm tree and fails for moderate
+or higher findings. See the dated [dependency review](docs/dependency-review.md)
+for the current results and scope.

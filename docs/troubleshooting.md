@@ -29,9 +29,9 @@ your approved software channel, then rerun setup. The launcher does not change
 permanent PowerShell or machine security settings.
 
 The setup reports npm audit counts but does not apply `audit fix --force` or
-change dependency versions outside the lockfile. The known packaging-tool
-findings still need a compatible upstream fix; see the
-[dependency review](dependency-review.md).
+change dependency versions outside the lockfile. If findings appear, update to
+the latest reviewed repository revision and rerun setup. See the
+[dependency review](dependency-review.md) for the current audit results.
 
 ### PowerShell says `npm.ps1` cannot be loaded
 
