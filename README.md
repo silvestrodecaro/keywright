@@ -46,51 +46,70 @@ execution and trace availability.
 
 ## Run from source
 
-Install [Node.js 24](https://nodejs.org/), [Python](https://www.python.org/downloads/)
-and [Git](https://git-scm.com/). Make Python available on `PATH`; the project creator
-looks for Python 3.10 or later. The tested Python combination is recorded in
+### Prerequisites
+
+Use Windows 10/11 and install these tools:
+
+| Tool | Version to use | Check in PowerShell |
+| --- | --- | --- |
+| [Node.js](https://nodejs.org/en/download) with npm | 24.x | `node --version` and `npm.cmd --version` |
+| [Python](https://www.python.org/downloads/windows/) | 3.13.x, available through the Windows `py` launcher | `py -3.13 --version` |
+| [Git](https://git-scm.com/install/windows) | A current Windows version | `git --version` |
+
+Close and reopen PowerShell after installing the tools. These are the Node and
+Python versions used by CI; exact tested package versions are listed in
 [Contributing](CONTRIBUTING.md#verified-environment).
 
-In PowerShell:
+### Install and launch
+
+Run these commands in PowerShell. They create a `keywright` folder in your user
+folder; use another short, writable location if you prefer.
 
 ```powershell
+cd $env:USERPROFILE
 git clone https://github.com/silvestrodecaro/keywright.git
 cd keywright
-npm ci
-npm exec -- install-electron
-npm run install-browsers
-npm start
+npm.cmd ci
+npm.cmd exec -- install-electron
+npm.cmd run install-browsers
+npm.cmd start
 ```
 
-`npm start` builds the editor and launches the Electron app. Python and the test
-project's Browser dependencies are installed separately. The Test Generator has
-its own browser installation; installing its Chromium does not prepare a project's
-Python environment. Follow the first-run steps below to create that environment.
+The install commands download the app's dependencies, Electron and the recorder's
+Chromium browser. `npm.cmd start` builds the editor and opens the Keywright welcome
+screen. If a command fails, see [startup troubleshooting](docs/troubleshooting.md#starting-keywright-from-source)
+before continuing. The `.cmd` spelling also works when PowerShell blocks `npm.ps1`.
+
+These commands prepare the IDE. Each Robot Framework project has its own Python
+environment and Browser installation, prepared in the next step.
+
+For later launches, open PowerShell in the same `keywright` folder and run
+`npm.cmd start`. After pulling changes that update dependencies, repeat the three
+install commands before starting the app.
 
 ## First run
 
-1. Choose **New project** on the welcome screen. Use a short location such as
-   `C:\Projects`; Browser's installed browser executables can exceed Windows path
-   limits in deeply nested projects.
-2. Leave virtual environment and browser installation enabled. The setup view
-   shows each step and its output. If a step fails, the project folder is kept so
-   you can repair it.
-3. Open the project, select **Testing**, and run the example suite. A successful
-   result confirms the project's Robot and Browser setup can execute a test.
-4. Open **Test Generator**, enter a URL and press **Record**. Add assertions with
-   the toolbar in the recorded browser, then stop and save the generated `.robot`
-   file under `tests/`.
-5. Review the file and run it from **Testing**. Select its result to inspect the
-   keyword steps. **Report** and **Log** show Robot's output from the latest run.
+1. Choose **New project**, enter a name such as `my-web-tests` and select a short,
+   writable parent folder. Your user folder is usually suitable. The full project
+   path must be at most 85 characters when installing browsers on Windows.
+2. Keep virtual environment and browser installation enabled, then choose
+   **Create project**. The wizard creates `.venv`, installs the Python packages and
+   downloads Browser's browsers. Wait for the setup steps to finish, then choose
+   **Open project**. If a step fails, its output remains visible and the folder is
+   kept: see [repair a partial setup](docs/troubleshooting.md#project-setup-stopped-partway-through).
+3. Select **Testing → Run all**. The generated project contains one test, so the
+   expected result is **one passing test**. It opens `https://example.com` and
+   requires network access. The footer should show the Python executable inside
+   this test project's `.venv`.
 
-For a complete example, follow [Record a test and investigate a failure](docs/walkthrough.md).
-It includes a local page and a runnable suite, with recording, reusable keywords
-and an intentional assertion failure.
+To try recording and failure analysis with a supplied local page, follow
+[Record a test and investigate a failure](docs/walkthrough.md). That example has
+two tests and works offline after its dependencies and browsers are installed.
 
-For an existing repository, choose **Open folder…**. Opening it does not install
-dependencies or create an environment. Follow
-[open an existing project](docs/user-guide.md#open-an-existing-project) if its Python
-or test directory differs from the defaults.
+Already have Robot tests? Choose **Open folder…** and select their project folder.
+If they need an environment or use a different layout, follow
+[open an existing project](docs/user-guide.md#open-an-existing-project). Opening a
+folder reads its files; environment setup is a separate step.
 
 ## Documentation
 

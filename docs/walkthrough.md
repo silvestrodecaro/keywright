@@ -9,17 +9,22 @@ into a resource, then inspect an intentional failure and its Playwright trace.
 
 ## Prepare the example
 
-Download or clone this repository, then open PowerShell in
-`examples/browser-walkthrough`. Use Python 3.13 and Node.js 24 for the development
-baseline recorded in [Contributing](../CONTRIBUTING.md#verified-environment).
+First [install and launch Keywright](../README.md#run-from-source). Then open a
+second PowerShell window in the cloned `keywright` folder and run:
 
 ```powershell
-py -3 -m venv .venv
+cd examples/browser-walkthrough
+py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m Browser.entry init chromium
 ```
 
-Open Keywright and choose **Open folder…**, selecting `examples/browser-walkthrough`.
+This prepares the example's own Python environment. It uses Python 3.13 and Node.js
+24, as in the [tested environment](../CONTRIBUTING.md#verified-environment).
+Activation is unnecessary: the commands use `.venv`'s Python directly.
+
+In Keywright, choose **Open folder…** and select `examples/browser-walkthrough`
+inside your clone. If another project is open, choose **Close project** first.
 The project has this structure:
 
 ```text

@@ -4,17 +4,23 @@ A local access-request form and two Robot Framework tests for the
 [Keywright walkthrough](../../docs/walkthrough.md). The page does not send email
 or need an application server.
 
-From this directory, prepare the test environment in PowerShell:
+First [install and launch Keywright](../../README.md#run-from-source). Open a
+second PowerShell window in this example directory
+(`keywright/examples/browser-walkthrough`) and prepare its Python environment:
 
 ```powershell
-py -3 -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m Browser.entry init chromium
 ```
 
-Open this directory in Keywright, select **Testing** and press **Run all**. Both
-tests should pass. Follow the walkthrough to record another test and investigate
-an intentional assertion failure.
+These commands use Python 3.13 directly through the Windows launcher, then the
+environment's own executable; activation is unnecessary.
+
+In Keywright, choose **Open folder…** and select this directory, then select
+**Testing → Run all**. Both tests should pass. After installation, the local page
+needs no server or network access. Follow the walkthrough to record another test
+and investigate an intentional assertion failure.
 
 To run the same tests from PowerShell:
 

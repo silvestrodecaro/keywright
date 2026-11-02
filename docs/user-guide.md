@@ -52,6 +52,15 @@ The setup view reports each step. A failure skips later steps and keeps the file
 already created. You can open the partial project and finish setup in a terminal;
 see [repair a partial setup](troubleshooting.md#project-setup-stopped-partway-through).
 
+When setup finishes, choose **Open project**, then **Testing → Run all**. The
+generated suite has one test that opens `https://example.com`; it needs network
+access and should pass. Check that the footer names this project's Python.
+
+With several Python versions installed, review the version shown in the setup
+form. On Windows the creator tries `py -3` first, then `python` and `python3`.
+For a specific Python version, prepare an environment as described below and open
+its project folder.
+
 On Windows, new projects that install Browser's browsers are checked against an
 85-character project-root limit. Prefer a short location such as `C:\Projects`.
 
@@ -65,6 +74,22 @@ By default, Keywright looks for:
 - Python at `.venv\Scripts\python.exe`;
 - suites under `tests/`;
 - Robot output under `results/`.
+
+If the project already runs in its own environment, keep using that environment.
+For a project with `requirements.txt` that needs a new `.venv`, open PowerShell
+in the **test project folder** and run:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m Browser.entry init chromium
+```
+
+This assumes the requirements include Robot Framework and Browser. The last
+command installs Chromium; initialize Firefox or WebKit too if the tests use them.
+For another dependency manager, use the project's own setup instructions and
+select its Python in `keywright.json`. These commands use the environment's
+executable directly, so activation is unnecessary.
 
 If your repository uses another layout or environment, create `keywright.json` at its
 root. For example, a repository with suites at the root and a shared environment:
@@ -80,6 +105,11 @@ root. For example, a repository with suites at the root and a shared environment
 The selected interpreter needs the libraries your tests import. System Python on
 `PATH` is used to create environments, but is not automatically selected as the
 interpreter of an opened project.
+
+Close and reopen the project after preparing its environment or changing
+`keywright.json`. In **Testing**, check that the expected suites appear, then run
+one known test before running the full project. If discovery fails, see
+[tests missing from Testing](troubleshooting.md#tests-are-missing-from-the-testing-panel).
 
 Use **Explorer** to open files and create a file with **New file**. Paths such as
 `tests/login.robot` create missing parent folders. Drag the sidebar divider to

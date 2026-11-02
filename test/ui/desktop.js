@@ -59,6 +59,8 @@ const test = base.extend({
       });
       await app.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
       tracing = true;
+      // firstWindow() can expose the HTML before its synchronous scripts bind controls.
+      await page.waitForLoadState('domcontentloaded');
       if (!projectOnLaunch) {
         await expect(page.locator('#view-welcome')).toBeVisible();
         await expect(page.getByText('No recent projects.', { exact: true })).toBeVisible();

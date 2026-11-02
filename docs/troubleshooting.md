@@ -4,17 +4,63 @@ Start by checking which environment failed: the Test Generator uses Keywright's
 Playwright installation; test execution uses the selected project's Python and
 Browser library. Their browser installations are separate.
 
-Commands below are for **PowerShell**, run from the test project root. They assume
-the default `.venv`. If `keywright.json` selects another interpreter, use its path
-instead. For an absolute executable path, PowerShell requires `&` before the
-quoted path, for example `& "C:\Environments\web-tests\Scripts\python.exe" --version`.
+Use **PowerShell**. Run `npm.cmd` commands from the **Keywright source folder**,
+which contains `package.json`. Run Python commands from the **Robot test project
+folder**, which contains its `requirements.txt` or `keywright.json`.
+
+Python commands assume the default `.venv`. If `keywright.json` selects another
+interpreter, use its path instead. For an absolute executable path, PowerShell
+requires `&` before the quoted path, for example
+`& "C:\Environments\web-tests\Scripts\python.exe" --version`. Environment activation
+is unnecessary when using the executable's path.
 
 ## Starting Keywright from source
 
 Installer releases are on hold. Follow [Run from source](../README.md#run-from-source)
-to launch the app. Run `npm ci` after dependency changes and use `npm start`, which
-builds the editor before opening Electron. The full development and integration-test
-setup is documented in [Contributing](../CONTRIBUTING.md).
+to launch the app. Run `npm.cmd ci` after dependency changes and use `npm.cmd start`,
+which builds the editor before opening Electron. Setup for working on Keywright's
+code and running its test suite is documented in [Contributing](../CONTRIBUTING.md).
+
+### PowerShell says `npm.ps1` cannot be loaded
+
+Use `npm.cmd` in place of `npm`, as in the README. For example, from the Keywright
+source folder:
+
+```powershell
+npm.cmd start
+```
+
+This uses the command launcher supplied with Node.js and requires no change to
+PowerShell's script execution policy.
+
+### npm cannot find `package.json` or `package-lock.json`
+
+Check that PowerShell is in the Keywright source folder, rather than the parent
+folder or a Robot project. Both of these checks should print `True`:
+
+```powershell
+Test-Path .\package.json
+Test-Path .\package-lock.json
+```
+
+Use `cd` to enter your clone, then rerun the failed command. With the README's
+default location, the folder is `$env:USERPROFILE\keywright`.
+
+### Electron is missing or failed to install
+
+From the Keywright source folder, run:
+
+```powershell
+npm.cmd ci
+npm.cmd exec -- install-electron
+npm.cmd start
+```
+
+The second command downloads Electron's executable. A successful `npm.cmd ci`
+alone does not confirm that the executable has been downloaded. For download
+failures, inspect the error for network, proxy or certificate details before
+retrying. Current dependency audit findings are recorded in the
+[dependency review](dependency-review.md).
 
 ## Python or Node.js is not detected during project creation
 
@@ -22,13 +68,18 @@ Keywright probes the tools available on its process `PATH`. On Windows it tries
 `py -3`, `python`, then `python3` for Python, and checks Node separately.
 
 ```powershell
+py -3.13 --version
 py -3 --version
 node --version
 ```
 
-The Python probe accepts 3.10 or later. The packages installed into the environment
-may have additional version requirements. If a tool was installed while Keywright
-was open, restart the app so it inherits the updated `PATH`.
+Python 3.13 is the documented setup version. With multiple Python installations,
+`py -3` can select a different version from `py -3.13`; the creator uses `py -3`
+first. To select 3.13 explicitly, prepare the project environment using
+[the existing-project instructions](user-guide.md#open-an-existing-project).
+The creator's probe accepts 3.10 or later, while installed packages can have
+additional version requirements. If a tool was installed while Keywright was open,
+restart the app so it inherits the updated `PATH`.
 
 Node is required by the project creator's `rfbrowser init` route. Keywright's
 bundled Electron runtime does not satisfy that external Node probe.
@@ -39,7 +90,7 @@ The setup view retains the command output and marks later steps as skipped. The
 folder is deliberately kept. Run only the missing steps, from that folder:
 
 ```powershell
-py -3 -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m Browser.entry init
 ```

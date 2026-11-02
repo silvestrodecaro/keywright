@@ -7,32 +7,33 @@ credentials and private application data from attached artifacts.
 
 ## Development setup
 
-Development and integration tests currently target Windows. Use Node.js 24 and npm
-for the app, and Python for Robot integration tests. CI uses the same Node.js
-version. The lockfile records the JavaScript dependency tree.
+Development and integration tests currently target Windows. Use Node.js 24 and
+Python 3.13, as in CI. Install and check the prerequisites in
+[Run from source](README.md#run-from-source) first. The lockfile records the
+JavaScript dependency tree.
 
 From the repository root:
 
 ```powershell
-npm ci
-npm exec -- install-electron
-npm run install-browsers
-npm start
+npm.cmd ci
+npm.cmd exec -- install-electron
+npm.cmd run install-browsers
+npm.cmd start
 ```
 
-`npm start` builds the editor bundle before launching Electron. To open a test
-project directly, use `npm start -- "C:\Projects\my-web-tests"`. The test project
+`npm.cmd start` builds the editor bundle before launching Electron. To open a test
+project directly, use `npm.cmd start -- "C:\Projects\my-web-tests"`. The test project
 can have a different Python environment from the repository's integration-test
 environment.
 
-`npm run build:watch` rebuilds Monaco's integration bundle on source changes. It
+`npm.cmd run build:watch` rebuilds Monaco's integration bundle on source changes. It
 does not automatically reload the Electron window. Generated files under
 `src/renderer/dist/` should not be edited or committed.
 
 ## Tests
 
 ```powershell
-npm test
+npm.cmd test
 ```
 
 The suite uses Node's test runner. Pure JavaScript tests cover source generation,
@@ -40,15 +41,17 @@ selector conversion, editor analysis, search, watch selection and history. Other
 tests exercise a real recorder, locator picking, Robot execution, debugging,
 formatting and the Python language worker.
 
-For the complete suite, prepare a repository-local environment and the Chromium
+To test changes to Keywright, prepare a `.venv` in the **Keywright repository
+root**, alongside `package.json`. This environment is for the integration tests;
+it is separate from the environments in your Robot projects. Install the Chromium
 versions needed by both toolchains:
 
 ```powershell
-py -3 -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m Browser.entry init chromium
-npm run install-browsers
-npm test
+npm.cmd run install-browsers
+npm.cmd test
 ```
 
 Python-backed tests select `KEYWRIGHT_PYTHON` when set, otherwise a repository `.venv`.
@@ -56,7 +59,7 @@ To use another prepared interpreter in PowerShell:
 
 ```powershell
 $env:KEYWRIGHT_PYTHON = "C:\Environments\keywright-tests\Scripts\python.exe"
-npm test
+npm.cmd test
 ```
 
 Review the test summary. Some integration tests are skipped when an interpreter is
@@ -71,7 +74,7 @@ node --test test/generator.test.js
 node --test test/debugger.test.js
 ```
 
-For editor-integration or bundling changes, also run `npm run build`. Changes to the
+For editor-integration or bundling changes, also run `npm.cmd run build`. Changes to the
 recorder require the real recording/replay and locator-picking tests: the app uses
 private Playwright recorder APIs, so generated-string tests alone are insufficient.
 If a failure is intermittent, capture its output and determine the cause; a passing
@@ -83,7 +86,7 @@ After preparing the integration-test environment above and installing Electron
 as described in the development setup, run:
 
 ```powershell
-npm run test:ui
+npm.cmd run test:ui
 ```
 
 This builds the renderer and runs [Playwright tests](test/ui/keywright.spec.js)
@@ -103,7 +106,7 @@ project copies are removed after each test.
 Tests run one at a time without automatic retries. On failure, `out/ui-tests/`
 contains the window screenshot, Playwright trace, Electron log and available Robot
 results. The HTML report is in `out/ui-report/`. Inspect it with
-`npx playwright show-report out/ui-report`.
+`npx.cmd playwright show-report out/ui-report`.
 
 The [Verify workflow](.github/workflows/verify.yml) prepares both browser toolchains,
 runs the component and integration tests, executes the example's Robot Framework
@@ -163,8 +166,8 @@ CI runs tests and builds the editor. Packaging remains available for checking
 Electron's bundled paths and runtime behavior locally.
 
 ```powershell
-npm run pack
-npm run dist
+npm.cmd run pack
+npm.cmd run dist
 ```
 
 `pack` produces `release/win-unpacked/`; `dist` produces the NSIS installer under
@@ -177,7 +180,7 @@ open Report/Log and a completed trace, and confirm dirty-file handling on close.
 An unsigned local package does not verify signing or the update path.
 
 For an isolated check, use
-`npx electron-builder --win --dir --publish never --config.directories.output=out/package-check`
+`npx.cmd electron-builder --win --dir --publish never --config.directories.output=out/package-check`
 after building the renderer, then launch `Keywright.exe` with
 `--user-data-dir=<temporary-profile>` and a disposable project path. This keeps
 the check's recent projects and editor settings separate from the normal profile.
