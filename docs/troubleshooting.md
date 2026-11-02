@@ -23,10 +23,8 @@ which builds the editor before opening Electron. Setup for working on Keywright'
 code and running its test suite is documented in [Contributing](../CONTRIBUTING.md).
 
 For the guided route, rerun `setup.bat`. It stops at the failed step and records
-the full command output under `out/setup/`. If WinGet is unavailable or an
-installation is blocked by company policy, install the named prerequisite using
-your approved software channel, then rerun setup. The launcher does not change
-permanent PowerShell or machine security settings.
+the full command output under `out/setup/`. If WinGet is unavailable, install the
+missing prerequisites from the official links printed by setup, then rerun it.
 
 The setup reports npm audit counts but does not apply `audit fix --force` or
 change dependency versions outside the lockfile. If findings appear, update to
@@ -54,9 +52,9 @@ begin with `[startup]` and include the Electron version, graphics feature status
 page loading, preload errors, renderer console warnings and errors, and process
 crashes. The `ready-to-show` record also includes native window visibility,
 minimized state and bounds. A `page-state` record reports whether the application
-bridge is available and which shell view is visible; it does not establish that the window was painted
-correctly. If the page has not responded after 15 seconds, a `page-not-ready`
-record includes its loading state.
+bridge is available and which shell view is visible; it does not establish that
+the window was painted correctly. If the page has not responded after 15 seconds,
+a `page-not-ready` record includes its loading state.
 
 While the blank window remains open, use a second PowerShell in the source folder
 to read the most recent launcher log:
@@ -113,41 +111,45 @@ retrying. Current dependency audit findings are recorded in the
 
 ## Antivirus detects electron.exe
 
-### Suspected Microsoft Defender false positive
+### Confirmed Microsoft Defender false positive
 
-Microsoft Defender has been reported to quarantine Electron 45.2.1 on Windows
-as **Trojan:Win32/Cinjo.O!cl**. The affected path is
-`node_modules/electron/dist/electron.exe` inside the Keywright source folder.
+On 2026-11-02, Microsoft reviewed the submitted Electron 45.2.1 Windows x64 sample,
+classified it as **Not malware** and removed the **Trojan:Win32/Cinjo.O!cl**
+detection. The affected file was `node_modules/electron/dist/electron.exe`
+inside the Keywright source folder. The sample's hash is listed below.
 
-We suspect a false positive: the local runtime we checked matches the official
-Electron release, and Keywright does not modify that executable. A sample was
-submitted to Microsoft for analysis on 2026-11-02.
+### Update Defender and restore Electron
 
-### Restore Electron on your own PC
+For this detection:
 
-If you trust this runtime and choose to allow it on a PC you manage, Windows
-provides the following recovery steps. This makes an exception to Defender's
-block. If you are unsure which file was detected, keep it quarantined.
-
-On a managed work PC, ask IT/security to approve and handle recovery according
-to the organization's policy.
-
-1. Open **Start → Windows Security → Virus & threat protection → Protection history**.
-2. Expand the alert for `node_modules\electron\dist\electron.exe` inside your
-   Keywright folder. Check that the path and detection name match the issue above.
+1. Open **Windows Security → Virus & threat protection → Protection updates →
+   Check for updates** and wait for the update to finish.
+2. Open **Protection history** and find the alert for
+   `node_modules\electron\dist\electron.exe` inside your Keywright folder.
 3. For **Threat quarantined**, choose **Actions → Restore**.
-4. If Defender detects the restored file again, open the new alert for that file
-   and choose **Actions → Allow on device**.
-5. Start Keywright again with `npm.cmd start` from its source folder.
+4. Start Keywright with `npm.cmd start` from its source folder.
 
-Keep real-time protection enabled. To undo the exception, open
-**Virus & threat protection → Allowed threats**, select the entry and choose
-**Don't allow**. Microsoft's [Protection history instructions](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app)
-describe these actions. **Allow on device** permits execution; it is not a
-Microsoft safety verdict.
+If the same alert returns after updating, use the cache-reset procedure in the
+technical details below. Other detection names or Electron versions need their
+own review. See Microsoft's guides to [security intelligence updates](https://www.microsoft.com/en-us/wdsi/defenderupdates)
+and [Protection history](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app).
+
+On a managed device, follow your administrator's recovery instructions.
 
 <details>
-<summary>Technical details for IT and support</summary>
+<summary>Technical details and cached detections</summary>
+
+Microsoft's response recommends clearing cached dynamic signatures if this
+detection persists. Open **Command Prompt as administrator** and run:
+
+```bat
+cd /d "%ProgramFiles%\Windows Defender"
+MpCmdRun.exe -RemoveDefinitions -DynamicSignatures
+MpCmdRun.exe -SignatureUpdate
+```
+
+Wait for the signature update to finish, then repeat the restore steps above.
+Microsoft publishes these commands in its [security intelligence update instructions](https://www.microsoft.com/en-us/wdsi/defenderupdates).
 
 These checks help identify the executable involved in a detection. They read
 the file without running it:
@@ -159,7 +161,6 @@ Get-AuthenticodeSignature .\node_modules\electron\dist\electron.exe | Select-Obj
 ```
 
 If the executable is quarantined, the first two commands report a missing file.
-On a managed device, IT can obtain its hash from the Defender incident details.
 
 The local Windows x64 review on 2026-11-02 compared Electron 45.2.1 with its
 [official archive checksums](https://github.com/electron/electron/releases/download/v45.2.1/SHASUMS256.txt).
@@ -169,19 +170,13 @@ The installed executable matched the copy inside the verified archive. Its SHA-2
 32e357fc856feadd1e51531f47811d2621483e5a58815eb4999154d7c9baea3b
 ```
 
-That copy returned `NotSigned` from the Authenticode check. The hash identifies
-the local Windows x64 copy checked above; it does not identify a file quarantined
-on another computer. Matching an official archive establishes provenance, while
-the antivirus classification requires separate analysis. The npm audit covers
-JavaScript dependency advisories rather than the runtime executable.
-
-Suspected false positives can be reported through
-[Microsoft's file analysis submission process](https://www.microsoft.com/en-us/wdsi/filesubmission).
+That copy returned `NotSigned` from the Authenticode check. Microsoft's
+**Not malware** verdict covers this submitted sample. Report new detections
+through [Microsoft's file analysis submission process](https://www.microsoft.com/en-us/wdsi/filesubmission).
 
 Start never downloads a missing Electron runtime. Setup also stops before
 reinstallation if it finds an existing runtime's version file but no executable.
-Resolve the detection before attempting another installation; on a managed PC,
-follow IT/security's recovery decision.
+Resolve the detection before attempting another installation.
 
 </details>
 
@@ -221,8 +216,8 @@ py -3.13 -m venv .venv
 
 Skip environment creation if `.venv` is already valid. If downloading packages or
 browsers fails, inspect the command output for proxy, certificate, network or
-package-compatibility errors. Use your organization's approved package and proxy
-configuration rather than disabling certificate checks.
+package-compatibility errors. For certificate errors, check the trusted
+certificates and proxy configuration before retrying.
 
 Browser binaries are now installed outside `.venv`, in the shared cache. If the
 error names a missing executable, rerun Browser initialization with the same

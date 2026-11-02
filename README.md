@@ -79,8 +79,7 @@ Setup installs the locked app dependencies, Electron and Chromium, prepares the
 included example's Python environment, builds the editor and runs its two browser
 tests. It also reports dependency audit findings. The full output is saved under
 `out/setup/`; a failed step stops setup and shows the error and log path.
-If antivirus flags Electron, stop and follow the
-[antivirus troubleshooting steps](docs/troubleshooting.md#antivirus-detects-electronexe).
+See [Troubleshooting](docs/troubleshooting.md) for installation and launch errors.
 
 When setup finishes, choose whether to open Keywright. To try the prepared example,
 choose **Open folder…**, select `examples/browser-walkthrough` inside the clone,
