@@ -246,12 +246,17 @@ instructions; the app does not check releases, download updates or modify its ch
 and launches the app with the requested project arguments. It shares terminal
 progress and command logging with setup. Setup and start stop if an installed
 runtime has lost its executable; start never downloads a missing runtime.
+The command runner hides console-tool windows by default. Electron is launched
+with `windowsHide: false`: the Windows process flag also hides a GUI program's
+first window, even when its page has loaded successfully. A Windows integration
+test runs the actual launcher against Electron and checks native window visibility.
 
 `startupDiagnostics.js` attaches window listeners before the first page load.
 It forwards page, preload, renderer-console and process-failure events through the
 main process into the launcher's log, since Windows child-process stderr may be
-absent. A small page query records bridge availability and visible shell view IDs;
-it reads no project source. The 15-second diagnostic timer reports a page that has
+absent. The first-paint event records native window visibility, minimized state
+and bounds. A small page query records bridge availability and visible shell view
+IDs; it reads no project source. The 15-second diagnostic timer reports a page that has
 not responded and is cleared on a response, load failure, renderer exit or window
 close. These records aid diagnosis without changing rendering or security settings.
 

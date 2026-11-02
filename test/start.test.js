@@ -47,11 +47,46 @@ test('start builds before launching and forwards a project path without shell in
   assert.equal(f.calls.length, 2);
   assert.equal(f.calls[0].executable, process.execPath);
   assert.ok(f.calls[0].args[0].endsWith(path.join('scripts', 'build.mjs')));
+  assert.equal(f.calls[0].options.windowsHide, true);
   assert.equal(f.calls[1].executable, f.executable);
   assert.deepEqual(f.calls[1].args, [f.root, project]);
   assert.equal(f.calls[1].options.cwd, f.root);
   assert.equal(f.calls[1].options.shell, false);
+  assert.equal(f.calls[1].options.windowsHide, false);
   assert.equal(f.calls[1].options.env.ELECTRON_RUN_AS_NODE, undefined);
+});
+
+test('the Windows launcher creates a visible native Electron window', { skip: process.platform !== 'win32' }, async () => {
+  const root = tempDir('native window with spaces');
+  fs.mkdirSync(path.join(root, 'scripts'));
+  fs.mkdirSync(path.join(root, 'node_modules/electron'), { recursive: true });
+  fs.symlinkSync(path.dirname(require('electron')), path.join(root, 'node_modules/electron/dist'), 'junction');
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'keywright-launch-probe', version: '0.2.0', main: 'probe.cjs' }));
+  fs.writeFileSync(path.join(root, 'scripts/build.mjs'), '// This fixture has no editor bundle.\n');
+  const report = path.join(root, 'window-state.json');
+  fs.writeFileSync(path.join(root, 'probe.cjs'), `
+    const { app, BrowserWindow } = require('electron');
+    const fs = require('node:fs');
+    const path = require('node:path');
+    setTimeout(() => app.exit(99), 15_000).unref();
+    app.whenReady().then(() => {
+      const window = new BrowserWindow({ width: 400, height: 240, webPreferences: {
+        sandbox: true, contextIsolation: true, nodeIntegration: false,
+      } });
+      window.once('ready-to-show', () => {
+        fs.writeFileSync(path.join(__dirname, 'window-state.json'), JSON.stringify({
+          visible: window.isVisible(), minimized: window.isMinimized(),
+        }));
+        app.quit();
+      });
+      window.loadURL('data:text/html,<title>Keywright launch probe</title><h1>Launch probe</h1>');
+    });
+  `);
+  const output = new PassThrough();
+  output.resume();
+  const { start } = require('../scripts/start');
+  await start({ root, args: ['--user-data-dir=' + path.join(root, 'profile')], output });
+  assert.deepEqual(JSON.parse(fs.readFileSync(report, 'utf8')), { visible: true, minimized: false });
 });
 
 test('a failed renderer build prevents Electron from being launched', async () => {

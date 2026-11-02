@@ -22,7 +22,8 @@ async function start({ root = path.resolve(__dirname, '..'), args = [], env = pr
   await run('Build editor', process.execPath, [path.join(root, 'scripts', 'build.mjs')]);
   ui.line();
   ui.label('START', 'Opening Keywright. Close the app to return to this terminal.');
-  await run('Keywright desktop', executable, [root, ...args], { background: true });
+  // windowsHide also hides a GUI process's first native window on Windows.
+  await run('Keywright desktop', executable, [root, ...args], { background: true, windowsHide: false });
 }
 
 if (require.main === module)

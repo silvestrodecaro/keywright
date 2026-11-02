@@ -5,10 +5,10 @@ const { spawn } = require('node:child_process');
 
 function commandRunner({ root, env, log, ui, spawn: spawnChild = spawn }) {
   const write = (text) => fs.appendFileSync(log, text, 'utf8');
-  return (title, executable, args, { cwd = root, allowedCodes = [0], background = false } = {}) =>
+  return (title, executable, args, { cwd = root, allowedCodes = [0], background = false, windowsHide = true } = {}) =>
     ui.task(title, () => new Promise((resolve, reject) => {
       write(`\n${title}\n${JSON.stringify([executable, ...args])}\n`);
-      const child = spawnChild(executable, args, { cwd, env, windowsHide: true, shell: false });
+      const child = spawnChild(executable, args, { cwd, env, windowsHide, shell: false });
       let output = '';
       let tail = '';
       const failed = (code, reason) => {

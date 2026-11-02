@@ -38,6 +38,11 @@ the latest reviewed repository revision and rerun setup. See the
 The terminal's **OPEN** message means the Electron process has started. The
 welcome screen should appear without opening a project or waiting for Python.
 
+If Keywright is also missing from the taskbar and Alt+Tab, first update the source
+checkout with `git pull --ff-only` while the app is closed. The launcher must allow
+Electron's native window to show; hiding it can leave the page running normally
+without a selectable app window.
+
 Close Keywright and start it from a normal, non-administrator PowerShell:
 
 ```powershell
@@ -47,8 +52,9 @@ npm.cmd start
 The launcher prints the log path under `out/start/`. Startup records in that log
 begin with `[startup]` and include the Electron version, graphics feature status,
 page loading, preload errors, renderer console warnings and errors, and process
-crashes. A `page-state` record reports whether the application bridge is available
-and which shell view is visible; it does not establish that the window was painted
+crashes. The `ready-to-show` record also includes native window visibility,
+minimized state and bounds. A `page-state` record reports whether the application
+bridge is available and which shell view is visible; it does not establish that the window was painted
 correctly. If the page has not responded after 15 seconds, a `page-not-ready`
 record includes its loading state.
 

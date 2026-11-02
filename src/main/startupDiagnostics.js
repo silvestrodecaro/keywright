@@ -25,7 +25,9 @@ function installStartupDiagnostics(app) {
     }, 15_000);
     pending.unref();
     window.once('closed', () => clearTimeout(pending));
-    window.once('ready-to-show', () => report('ready-to-show'));
+    window.once('ready-to-show', () => report('ready-to-show', {
+      visible: window.isVisible(), minimized: window.isMinimized(), bounds: window.getBounds(),
+    }));
     contents.on('did-start-loading', () => report('loading'));
     contents.on('dom-ready', () => report('dom-ready'));
     contents.on('did-finish-load', () => {
