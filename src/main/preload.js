@@ -9,6 +9,7 @@ function subscribe(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('keywright', {
+  appVersion: () => ipcRenderer.invoke('app:version'),
   // Projects
   recentProjects: () => ipcRenderer.invoke('projects:recent'),
   removeRecentProject: (root) => ipcRenderer.invoke('projects:remove-recent', root),
@@ -49,11 +50,6 @@ contextBridge.exposeInMainWorld('keywright', {
   stopTests: () => ipcRenderer.invoke('tests:stop'),
   debugCommand: (command) => ipcRenderer.invoke('tests:debug-command', command),
   testHistory: () => ipcRenderer.invoke('tests:history'),
-  updateState: () => ipcRenderer.invoke('update:state'),
-  checkForUpdates: () => ipcRenderer.invoke('update:check'),
-  downloadUpdate: () => ipcRenderer.invoke('update:download'),
-  installUpdate: () => ipcRenderer.invoke('update:install'),
-  onUpdateState: (callback) => subscribe('update:state', callback),
   onHistoryAdded: (callback) => subscribe('tests:history-added', callback),
   openTestOutput: (file) => ipcRenderer.invoke('tests:open-output', file),
   testOutputUrl: (file) => ipcRenderer.invoke('tests:output-url', file),

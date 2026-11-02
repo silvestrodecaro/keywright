@@ -3,9 +3,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { spawn } = require('node:child_process');
 const { parseArgs } = require('node:util');
 const { browserEnvironment } = require('../src/main/browserEnvironment');
+const { terminal } = require('./terminal');
+const { commandRunner } = require('./command');
+const { assertRuntimeNotRemoved, electronExecutable } = require('./electron-runtime');
 
 async function main() {
   const { values } = parseArgs({ options: { python: { type: 'string' }, npm: { type: 'string' } } });
@@ -21,37 +23,15 @@ async function main() {
   const env = browserEnvironment({ ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' });
   delete env.ELECTRON_RUN_AS_NODE;
   const writeLog = (text) => fs.appendFileSync(log, text, 'utf8');
-  console.log(`Setup log: ${log}`);
-
-  function run(title, executable, args, { cwd = root, allowedCodes = [0] } = {}) {
-    console.log(`\n[RUN] ${title}`);
-    writeLog(`\n${title}\n${JSON.stringify([executable, ...args])}\n`);
-    return new Promise((resolve, reject) => {
-      const child = spawn(executable, args, { cwd, env, windowsHide: true, shell: false });
-      let output = '';
-      let tail = '';
-      child.stdout.on('data', (data) => {
-        output += data.toString();
-        tail = (tail + data).slice(-12_000);
-        writeLog(data.toString());
-      });
-      child.stderr.on('data', (data) => {
-        tail = (tail + data).slice(-12_000);
-        writeLog(data.toString());
-      });
-      child.on('error', reject);
-      child.on('close', (code) => {
-        if (!allowedCodes.includes(code)) {
-          reject(new Error(`${title} failed (exit ${code}).\n${tail.trim().split(/\r?\n/).slice(-18).join('\n')}\nFull log: ${log}`));
-        } else {
-          console.log(`[OK] ${title}`);
-          resolve(output);
-        }
-      });
-    });
-  }
+  const ui = terminal();
+  ui.heading('Prepare workspace');
+  ui.line(`  Setup log: ${log}`);
+  const command = commandRunner({ root, env, log, ui });
+  let step = 0;
+  const run = (title, ...args) => command(`${++step}/11  ${title}`, ...args);
 
   try {
+    assertRuntimeNotRemoved(root);
     const cache = env.PLAYWRIGHT_BROWSERS_PATH;
     if (cache !== '0') {
       if (!path.isAbsolute(cache)) throw new Error('PLAYWRIGHT_BROWSERS_PATH must be an absolute folder or 0.');
@@ -60,17 +40,19 @@ async function main() {
       fs.writeFileSync(probe, '', { flag: 'wx' });
       fs.unlinkSync(probe);
     }
-    console.log(`Browser storage: ${cache === '0' ? 'project-local (explicit override)' : cache}`);
+    ui.line(`  Browser storage: ${cache === '0' ? 'project-local (explicit override)' : cache}`);
+    ui.line();
     const npm = (title, args, options) => run(title, process.execPath, [values.npm, ...args], options);
     await npm('Install locked app dependencies', ['ci', '--no-audit', '--no-fund']);
     await npm('Install the Electron runtime', ['exec', '--', 'install-electron']);
-    await run('Check the Electron executable', process.execPath, [path.join(root, 'node_modules/electron/cli.js'), '--version']);
+    await run('Check the Electron executable', electronExecutable(root), ['--version']);
     await npm('Install the recorder browser', ['run', 'install-browsers']);
 
     const example = path.join(root, 'examples', 'browser-walkthrough');
     const python = path.join(example, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
     if (!fs.existsSync(python))
       await run('Create the example Python environment', values.python, ['-m', 'venv', path.join(example, '.venv')]);
+    else ui.label('REUSE', `${++step}/11  Existing example Python environment`);
     const version = await run('Check the example Python', python, ['-c', 'import sys; print("%d.%d" % sys.version_info[:2])']);
     if (version.trim() !== '3.13')
       throw new Error(`The existing example .venv uses Python ${version.trim()}. Rename that .venv if you want setup to create one with Python 3.13. Existing environments are not deleted.`);
@@ -87,17 +69,17 @@ async function main() {
       audit = JSON.parse(await npm('Check dependency advisories', ['audit', '--json'], { allowedCodes: [0, 1] }));
       if (!audit.metadata?.vulnerabilities) throw new Error('The registry returned no audit summary.');
     } catch (error) {
-      console.log(`[WARN] Dependency audit could not be completed. See ${log}`);
+      ui.label('WARN', `Dependency audit could not be completed. See ${log}`, '33');
       writeLog(`Audit unavailable: ${error.message}\n`);
       audit = null;
     }
     if (audit) {
       const count = audit.metadata.vulnerabilities;
-      console.log(`Advisories: ${count.moderate} moderate, ${count.high} high, ${count.critical} critical.`);
+      ui.line(`  Advisories: ${count.moderate} moderate, ${count.high} high, ${count.critical} critical.`);
       if (count.high || count.critical)
         throw new Error('High or critical dependency advisories need review. Update to a reviewed repository revision or report this setup log.');
       if (count.total)
-        console.log('[WARN] Dependency findings remain. See docs/dependency-review.md; setup does not force dependency upgrades.');
+        ui.label('WARN', 'Dependency findings remain. See docs/dependency-review.md; setup does not force dependency upgrades.', '33');
     }
     const report = {
       completedAt: new Date().toISOString(), node: process.versions.node, python,
@@ -105,9 +87,12 @@ async function main() {
       advisories: audit?.metadata.vulnerabilities || 'unavailable', log,
     };
     fs.writeFileSync(path.join(logDirectory, id + '.json'), JSON.stringify(report, null, 2) + '\n');
-    console.log('\nSetup complete. The bundled example is ready to open in Keywright.');
-    console.log('To start later, open a terminal in this folder and run: npm.cmd start');
-    console.log('If system tools were installed, use a new terminal so it receives their updated PATH.');
+    ui.line();
+    ui.label('READY', 'Setup complete. The bundled example is ready to open in Keywright.', '32');
+    ui.line('  Open examples/browser-walkthrough, then choose Testing > Run all.');
+    ui.line('  Start later: npm.cmd start');
+    ui.line('  If system tools were installed, use a new terminal for their updated PATH.');
+    ui.line();
   } catch (error) {
     writeLog(`\nSETUP FAILED: ${error.stack || error.message}\n`);
     throw error;
@@ -115,6 +100,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`[ERROR] ${error.message}`);
-  process.exitCode = 1;
+  if (error.name !== 'AbortError') terminal(process.stderr).label('ERROR', error.message, '31');
+  process.exitCode = error.exitCode || 1;
 });

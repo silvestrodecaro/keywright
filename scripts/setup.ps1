@@ -9,6 +9,11 @@ $env:PYTHONUTF8 = '1'
 $setupRoot = Split-Path -Parent $PSScriptRoot
 $transcriptStarted = $false
 
+function Write-SetupStatus([string]$Status, [string]$Message, [ConsoleColor]$Color = 'Green') {
+    Write-Host ("  {0,-6} " -f $Status) -ForegroundColor $Color -NoNewline
+    Write-Host $Message
+}
+
 function Find-Application([string]$Name) {
     $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { return $command.Source }
@@ -94,9 +99,18 @@ try {
     $bootstrapLog = Join-Path $logDirectory ("bootstrap-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + "-$PID.log")
     Start-Transcript -LiteralPath $bootstrapLog | Out-Null
     $transcriptStarted = $true
-    Write-Host 'Keywright setup'
+    $appVersion = (Get-Content -LiteralPath (Join-Path $setupRoot 'package.json') -Raw | ConvertFrom-Json).version
+    Write-Host ''
+    Write-Host '  | /   KEYWRIGHT' -ForegroundColor Cyan -NoNewline
+    Write-Host "  $appVersion"
+    Write-Host '  |<    Robot Framework + Browser'
+    Write-Host '  | \   Setup for Windows' -ForegroundColor DarkGray
+    Write-Host ''
     Write-Host "Folder: $setupRoot"
     Write-Host "Prerequisite log: $bootstrapLog"
+    Write-Host ''
+    Write-Host '  Check prerequisites' -ForegroundColor White
+    Write-Host ''
     $node = Find-Node
     if (-not $node) {
         $existingNode = Probe-Command (Find-Application 'node') @('--version')
@@ -105,21 +119,21 @@ try {
         $node = Find-Node
         if (-not $node) { throw 'Node.js is still unavailable. Open a new terminal and run setup.bat again.' }
     }
-    Write-Host "[OK] Node.js $($node.Version)"
+    Write-SetupStatus 'OK' "Node.js $($node.Version)"
     $npm = Find-Application 'npm.cmd'
     $npmVersion = Probe-Command $npm @('--version')
     if (-not $npmVersion) { throw 'npm is missing. Repair the Node.js installation with npm enabled, then retry.' }
-    Write-Host "[OK] npm $npmVersion"
+    Write-SetupStatus 'OK' "npm $npmVersion"
     $python = Find-Python
     if (-not $python) {
         Install-Prerequisite 'Python 3.13' 'Python.Python.3.13' 'https://www.python.org/downloads/windows/'
         $python = Find-Python
         if (-not $python) { throw 'Python 3.13 is still unavailable. Open a new terminal and run setup.bat again.' }
     }
-    Write-Host "[OK] $($python.Version)"
+    Write-SetupStatus 'OK' $python.Version
     $git = Probe-Command (Find-Application 'git') @('--version')
-    if ($git) { Write-Host "[OK] $git" }
-    else { Write-Host '[INFO] Git is optional. Project Git initialization is unavailable until Git is installed.' }
+    if ($git) { Write-SetupStatus 'OK' $git }
+    else { Write-SetupStatus 'INFO' 'Git is optional. Project Git initialization is unavailable until Git is installed.' 'Cyan' }
     if ($CheckOnly) {
         Write-Host 'Prerequisite checks passed. No dependencies were installed.'
         exit 0
@@ -141,7 +155,7 @@ try {
     }
     exit 0
 } catch {
-    Write-Host "[ERROR] $($_.Exception.Message)"
+    Write-SetupStatus 'ERROR' $_.Exception.Message 'Red'
     exit 1
 } finally {
     if ($transcriptStarted) { Stop-Transcript | Out-Null }

@@ -49,7 +49,6 @@ executables out of `.venv` makes their paths independent of the project director
 | Editor services | [keywordIndex.js](../src/main/keywordIndex.js), [languageWorker.js](../src/main/languageWorker.js), [formatter.js](../src/main/formatter.js), [projectVariables.js](../src/main/projectVariables.js) | Completion data, persistent diagnostics worker, formatting and static variable index |
 | Search | [projectSearch.js](../src/main/projectSearch.js), [searchCore.js](../src/renderer/searchCore.js), [search.js](../src/renderer/search.js) | Disk traversal, matching/replacement and open-buffer coordination |
 | Artifacts | [traceServer.js](../src/main/traceServer.js), [runHistory.js](../src/main/runHistory.js) | Local output serving and bounded run summaries |
-| Updates | [updater.js](../src/main/updater.js) | GitHub update state, requested download and installation |
 | UI shell | [app.js](../src/renderer/app.js), [index.html](../src/renderer/index.html), [styles.css](../src/renderer/styles.css) | Welcome/setup, project tabs, file saves, shared structure and visual tokens |
 | Workspace saves | [workspaceFiles.js](../src/renderer/workspaceFiles.js) | Per-file save queue, editor snapshots, disk revision conflicts and shared run preparation |
 | Keyboard navigation | [treeNavigation.js](../src/renderer/treeNavigation.js) | Visible-tree navigation, focus restoration and tab-group keyboard behavior |
@@ -240,7 +239,13 @@ patched dependency directly.
 
 Keywright currently runs from source. Packaging and publishing commands are not
 provided; Electron Builder is excluded from the dependency tree while installer
-distribution is deferred. Source runs disable `electron-updater`.
+distribution is deferred. The welcome screen provides manual source update
+instructions; the app does not check releases, download updates or modify its checkout.
+
+`scripts/start.js` checks for the installed Electron executable, builds the editor
+and launches the app with the requested project arguments. It shares terminal
+progress and command logging with setup. Setup and start stop if an installed
+runtime has lost its executable; start never downloads a missing runtime.
 
 The repository's CI verifies the dependency audit, component and integration tests,
 the guided Windows setup, the editor build and desktop UI flows. See

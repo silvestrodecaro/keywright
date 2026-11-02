@@ -15,7 +15,7 @@ function fixture({ node = '24.16.0', python = '3.13.14' } = {}) {
   const bin = path.join(root, 'tools');
   fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
   fs.mkdirSync(bin);
-  for (const name of ['setup.bat', 'scripts/setup.ps1']) {
+  for (const name of ['setup.bat', 'scripts/setup.ps1', 'package.json']) {
     if (fs.existsSync(path.join(repository, name))) fs.copyFileSync(path.join(repository, name), path.join(root, name));
   }
   const command = (name, text) => fs.writeFileSync(path.join(bin, name + '.cmd'), '@echo off\r\n' + text + '\r\n');
@@ -101,7 +101,7 @@ test('a confirmed WinGet installation failure is reported and stops setup', { sk
 
 test('a dependency installation failure preserves its diagnostic and stops later stages', () => {
   const root = tempDir('setup-failed-install');
-  for (const name of ['scripts/setup.js', 'src/main/browserEnvironment.js', 'package.json', 'package-lock.json']) {
+  for (const name of ['scripts/setup.js', 'scripts/terminal.js', 'scripts/command.js', 'scripts/electron-runtime.js', 'src/main/browserEnvironment.js', 'package.json', 'package-lock.json']) {
     const source = path.join(repository, name);
     if (!fs.existsSync(source)) continue;
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
@@ -118,4 +118,27 @@ test('a dependency installation failure preserves its diagnostic and stops later
   assert.ok(!fs.existsSync(path.join(root, 'examples/browser-walkthrough/.venv')));
   const logs = fs.readdirSync(path.join(root, 'out/setup'));
   assert.ok(logs.some((name) => fs.readFileSync(path.join(root, 'out/setup', name), 'utf8').includes('Registry unavailable for setup test')));
+});
+
+test('setup stops before reinstalling a runtime whose installed executable was removed', { skip: !windows }, () => {
+  const root = tempDir('setup-removed-runtime');
+  const marker = path.join(root, 'npm-called');
+  for (const name of fs.readdirSync(path.join(repository, 'scripts'))) {
+    fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
+    fs.copyFileSync(path.join(repository, 'scripts', name), path.join(root, 'scripts', name));
+  }
+  fs.mkdirSync(path.join(root, 'src/main'), { recursive: true });
+  fs.copyFileSync(path.join(repository, 'src/main/browserEnvironment.js'), path.join(root, 'src/main/browserEnvironment.js'));
+  for (const name of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(repository, name), path.join(root, name));
+  const dist = path.join(root, 'node_modules/electron/dist');
+  fs.mkdirSync(dist, { recursive: true });
+  fs.writeFileSync(path.join(dist, 'version'), '45.2.1');
+  const npm = path.join(root, 'fake-npm.js');
+  fs.writeFileSync(npm, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'called'); process.exit(17);`);
+  const result = spawnSync(process.execPath, [path.join(root, 'scripts/setup.js'), '--python', process.execPath, '--npm', npm], {
+    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: path.join(root, 'browsers') }, encoding: 'utf8', timeout: 15_000,
+  });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /quarantin|blocked/i);
+  assert.ok(!fs.existsSync(marker), 'setup must not download the removed runtime again');
 });

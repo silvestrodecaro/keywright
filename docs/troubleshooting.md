@@ -74,6 +74,45 @@ failures, inspect the error for network, proxy or certificate details before
 retrying. Current dependency audit findings are recorded in the
 [dependency review](dependency-review.md).
 
+## Antivirus detects electron.exe
+
+If Defender or another security product reports a threat in
+`node_modules/electron/dist/electron.exe`, stop Keywright and keep the file
+quarantined. On a managed work computer, ask IT/security to review the detection.
+Do not add an exclusion, restore the file or disable protection to get the app running.
+
+The npm audit checks JavaScript dependency advisories. A clean audit does not
+classify the Electron executable or resolve an antivirus alert.
+
+If the executable is still available, collect these details without running it:
+
+```powershell
+Get-FileHash .\node_modules\electron\dist\electron.exe -Algorithm SHA256
+Get-AuthenticodeSignature .\node_modules\electron\dist\electron.exe | Select-Object Status, StatusMessage, SignerCertificate
+(Get-Content .\node_modules\electron\package.json | ConvertFrom-Json).version
+```
+
+If it is quarantined, the first two commands report a missing file. Leave it in
+quarantine; IT can obtain its hash from the Defender incident details.
+
+The local Windows x64 review on 2026-11-02 compared Electron 45.2.1 with its
+[official archive checksums](https://github.com/electron/electron/releases/download/v45.2.1/SHASUMS256.txt).
+The installed executable matched the copy inside the verified archive. Its SHA-256 was:
+
+```text
+32e357fc856feadd1e51531f47811d2621483e5a58815eb4999154d7c9baea3b
+```
+
+That local copy returned `NotSigned` from the Authenticode check. These observations
+establish the provenance of the reviewed copy; they do not identify a quarantined
+file on another computer or establish that an antivirus detection is incorrect.
+For a suspected false positive, IT can use
+[Microsoft's file analysis submission process](https://www.microsoft.com/en-us/wdsi/filesubmission).
+
+Start never downloads a missing Electron runtime. Setup also stops before
+reinstallation if it finds an existing runtime's version file but no executable.
+Resolve the security alert with IT before attempting another installation.
+
 ## Python or Node.js is not detected during project creation
 
 Keywright probes the tools available on its process `PATH`. On Windows it tries

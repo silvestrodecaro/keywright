@@ -475,9 +475,18 @@ editor and the item under the cursor.
 
 ## Updates and local settings
 
-Copies run from source do not use the automatic updater. Installer releases are
-currently on hold; update a source checkout with Git and follow the development
-setup after dependency changes. The updater code applies to packaged builds only.
+On the welcome screen, expand **Update Keywright** for source update instructions.
+For a Git clone, close Keywright and run these commands in its source folder:
+
+```powershell
+git pull --ff-only
+.\setup.bat
+```
+
+Git stops if it cannot update by fast-forward; review local changes before
+continuing. For a ZIP download, extract the latest archive into a new folder and
+run `setup.bat` there. Keep Robot test projects in their existing folders.
+The app does not download updates or change its source files.
 
 Recent projects, sidebar
 width, breakpoints, watches and run options are stored in Electron's user-data

@@ -720,48 +720,7 @@
   window.addEventListener('keywright:show-testing', () => showSidebar('testing'));
   window.addEventListener('keywright:status', (event) => setEditorStatus(event.detail.text));
 
-  // Updates from GitHub Releases: a banner offers to download, then to restart and install.
-  let updateState = { status: 'idle' };
-  let updatePostponed = null; // "status:version" the user closed the banner for
-
-  function renderUpdate(state) {
-    updateState = state;
-    $('#app-version').textContent = state.current ? `Version ${state.current}` : '';
-    $('#update-status').textContent = {
-      checking: 'Checking…',
-      latest: 'You have the latest version.',
-      error: `Could not check for updates: ${state.error}`,
-      disabled: state.reason,
-      available: `Version ${state.version} is available.`,
-      downloading: `Downloading ${state.version}… ${state.percent || 0}%`,
-      downloaded: `Version ${state.version} is ready to install.`,
-    }[state.status] || '';
-    $('#update-check').disabled = ['checking', 'downloading', 'downloaded', 'disabled'].includes(state.status);
-    const shown = ['available', 'downloading', 'downloaded'].includes(state.status) && updatePostponed !== `${state.status}:${state.version}`;
-    $('#update-banner').hidden = !shown;
-    if (!shown)
-      return;
-    $('#update-text').textContent = state.status === 'available'
-      ? `Keywright ${state.version} is available (you have ${state.current}).${state.notes ? ` ${state.notes}` : ''}`
-      : state.status === 'downloading' ? `Downloading Keywright ${state.version}… ${state.percent || 0}%`
-        : `Keywright ${state.version} has been downloaded.`;
-    $('#update-action').hidden = state.status === 'downloading';
-    $('#update-action').textContent = state.status === 'available' ? 'Download' : 'Restart and update';
-  }
-
-  $('#update-action').addEventListener('click', async () => {
-    if (updateState.status === 'available')
-      api.downloadUpdate();
-    else if (updateState.status === 'downloaded' && await resolveUnsaved(editor.dirtyPaths()))
-      api.installUpdate();
-  });
-  $('#update-later').addEventListener('click', () => {
-    updatePostponed = `${updateState.status}:${updateState.version}`;
-    $('#update-banner').hidden = true;
-  });
-  $('#update-check').addEventListener('click', () => api.checkForUpdates());
-  api.onUpdateState(renderUpdate);
-  api.updateState().then(renderUpdate);
+  api.appVersion().then((version) => { $('#app-version').textContent = `Version ${version}`; });
 
   // Format Document needs Robocop in the project's virtual environment: offer to install it.
   window.addEventListener('keywright:format-failed', (event) => {

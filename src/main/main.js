@@ -21,7 +21,6 @@ const { projectVariables } = require('./projectVariables');
 const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
 const { RunHistory } = require('./runHistory');
-const { Updater } = require('./updater');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -612,15 +611,9 @@ app.whenReady().then(async () => {
   }
   createWindow();
   setWindowTitle();
-  updater.init();
 });
 
-// Updates (GitHub Releases): state pushed to the renderer, actions on request.
-const updater = new Updater((state) => send('update:state', state));
-ipcMain.handle('update:state', () => updater.state);
-ipcMain.handle('update:check', () => updater.check());
-ipcMain.handle('update:download', () => updater.download());
-ipcMain.handle('update:install', () => updater.install());
+ipcMain.handle('app:version', () => app.getVersion());
 
 app.on('window-all-closed', async () => {
   runner.stop();

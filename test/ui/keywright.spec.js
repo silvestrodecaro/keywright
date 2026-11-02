@@ -26,8 +26,16 @@ async function runAll(page, passed, failed) {
   await expect(page.locator('#tests-run-all')).toBeEnabled();
 }
 
-test('opens the example from a clean profile and runs both tests through the UI', async ({ desktop }) => {
+test('opens the example from a clean profile and runs both tests through the UI', async ({ desktop }, testInfo) => {
   const { page } = desktop;
+  const updates = page.locator('#source-update-help');
+  await updates.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(updates.locator('pre code')).toContainText('git pull');
+  await expect(updates.locator('pre code')).toContainText('.\\setup.bat');
+  await expect(updates).toContainText('ZIP');
+  await page.screenshot({ path: testInfo.outputPath('source-update-help.png') });
+  await updates.locator('summary').click();
   await openExample(desktop);
   await runAll(page, 2, 0);
   await expect(page.locator('#test-tree .is-test .status-pass')).toHaveCount(2);

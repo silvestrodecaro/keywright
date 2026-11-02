@@ -29,6 +29,10 @@ removed from `package.json` and the lockfile. The packaging configuration,
 `pack`, `dist` and `release` commands, and installer metadata script were removed
 with them. The source app, renderer build and tests do not use these tools.
 
+The obsolete installer update client, `electron-updater`, has also been removed.
+The welcome screen provides source update instructions for Git clones and ZIP
+downloads. No updater service runs in the app.
+
 The audit runs on the full remaining tree. No advisories are suppressed and no
 dependency overrides were added for minimatch. Reintroducing packaging requires
 a new dependency review and checks of the packaged app, signing and update path.
@@ -51,11 +55,11 @@ the replacement. See [Architecture](architecture.md#build-and-packaging).
 
 The Windows checks on 2026-11-02 passed:
 
-- A clean `npm ci` installed 37 packages; the complete audit and
+- A clean `npm ci` installed 24 packages; the complete audit and
   `npm audit --omit=dev` both reported zero findings.
 - `setup.bat --non-interactive --no-pause` prepared the example, built the editor
   and ran its two browser tests successfully.
-- `npm test` passed all 140 tests with no skips, including the recorder integration
+- `npm test` passed all 145 tests with no skips, including the recorder integration
   and the editor sanitizer check.
 - `npm run test:ui` passed all three desktop tests using the example environment
   prepared by setup.

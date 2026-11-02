@@ -79,6 +79,8 @@ Setup installs the locked app dependencies, Electron and Chromium, prepares the
 included example's Python environment, builds the editor and runs its two browser
 tests. It also reports dependency audit findings. The full output is saved under
 `out/setup/`; a failed step stops setup and shows the error and log path.
+If antivirus flags Electron, stop and follow the
+[antivirus troubleshooting steps](docs/troubleshooting.md#antivirus-detects-electronexe).
 
 When setup finishes, choose whether to open Keywright. To try the prepared example,
 choose **Open folder…**, select `examples/browser-walkthrough` inside the clone,
@@ -89,8 +91,10 @@ environments. Projects can stay in their chosen folders, including nested paths
 and paths containing spaces. Each Robot project still has its own Python environment.
 
 For later launches, open PowerShell in the same `keywright` folder and run
-`npm.cmd start`. After pulling changes that update dependencies, run `setup.bat`
-again. See [manual setup](CONTRIBUTING.md#development-setup) for the individual commands.
+`npm.cmd start`. Setup and start show progress and timings; launch logs are in
+`out/start/`. Expand **Update Keywright** on the welcome screen for
+[update instructions](docs/user-guide.md#updates-and-local-settings).
+See [manual setup](CONTRIBUTING.md#development-setup) for the individual commands.
 
 ## First run
 

@@ -32,7 +32,11 @@ environment described below.
 The npm install-script policy permits the reviewed `esbuild@0.28.2` hook.
 Review the policy when changing that version or adding another install script.
 
-`npm.cmd start` builds the editor bundle before launching Electron. To open a test
+`npm.cmd start` checks the installed runtime, builds the editor and launches
+Electron. Detailed command output is saved under `out/start/`. If the executable
+is missing, start stops without downloading it; see the
+[antivirus recovery guidance](docs/troubleshooting.md#antivirus-detects-electronexe).
+To open a test
 project directly, use `npm.cmd start -- "C:\Projects\my-web-tests"`. The test project
 can have a different Python environment from the repository's integration-test
 environment.
@@ -169,7 +173,7 @@ integration contracts. The main areas are:
 | `src/renderer/` | UI panels, styles and shared browser/Node-compatible logic |
 | `src/renderer/editor/` | Monaco providers and Robot analysis helpers |
 | `test/` | Node tests, local fixtures and Python/Browser integration checks |
-| `scripts/` | Renderer build and guided Windows setup |
+| `scripts/` | Renderer build, Windows setup, launch and terminal progress |
 
 Keep public documentation and UI copy in English. Use real UI labels, explain
 failure recovery and keep examples aligned with the implementation. Update the
