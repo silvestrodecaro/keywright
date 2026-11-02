@@ -1,12 +1,13 @@
 'use strict';
 
-// History of test runs, kept in the project's results folder (.rfide-history.json):
+// History of test runs, kept in the project's results folder (.keywright-history.json):
 // for each run its options and the status and time of every test that ran.
 
 const fs = require('fs');
 const path = require('path');
+const { LEGACY_HISTORY_FILE } = require('./compatibility');
 
-const FILE_NAME = '.rfide-history.json';
+const FILE_NAME = '.keywright-history.json';
 const MAX_RUNS = 30;
 const MAX_MESSAGE = 300;
 
@@ -70,7 +71,9 @@ class RunHistory {
   /** Saved runs, newest first. */
   list(outputDir) {
     try {
-      const runs = JSON.parse(fs.readFileSync(path.join(outputDir, FILE_NAME), 'utf8'));
+      const modern = path.join(outputDir, FILE_NAME);
+      const file = fs.existsSync(modern) ? modern : path.join(outputDir, LEGACY_HISTORY_FILE);
+      const runs = JSON.parse(fs.readFileSync(file, 'utf8'));
       return Array.isArray(runs) ? runs : [];
     } catch {
       return [];

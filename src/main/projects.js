@@ -6,6 +6,7 @@ const { resolveInside } = require('./pathBoundary');
 const { createHash, randomUUID } = require('crypto');
 const { spawn } = require('child_process');
 const { projectFiles, CONFIG_FILE, DEFAULT_CONFIG } = require('./projectTemplate');
+const { LEGACY_CONFIG_FILE } = require('./compatibility');
 
 const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]*$/;
 const IS_WINDOWS = process.platform === 'win32';
@@ -198,7 +199,7 @@ async function createProject(request, callbacks = {}) {
 }
 
 /**
- * Loads the project at `root`. Any folder can be opened; rfide.json is optional.
+ * Loads the project at `root`. Any folder can be opened; keywright.json is optional.
  * @returns {{ root: string, name: string, config: typeof DEFAULT_CONFIG, python: string | null }}
  */
 function loadProject(root) {
@@ -206,12 +207,13 @@ function loadProject(root) {
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
     throw new Error(`Folder not found: ${resolved}`);
   let config = { ...DEFAULT_CONFIG };
-  const configPath = path.join(resolved, CONFIG_FILE);
+  const configFile = fs.existsSync(path.join(resolved, CONFIG_FILE)) ? CONFIG_FILE : LEGACY_CONFIG_FILE;
+  const configPath = path.join(resolved, configFile);
   if (fs.existsSync(configPath)) {
     try {
       config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf8')) };
     } catch (error) {
-      throw new Error(`Invalid ${CONFIG_FILE}: ${error.message}`);
+      throw new Error(`Invalid ${configFile}: ${error.message}`);
     }
   }
   const pythonPath = config.python ? path.resolve(resolved, config.python) : venvPython(resolved);

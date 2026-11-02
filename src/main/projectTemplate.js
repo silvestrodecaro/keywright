@@ -2,7 +2,7 @@
 
 // Files written into a newly created Robot Framework project.
 
-const CONFIG_FILE = 'rfide.json';
+const CONFIG_FILE = 'keywright.json';
 
 const DEFAULT_CONFIG = {
   version: 1,

@@ -63,7 +63,7 @@ monaco.languages.setLanguageConfiguration(LANGUAGE, {
 // Monaco measures the font when an editor is created; IBM Plex Mono may still be loading then.
 document.fonts.ready.then(() => monaco.editor.remeasureFonts());
 
-monaco.editor.defineTheme('rfide-dark', {
+monaco.editor.defineTheme('keywright-dark', {
   base: 'vs-dark',
   inherit: true,
   rules: [
@@ -289,7 +289,7 @@ async function readLines(path) {
   const model = monaco.editor.getModel(uriFor(path));
   if (model)
     return model.getLinesContent();
-  const file = await window.rfide.readProjectFile(path).catch(() => null);
+  const file = await window.keywright.readProjectFile(path).catch(() => null);
   return file && file.content !== null ? file.content.split(/\r?\n/) : null;
 }
 
@@ -297,7 +297,7 @@ async function readLines(path) {
 async function ensureModel(path) {
   if (monaco.editor.getModel(uriFor(path)))
     return;
-  const file = await window.rfide.readProjectFile(path).catch(() => null);
+  const file = await window.keywright.readProjectFile(path).catch(() => null);
   if (file && file.content !== null && !monaco.editor.getModel(uriFor(path)))
     monaco.editor.createModel(file.content, languageForPath(path), uriFor(path));
 }
@@ -434,7 +434,7 @@ monaco.languages.registerHoverProvider(LANGUAGE, {
 async function projectRobotFiles() {
   const flatten = (nodes) => nodes.flatMap((node) => (node.type === 'dir' ? flatten(node.children || [])
     : /\.(robot|resource)$/i.test(node.path) ? [node.path] : []));
-  return flatten(await window.rfide.projectTree());
+  return flatten(await window.keywright.projectTree());
 }
 
 /** The files that import `target` (directly or through other resources), `target` included. */
@@ -632,10 +632,10 @@ async function applyRename(edits) {
       }
       continue;
     }
-    const file = await window.rfide.readProjectFile(path);
+    const file = await window.keywright.readProjectFile(path);
     const eol = file.content.includes('\r\n') ? '\r\n' : '\n';
     const content = applyEdits(file.content.split(/\r?\n/), list).join(eol);
-    const saved = await window.rfide.writeProjectFile(path, content, file.revision);
+    const saved = await window.keywright.writeProjectFile(path, content, file.revision);
     if (!saved.ok)
       throw new Error(`${path} changed on disk. Reload the file and try renaming again.`);
     const preview = monaco.editor.getModel(uriFor(path)); // definition preview of a closed file
@@ -674,7 +674,7 @@ monaco.languages.registerRenameProvider(LANGUAGE, {
         text += `, ${written} saved`;
       if (workspace.length)
         text += '; open files have unsaved changes';
-      window.dispatchEvent(new CustomEvent('rfide:status', { detail: { text } }));
+      window.dispatchEvent(new CustomEvent('keywright:status', { detail: { text } }));
       return { edits: workspace };
     } catch (error) {
       return { edits: [], rejectReason: error.message };
@@ -734,14 +734,14 @@ let projectVariablesPromise = null;
 
 function projectVariables() {
   if (!projectVariablesPromise) {
-    projectVariablesPromise = window.rfide.projectVariables()
+    projectVariablesPromise = window.keywright.projectVariables()
       .then((r) => ({ runtime: new Set(r.runtime), suite: new Set(r.suite), dynamicSuite: r.dynamicSuite }))
       .catch(() => null);
   }
   return projectVariablesPromise;
 }
 
-for (const event of ['rfide:files-changed', 'rfide:file-saved', 'rfide:project-opened']) {
+for (const event of ['keywright:files-changed', 'keywright:file-saved', 'keywright:project-opened']) {
   window.addEventListener(event, () => {
     projectVariablesPromise = null;
     RFEditor.revalidate();
@@ -819,11 +819,11 @@ let lintUnavailableNotified = false;
 async function lintMarkers(path, text) {
   if (!lintEnabled)
     return [];
-  const result = await window.rfide.lintFile(path, text);
+  const result = await window.keywright.lintFile(path, text);
   if (!result.available) {
     if (!lintUnavailableNotified) {
       lintUnavailableNotified = true;
-      window.dispatchEvent(new CustomEvent('rfide:lint-unavailable'));
+      window.dispatchEvent(new CustomEvent('keywright:lint-unavailable'));
     }
     return [];
   }
@@ -847,7 +847,7 @@ async function validate(model, path) {
   const version = model.getVersionId();
   const text = model.getValue();
   const [result, variables, lint] = await Promise.all([
-    window.rfide.checkFile(path, text),
+    window.keywright.checkFile(path, text),
     variableMarkers(model, path).catch(() => []),
     lintMarkers(path, text).catch(() => []),
   ]);
@@ -876,7 +876,7 @@ async function fileMarkers(path, text) {
   const lines = text.split(/\r?\n/);
   const document = { getValue: () => text, getLinesContent: () => lines };
   const [result, variables, lint] = await Promise.all([
-    window.rfide.checkFile(path, text),
+    window.keywright.checkFile(path, text),
     variableMarkers(document, path).catch(() => []),
     lintMarkers(path, text).catch(() => []),
   ]);
@@ -904,15 +904,15 @@ monaco.languages.registerDocumentFormattingEditProvider(LANGUAGE, {
   async provideDocumentFormattingEdits(model) {
     const text = model.getValue();
     const version = model.getVersionId();
-    const result = await window.rfide.formatFile(modelPath(model), text);
+    const result = await window.keywright.formatFile(modelPath(model), text);
     if (!result.ok) {
-      window.dispatchEvent(new CustomEvent('rfide:format-failed', { detail: result }));
+      window.dispatchEvent(new CustomEvent('keywright:format-failed', { detail: result }));
       return [];
     }
     if (model.isDisposed() || model.getVersionId() !== version)
       return []; // edited while formatting
     const changed = result.formatted !== text;
-    window.dispatchEvent(new CustomEvent('rfide:status', { detail: { text: changed ? 'Formatted with Robocop' : 'Already formatted' } }));
+    window.dispatchEvent(new CustomEvent('keywright:status', { detail: { text: changed ? 'Formatted with Robocop' : 'Already formatted' } }));
     return changed ? [{ range: model.getFullModelRange(), text: result.formatted }] : [];
   },
 });
@@ -942,25 +942,25 @@ function quickFix(title, model, marker, edits, preferred = false) {
 }
 
 // Adds a keyword to a file (open: as an unsaved edit; closed: saved), then shows it.
-monaco.editor.registerCommand('rfide.createKeyword', async (_accessor, { path, stub }) => {
+monaco.editor.registerCommand('keywright.createKeyword', async (_accessor, { path, stub }) => {
   const model = RFEditor.has(path) ? monaco.editor.getModel(uriFor(path)) : null;
   let insertion;
   if (model) {
     insertion = keywordInsertion(model.getLinesContent(), stub);
     model.pushEditOperations([], [insertionEdit(model, insertion)], () => null);
   } else {
-    const file = await window.rfide.readProjectFile(path);
+    const file = await window.keywright.readProjectFile(path);
     const eol = file.content.includes('\r\n') ? '\r\n' : '\n';
     const lines = file.content.split(/\r?\n/);
     insertion = keywordInsertion(lines, stub);
     const content = applyInsertion(lines, insertion).join(eol);
-    const saved = await window.rfide.writeProjectFile(path, content, file.revision);
+    const saved = await window.keywright.writeProjectFile(path, content, file.revision);
     if (!saved.ok)
       throw new Error(`${path} changed on disk. Reload the file and create the keyword again.`);
     monaco.editor.getModel(uriFor(path))?.setValue(content); // definition preview
   }
-  window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path, line: insertion.keywordLine + stub.length - 1, column: 5 } }));
-  window.dispatchEvent(new CustomEvent('rfide:status', { detail: { text: `Created keyword '${stub[0]}' in ${path}` } }));
+  window.dispatchEvent(new CustomEvent('keywright:open-file', { detail: { path, line: insertion.keywordLine + stub.length - 1, column: 5 } }));
+  window.dispatchEvent(new CustomEvent('keywright:status', { detail: { text: `Created keyword '${stub[0]}' in ${path}` } }));
 });
 
 const BDD = /^(given|when|then|and|but)\s+/i;
@@ -978,7 +978,7 @@ async function keywordFixes(model, marker, name) {
   }
   const stub = keywordStub(base, callArguments(lines, marker.startLineNumber, marker.startColumn - 1));
   const create = (target, title) => ({ title, kind: 'quickfix', diagnostics: [marker],
-    command: { id: 'rfide.createKeyword', title, arguments: [{ path: target, stub }] } });
+    command: { id: 'keywright.createKeyword', title, arguments: [{ path: target, stub }] } });
   actions.push(create(path, `Create keyword '${base}' in this file`));
   // Resource files the file imports: the new keyword is found there too.
   for (const item of parseFile(lines).imports.filter((i) => i.type === 'resource')) {
@@ -1106,7 +1106,7 @@ const RFEditor = (() => {
   function mount(container) {
     editor = monaco.editor.create(container, {
       model: null,
-      theme: 'rfide-dark',
+      theme: 'keywright-dark',
       automaticLayout: true,
       fontFamily: '"IBM Plex Mono", "Cascadia Code", Consolas, monospace',
       fontSize: 13,
@@ -1201,7 +1201,7 @@ const RFEditor = (() => {
       if (files.has(path)) {
         markers = monaco.editor.getModelMarkers({ resource: files.get(path).model.uri });
       } else {
-        const file = await window.rfide.readProjectFile(path).catch(() => null);
+        const file = await window.keywright.readProjectFile(path).catch(() => null);
         if (!file || file.content === null)
           continue;
         markers = await fileMarkers(path, file.content);
@@ -1450,7 +1450,7 @@ const RFEditor = (() => {
     node.className = 'breakpoint-condition';
     node.append(Object.assign(document.createElement('span'), { textContent: `Line ${line}` }), input);
     conditionWidget = {
-      getId: () => 'rfide.breakpointCondition',
+      getId: () => 'keywright.breakpointCondition',
       getDomNode: () => node,
       getPosition: () => ({ position: { lineNumber: line, column: 1 }, preference: [monaco.editor.ContentWidgetPositionPreference.BELOW] }),
     };
@@ -1559,7 +1559,7 @@ const RFEditor = (() => {
 
   function mountRunGlyphs() {
     glyphs = editor.createDecorationsCollection();
-    robotFileKey = editor.createContextKey('rfideRobotFile', false);
+    robotFileKey = editor.createContextKey('keywrightRobotFile', false);
     editor.onMouseDown((event) => {
       if (event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !event.event.leftButton)
         return;
@@ -1579,7 +1579,7 @@ const RFEditor = (() => {
         editBreakpointCondition(event.target.position.lineNumber);
     });
     editor.addAction({
-      id: 'rfide.conditionalBreakpoint',
+      id: 'keywright.conditionalBreakpoint',
       label: 'Add Conditional Breakpoint…',
       contextMenuGroupId: '1_debug',
       contextMenuOrder: 1,
@@ -1595,9 +1595,9 @@ const RFEditor = (() => {
         toggleBreakpoint(current, line);
     });
     editor.addAction({
-      id: 'rfide.runTestAtCursor',
+      id: 'keywright.runTestAtCursor',
       label: 'Run Test at Cursor',
-      precondition: 'rfideRobotFile',
+      precondition: 'keywrightRobotFile',
       contextMenuGroupId: '0_run',
       contextMenuOrder: 1,
       run: () => {
@@ -1607,9 +1607,9 @@ const RFEditor = (() => {
       },
     });
     editor.addAction({
-      id: 'rfide.runTestsInFile',
+      id: 'keywright.runTestsInFile',
       label: 'Run Tests in File',
-      precondition: 'rfideRobotFile',
+      precondition: 'keywrightRobotFile',
       contextMenuGroupId: '0_run',
       contextMenuOrder: 2,
       run: () => requestRun(null),
@@ -1640,7 +1640,7 @@ const RFEditor = (() => {
     const separator = before === '' || /( {2,}|\t)$/.test(before) ? '' : before.endsWith(' ') ? '   ' : '    ';
     const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
     editor.pushUndoStop();
-    editor.executeEdits('rfide-pick', [{ range, text: separator + text, forceMoveMarkers: true }]);
+    editor.executeEdits('keywright-pick', [{ range, text: separator + text, forceMoveMarkers: true }]);
     editor.pushUndoStop();
     editor.focus();
     return true;
@@ -1737,7 +1737,7 @@ const RFEditor = (() => {
 })();
 
 function uriFor(path) {
-  return monaco.Uri.from({ scheme: 'rfide', path: '/' + path });
+  return monaco.Uri.from({ scheme: 'keywright', path: '/' + path });
 }
 
 window.RFEditor = RFEditor;

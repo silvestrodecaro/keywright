@@ -8,7 +8,7 @@ function subscribe(channel, callback) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 
-contextBridge.exposeInMainWorld('rfide', {
+contextBridge.exposeInMainWorld('keywright', {
   // Projects
   recentProjects: () => ipcRenderer.invoke('projects:recent'),
   removeRecentProject: (root) => ipcRenderer.invoke('projects:remove-recent', root),

@@ -24,7 +24,7 @@ The project has this structure:
 
 ```text
 browser-walkthrough/
-  rfide.json
+  keywright.json
   requirements.txt
   resources/access.resource
   site/index.html

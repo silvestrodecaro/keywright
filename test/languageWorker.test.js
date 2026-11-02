@@ -1,6 +1,8 @@
 'use strict';
 
-// Needs the same Python as e2e.test.js (RFIDE_PYTHON or .venv); skipped otherwise.
+const { environmentValue } = require('../src/main/compatibility');
+
+// Needs the same Python as e2e.test.js (KEYWRIGHT_PYTHON or .venv); skipped otherwise.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -10,7 +12,7 @@ const { LanguageWorker } = require('../src/main/languageWorker');
 const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
-const python = process.env.RFIDE_PYTHON || [
+const python = environmentValue(process.env, 'PYTHON') || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

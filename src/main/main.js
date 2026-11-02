@@ -22,6 +22,7 @@ const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
 const { RunHistory } = require('./runHistory');
 const { Updater } = require('./updater');
+const { environmentValue } = require('./compatibility');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -30,8 +31,8 @@ let currentProject = null;
 let creatingProject = false;
 const session = new RecorderSession();
 // UI tests drive the recorded browser through the main process.
-if (process.env.RFIDE_TEST)
-  global.__rfideSession = session;
+if (environmentValue(process.env, 'TEST'))
+  global.__keywrightSession = session;
 const runner = new TestRunner();
 const keywordIndex = new KeywordIndex();
 const traceServer = new TraceServer();
@@ -495,8 +496,8 @@ ipcMain.handle('recorder:remove-step', (_event, index) => session.removeAction(i
 // Pick locator: in the Test Generator's browser while it records, otherwise in
 // a browser opened just for picking (kept open for the next picks).
 const pickerSession = new RecorderSession();
-if (process.env.RFIDE_TEST)
-  global.__rfidePicker = pickerSession;
+if (environmentValue(process.env, 'TEST'))
+  global.__keywrightPicker = pickerSession;
 let pickingSession = null;
 
 function publishPickState() {

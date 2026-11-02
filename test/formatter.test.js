@@ -1,7 +1,9 @@
 'use strict';
 
+const { environmentValue } = require('../src/main/compatibility');
+
 // Format Document with Robocop. Needs a Python with robotframework-robocop
-// (RFIDE_PYTHON or .venv); skipped otherwise.
+// (KEYWRIGHT_PYTHON or .venv); skipped otherwise.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -13,7 +15,7 @@ const { formatRobot } = require('../src/main/formatter');
 const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
-const python = process.env.RFIDE_PYTHON || [
+const python = environmentValue(process.env, 'PYTHON') || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

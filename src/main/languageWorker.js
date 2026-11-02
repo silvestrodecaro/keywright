@@ -6,7 +6,7 @@ const { HELPER, pythonEnv } = require('./pythonHelper');
 const REQUEST_TIMEOUT = 15_000;
 
 /**
- * A long-running `rfide_runner.py serve` process in the project's Python, so
+ * A long-running `keywright_runner.py serve` process in the project's Python, so
  * the editor can check unsaved content without paying Robot's import time on
  * every keystroke. Started lazily and restarted after a crash.
  */

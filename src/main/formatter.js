@@ -45,7 +45,7 @@ function configFile(root) {
 async function formatRobot(project, relative, text) {
   if (!project.python)
     return { ok: false, error: 'This project has no virtual environment (.venv) to run Robocop with.' };
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rfide-format-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'keywright-format-'));
   try {
     const file = path.join(dir, path.basename(relative));
     fs.writeFileSync(file, text);

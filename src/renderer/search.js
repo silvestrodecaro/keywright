@@ -5,7 +5,7 @@
 // replacements can be undone); the other files on disk by the main process.
 (function () {
   const $ = (selector) => document.querySelector(selector);
-  const api = window.rfide;
+  const api = window.keywright;
   const editor = window.RFEditor;
   const core = window.RFSearch;
 
@@ -83,7 +83,7 @@
   }
 
   function status(text) {
-    window.dispatchEvent(new CustomEvent('rfide:status', { detail: { text } }));
+    window.dispatchEvent(new CustomEvent('keywright:status', { detail: { text } }));
   }
 
   /**
@@ -142,7 +142,7 @@
       });
       row.append(button);
     }
-    row.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rfide:open-file',
+    row.addEventListener('click', () => window.dispatchEvent(new CustomEvent('keywright:open-file',
       { detail: { path: file.path, line: match.line, column: match.column, length: match.length } })));
     return row;
   }
@@ -224,7 +224,7 @@
       return;
     event.preventDefault();
     event.stopPropagation();
-    window.dispatchEvent(new CustomEvent('rfide:show-sidebar', { detail: { name: 'search' } }));
+    window.dispatchEvent(new CustomEvent('keywright:show-sidebar', { detail: { name: 'search' } }));
     const selected = editor.selectedText();
     if (selected && !selected.includes('\n')) {
       $('#search-query').value = selected;
@@ -235,7 +235,7 @@
   }, true);
 
   // Keep results fresh when files change (on disk or in the editor).
-  window.addEventListener('rfide:files-changed', () => {
+  window.addEventListener('keywright:files-changed', () => {
     if ($('#search-query').value)
       schedule(400);
   });
@@ -243,7 +243,7 @@
     if ($('#search-query').value && isVisible())
       schedule(400);
   });
-  window.addEventListener('rfide:project-opened', () => {
+  window.addEventListener('keywright:project-opened', () => {
     results = [];
     error = '';
     collapsed.clear();

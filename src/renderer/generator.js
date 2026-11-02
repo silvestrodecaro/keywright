@@ -41,12 +41,12 @@
     el.classList.add('is-info');
     busy = true;
     renderState();
-    const unsubscribe = window.rfide.onInstallLog((text) => {
+    const unsubscribe = window.keywright.onInstallLog((text) => {
       // The CLI prints a new progress line every 10%: show the latest one.
       const lines = (log.textContent + '\n' + text).split(/[\r\n]+/).filter((line) => line.trim());
       log.textContent = lines.slice(-1).join('').replace(/\s{2,}/g, ' ');
     });
-    const result = await window.rfide.installBrowser(name);
+    const result = await window.keywright.installBrowser(name);
     unsubscribe();
     el.classList.remove('is-info');
     busy = false;
@@ -112,7 +112,7 @@
       remove.type = 'button';
       remove.title = 'Remove step';
       remove.textContent = '✕';
-      remove.addEventListener('click', () => window.rfide.removeStep(index));
+      remove.addEventListener('click', () => window.keywright.removeStep(index));
 
       item.append(icon, text, remove);
       return item;
@@ -128,12 +128,12 @@
       return;
     showError('');
     if (recording) {
-      await window.rfide.stopRecording();
+      await window.keywright.stopRecording();
       return;
     }
     busy = true;
     renderState();
-    const result = await window.rfide.startRecording({
+    const result = await window.keywright.startRecording({
       url: $('#url').value.trim(),
       browser: $('#browser').value,
       viewport: parseViewport($('#viewport').value),
@@ -145,36 +145,36 @@
   });
 
   $('#test-name').addEventListener('input', (event) => {
-    window.rfide.setGeneratorOptions({ testName: event.target.value.trim() || 'Recorded Test' });
+    window.keywright.setGeneratorOptions({ testName: event.target.value.trim() || 'Recorded Test' });
   });
 
   $('#copy').addEventListener('click', async (event) => {
     const button = event.currentTarget; // null after the await
-    await window.rfide.copyToClipboard(currentCode);
+    await window.keywright.copyToClipboard(currentCode);
     flash(button, 'Copied');
   });
 
   $('#save').addEventListener('click', async (event) => {
     const button = event.currentTarget;
-    const filePath = await window.rfide.saveFile(currentCode);
+    const filePath = await window.keywright.saveFile(currentCode);
     if (filePath) {
       flash(button, 'Saved');
-      window.dispatchEvent(new CustomEvent('rfide:file-saved', { detail: { filePath } }));
+      window.dispatchEvent(new CustomEvent('keywright:file-saved', { detail: { filePath } }));
     }
   });
 
-  $('#clear').addEventListener('click', () => window.rfide.clearRecording());
+  $('#clear').addEventListener('click', () => window.keywright.clearRecording());
 
   // Pick locator: in the recorded browser, or in a browser opened for picking.
   let picking = false;
 
   $('#pick').addEventListener('click', async () => {
     if (picking) {
-      window.rfide.cancelPickLocator();
+      window.keywright.cancelPickLocator();
       return;
     }
     showError('');
-    const result = await window.rfide.pickLocator({
+    const result = await window.keywright.pickLocator({
       url: $('#url').value.trim(),
       browser: $('#browser').value,
       viewport: parseViewport($('#viewport').value),
@@ -189,23 +189,23 @@
 
   $('#picked-copy').addEventListener('click', async (event) => {
     const button = event.currentTarget;
-    await window.rfide.copyToClipboard($('#picked-selector').textContent);
+    await window.keywright.copyToClipboard($('#picked-selector').textContent);
     flash(button, 'Copied');
   });
 
-  window.rfide.onPickState((state) => {
+  window.keywright.onPickState((state) => {
     picking = state.picking;
     const button = $('#pick');
     button.classList.toggle('is-picking', picking);
     button.textContent = picking ? '✕ Cancel pick' : '◎ Pick locator';
   });
 
-  window.rfide.onCode(({ code, steps }) => {
+  window.keywright.onCode(({ code, steps }) => {
     renderCode(code);
     renderSteps(steps);
   });
 
-  window.rfide.onState((state) => {
+  window.keywright.onState((state) => {
     recording = state.recording;
     renderState();
   });

@@ -1,18 +1,18 @@
 """Robot Framework helpers used by the IDE. Runs with the project's Python.
 
-* ``python rfide_runner.py discover <path>`` prints the suite/test tree as JSON.
-* ``python rfide_runner.py index <project root>`` prints the library/resource
+* ``python keywright_runner.py discover <path>`` prints the suite/test tree as JSON.
+* ``python keywright_runner.py index <project root>`` prints the library/resource
   imports and the user keywords of every .robot/.resource file as JSON.
-* ``python rfide_runner.py libdoc <library>...`` prints library keywords as JSON.
-* ``python rfide_runner.py serve`` answers editor requests (syntax check of
+* ``python keywright_runner.py libdoc <library>...`` prints library keywords as JSON.
+* ``python keywright_runner.py serve`` answers editor requests (syntax check of
   unsaved content) as JSON lines on stdin/stdout.
-* ``--listener rfide_runner.Listener`` streams execution events as JSON lines
-  to the TCP port in the ``RFIDE_PORT`` environment variable. With
-  ``RFIDE_DEBUG=1`` it also reads debugger commands from that connection and
-  pauses at the breakpoints in ``RFIDE_BREAKPOINTS`` (JSON {source: [lines]}).
-* ``--prerunmodifier rfide_runner.SelectTests`` keeps only the tests whose full
+* ``--listener keywright_runner.Listener`` streams execution events as JSON lines
+  to the TCP port in the ``KEYWRIGHT_PORT`` environment variable. With
+  ``KEYWRIGHT_DEBUG=1`` it also reads debugger commands from that connection and
+  pauses at the breakpoints in ``KEYWRIGHT_BREAKPOINTS`` (JSON {source: [lines]}).
+* ``--prerunmodifier keywright_runner.SelectTests`` keeps only the tests whose full
   name, or the full name of one of their suites, is in the JSON list in
-  ``RFIDE_SELECT``.
+  ``KEYWRIGHT_SELECT``.
 
 Suites and tests are identified by their full name (``Tests.Login.Valid User``):
 Robot's own ids (``s1-s2-t1``) are positional and change when tests are filtered.
@@ -31,6 +31,11 @@ from robot.api import SuiteVisitor, TestSuiteBuilder
 MAX_TEXT = 4000
 # Logged by the Browser library's New Context when tracing is enabled.
 TRACE_MESSAGE = re.compile(r"trace file will be saved to: (.+\.zip)\s*$", re.IGNORECASE)
+
+
+def _environment(name):
+    modern = os.environ.get(f"KEYWRIGHT_{name}")
+    return modern if modern is not None else os.environ.get(f"RFIDE_{name}")
 
 
 def _rel(path, root):
@@ -70,7 +75,7 @@ class SelectTests(SuiteVisitor):
     """Pre-run modifier keeping only the selected tests and suites."""
 
     def __init__(self):
-        self.names = set(json.loads(os.environ.get("RFIDE_SELECT") or "[]"))
+        self.names = set(json.loads(_environment("SELECT") or "[]"))
 
     def start_suite(self, suite):
         if not self.names or self._selected(suite):
@@ -171,8 +176,8 @@ class Debugger:
     def __init__(self, listener, sock):
         self._listener = listener
         self._commands = queue.Queue()
-        self._breakpoints = self._parse(json.loads(os.environ.get("RFIDE_BREAKPOINTS") or "{}"))
-        self._pause_on_failure = os.environ.get("RFIDE_PAUSE_ON_FAILURE") == "1"
+        self._breakpoints = self._parse(json.loads(_environment("BREAKPOINTS") or "{}"))
+        self._pause_on_failure = _environment("PAUSE_ON_FAILURE") == "1"
         self._mode = None  # None (run to breakpoints), "pause", "into", "over", "out"
         self._depth = 0  # body item depth of the last pause, for stepping
         self._failure_stopped = False  # stopped at a failure: its parents fail too, do not stop again
@@ -353,14 +358,14 @@ class Listener:
         self._test = None
         self._suites = []  # full names of the running suites
         self._debugger = None
-        port = os.environ.get("RFIDE_PORT")
+        port = _environment("PORT")
         if port:
             try:
                 self._socket = socket.create_connection(("127.0.0.1", int(port)), timeout=5)
                 self._socket.settimeout(None)  # the debugger waits for commands
             except OSError as error:
-                print(f"[rfide] cannot connect to the IDE: {error}", file=sys.__stderr__)
-        if self._socket and os.environ.get("RFIDE_DEBUG") == "1":
+                print(f"[keywright] cannot connect to the IDE: {error}", file=sys.__stderr__)
+        if self._socket and _environment("DEBUG") == "1":
             self._debugger = Debugger(self, self._socket)
 
     def _send(self, event):
@@ -677,7 +682,7 @@ def _main(argv):
             except Exception as error:
                 errors.append({"import": name, "error": str(error).splitlines()[0]})
         return {"ok": True, "libraries": libraries, "errors": errors}
-    print("usage: rfide_runner.py discover <path> [root] | index <root> | libdoc <library>...", file=sys.stderr)
+    print("usage: keywright_runner.py discover <path> [root] | index <root> | libdoc <library>...", file=sys.stderr)
     sys.exit(2)
 
 

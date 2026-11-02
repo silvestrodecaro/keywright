@@ -96,7 +96,7 @@ test('createProject scaffolds files and reports steps', async () => {
     ['files', 'running'], ['files', 'done'],
     ['git', 'running'], ['git', 'done'],
   ]);
-  for (const file of ['rfide.json', 'requirements.txt', '.gitignore', 'README.md', 'tests/example.robot', 'resources/common.resource'])
+  for (const file of ['keywright.json', 'requirements.txt', '.gitignore', 'README.md', 'tests/example.robot', 'resources/common.resource'])
     assert.ok(fs.existsSync(path.join(result.root, file)), `${file} missing`);
   assert.ok(fs.existsSync(path.join(result.root, '.git')));
   assert.ok(fs.existsSync(path.join(result.root, 'results')));
@@ -107,7 +107,7 @@ test('createProject scaffolds files and reports steps', async () => {
   assert.strictEqual(project.python, null);
 
   const tree = projects.listTree(result.root);
-  assert.deepStrictEqual(tree.map((n) => n.name), ['resources', 'results', 'tests', '.gitignore', 'README.md', 'requirements.txt', 'rfide.json']);
+  assert.deepStrictEqual(tree.map((n) => n.name), ['resources', 'results', 'tests', '.gitignore', 'keywright.json', 'README.md', 'requirements.txt']);
   assert.deepStrictEqual(tree.find((n) => n.name === 'tests').children.map((n) => n.path), ['tests/example.robot']);
 
   assert.match(projects.readProjectFile(result.root, 'tests/example.robot').content, /Get Title {4}== {4}Example Domain/);

@@ -38,7 +38,7 @@ Settings and behavior may change before 1.0.
 - **SeleniumLibrary:** not a supported integration. Keywright does not generate
   SeleniumLibrary tests or translate existing SeleniumLibrary suites.
 - **Projects:** a project-local `.venv` by default, or an explicit Python path in
-  `rfide.json`. Existing layouts can configure the test and results directories.
+  `keywright.json`. Existing layouts can configure the test and results directories.
 
 See the guide for [configuration](docs/user-guide.md#project-configuration) and
 [current limitations](docs/user-guide.md#current-limitations), including saved-file
@@ -99,6 +99,7 @@ or test directory differs from the defaults.
 | [Walkthrough](docs/walkthrough.md) | Run the supplied example, record a test, reuse a resource and inspect a failure |
 | [User guide](docs/user-guide.md) | Projects, editor, recording, execution, debugging, configuration and shortcuts |
 | [Troubleshooting](docs/troubleshooting.md) | Environment setup, discovery, browser launch, missing traces and editor issues |
+| [Existing projects](docs/migration.md) | Configuration, history and preferences created before the Keywright rename |
 | [Contributing](CONTRIBUTING.md) | Development setup, tests, integration prerequisites and packaging |
 | [Architecture](docs/architecture.md) | Electron/Python boundaries, application flows, persistence and integration contracts |
 

@@ -1,7 +1,9 @@
 'use strict';
 
+const { environmentValue } = require('../src/main/compatibility');
+
 // Debugger: breakpoints, stepping and variables with the real Robot Framework.
-// Needs the same Python as runner.test.js (RFIDE_PYTHON or .venv); skipped otherwise.
+// Needs the same Python as runner.test.js (KEYWRIGHT_PYTHON or .venv); skipped otherwise.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -12,7 +14,7 @@ const { TestRunner } = require('../src/main/testRunner');
 const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
-const python = process.env.RFIDE_PYTHON || [
+const python = environmentValue(process.env, 'PYTHON') || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

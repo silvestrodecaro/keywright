@@ -5,6 +5,7 @@
 // downloaded without the user's consent.
 
 const { app } = require('electron');
+const { environmentValue } = require('./compatibility');
 
 function plainNotes(notes) {
   if (!notes)
@@ -34,8 +35,9 @@ class Updater {
     this._updater = autoUpdater;
     // Another update server (e.g. an internal mirror, or a local one in tests): a folder served
     // over http(s) with latest.yml and the installer.
-    if (process.env.RFIDE_UPDATE_URL)
-      autoUpdater.setFeedURL({ provider: 'generic', url: process.env.RFIDE_UPDATE_URL });
+    const updateUrl = environmentValue(process.env, 'UPDATE_URL');
+    if (updateUrl)
+      autoUpdater.setFeedURL({ provider: 'generic', url: updateUrl });
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true; // a downloaded update is installed on the next quit anyway
     autoUpdater.on('checking-for-update', () => this._set({ status: 'checking' }));

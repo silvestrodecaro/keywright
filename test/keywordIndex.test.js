@@ -1,5 +1,7 @@
 'use strict';
 
+const { environmentValue } = require('../src/main/compatibility');
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -8,7 +10,7 @@ const { KeywordIndex } = require('../src/main/keywordIndex');
 const { tempDir } = require('./helpers/tempDir');
 const { spawnSync } = require('node:child_process');
 
-const python = process.env.RFIDE_PYTHON || [
+const python = environmentValue(process.env, 'PYTHON') || [
   path.join(__dirname, '../.venv/Scripts/python.exe'),
   path.join(__dirname, '../.venv/bin/python'),
 ].find((file) => fs.existsSync(file));

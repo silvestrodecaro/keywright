@@ -9,7 +9,7 @@ source before relying on a contract during a change.
 
 ```mermaid
 flowchart LR
-    UI[Renderer: editor, generator, tests] --> Bridge[Preload: window.rfide]
+    UI[Renderer: editor, generator, tests] --> Bridge[Preload: window.keywright]
     Bridge --> Main[Electron main: IPC and project state]
     Main --> Recorder[Playwright recorder and picker]
     Main --> Helpers[Project Python: discovery, libdoc, lint]
@@ -21,12 +21,18 @@ flowchart LR
 
 The main window enables `contextIsolation` and sandboxing and disables Node
 integration. [preload.js](../src/main/preload.js) exposes specific methods and event
-subscriptions through `window.rfide`. [main.js](../src/main/main.js) registers IPC
+subscriptions through `window.keywright`. [main.js](../src/main/main.js) registers IPC
 handlers, owns the active project and services, and publishes state to the renderer.
 
 The recorder's Playwright runs in the app's Node environment. Test execution and
 library inspection use the selected project Python. These are distinct toolchains
 and can require different browser binaries.
+
+[compatibility.js](../src/main/compatibility.js) holds legacy file names and
+environment aliases. [settings.js](../src/renderer/settings.js) reads and copies
+older preference keys on demand, preserving the originals and existing new values.
+See [migration notes](migration.md) for the precedence rules. Runtime operations
+and newly written files use Keywright names.
 
 ## Source ownership
 
@@ -39,7 +45,7 @@ and can require different browser binaries.
 | Recording | [recorder.js](../src/main/recorder.js), [browserInstall.js](../src/main/browserInstall.js) | Recorder/picker sessions, action events and app-side browser installation |
 | Source generation | [robotGenerator.js](../src/generator/robotGenerator.js), [selectors.js](../src/generator/selectors.js), [escape.js](../src/generator/escape.js) | Recorded actions to Robot keywords, Browser locators and escaped cells |
 | Robot processes | [testRunner.js](../src/main/testRunner.js), [pythonHelper.js](../src/main/pythonHelper.js) | Discovery, process environment, run arguments, event transport and stop |
-| Python implementation | [rfide_runner.py](../src/python/rfide_runner.py) | Discovery, selection modifier, listener, debugger, library docs, syntax and lint |
+| Python implementation | [keywright_runner.py](../src/python/keywright_runner.py) | Discovery, selection modifier, listener, debugger, library docs, syntax and lint |
 | Editor services | [keywordIndex.js](../src/main/keywordIndex.js), [languageWorker.js](../src/main/languageWorker.js), [formatter.js](../src/main/formatter.js), [projectVariables.js](../src/main/projectVariables.js) | Completion data, persistent diagnostics worker, formatting and static variable index |
 | Search | [projectSearch.js](../src/main/projectSearch.js), [searchCore.js](../src/renderer/searchCore.js), [search.js](../src/renderer/search.js) | Disk traversal, matching/replacement and open-buffer coordination |
 | Artifacts | [traceServer.js](../src/main/traceServer.js), [runHistory.js](../src/main/runHistory.js) | Local output serving and bounded run summaries |
@@ -54,7 +60,7 @@ and can require different browser binaries.
 
 ## Project and file lifecycle
 
-`projects.loadProject()` merges optional `rfide.json` with template defaults. It
+`projects.loadProject()` merges optional `keywright.json` with template defaults. It
 chooses an explicit configured interpreter or the project's `.venv`, checking that
 the executable exists. Package availability is determined by subsequent operations,
 not by that existence check.
@@ -189,9 +195,9 @@ The formatted text returns to the editor rather than silently saving the source.
 
 | Data | Location / owner | Lifetime |
 | --- | --- | --- |
-| Source and `rfide.json` | Project directory | Normal user-managed files |
+| Source and `keywright.json` | Project directory | Normal user-managed files |
 | Robot reports and Browser artifacts | Configured `outputDir` | Written by the current run; later runs can replace artifacts |
-| Run history | `<outputDir>/.rfide-history.json` | Up to 30 summaries with test statuses, timings and shortened messages |
+| Run history | `<outputDir>/.keywright-history.json` | Up to 30 summaries with test statuses, timings and shortened messages |
 | Recent projects | `recent-projects.json` in Electron `userData` | Shared application setting |
 | Breakpoints and run options | Renderer local storage in Electron `userData` | Keyed by project root |
 | Sidebar width, lint preference and watches | Renderer local storage | Shared application settings |

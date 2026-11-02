@@ -1,8 +1,10 @@
 'use strict';
 
+const { environmentValue } = require('../src/main/compatibility');
+
 // Records real interactions with the Playwright recorder, generates a .robot
 // file and runs it with the Robot Framework Browser library.
-// Requires a Python with robotframework-browser: set RFIDE_PYTHON or create
+// Requires a Python with robotframework-browser: set KEYWRIGHT_PYTHON or create
 // .venv in the project root (see README). Skipped when not available.
 
 const test = require('node:test');
@@ -17,7 +19,7 @@ const { generateRobot } = require('../src/generator/robotGenerator');
 const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
-const python = process.env.RFIDE_PYTHON || [
+const python = environmentValue(process.env, 'PYTHON') || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

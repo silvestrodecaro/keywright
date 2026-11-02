@@ -41,7 +41,7 @@
     }
   },
   "build": {
-    "appId": "io.github.rfide",
+    "appId": "io.github.silvestrodecaro.keywright",
     "productName": "Keywright",
     "directories": {
       "output": "release",

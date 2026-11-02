@@ -20,9 +20,9 @@ after(() => {
   }
 });
 
-/** A new empty folder in the system temp folder: rfide-<prefix>-XXXXXX. */
+/** A new empty folder in the system temp folder: keywright-<prefix>-XXXXXX. */
 function tempDir(prefix) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `rfide-${prefix}-`));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `keywright-${prefix}-`));
   created.push(dir);
   return dir;
 }

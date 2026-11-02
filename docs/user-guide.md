@@ -31,7 +31,7 @@ The generated project contains:
 
 ```text
 my-web-tests/
-  rfide.json
+  keywright.json
   requirements.txt
   README.md
   .gitignore
@@ -66,7 +66,7 @@ By default, Keywright looks for:
 - suites under `tests/`;
 - Robot output under `results/`.
 
-If your repository uses another layout or environment, create `rfide.json` at its
+If your repository uses another layout or environment, create `keywright.json` at its
 root. For example, a repository with suites at the root and a shared environment:
 
 ```json
@@ -94,7 +94,7 @@ permissions, then close the tab and reopen the file to retry.
 
 ## Project configuration
 
-`rfide.json` is optional JSON stored at the project root. Omitted properties use
+`keywright.json` is optional JSON stored at the project root. Omitted properties use
 these defaults:
 
 ```json
@@ -106,6 +106,10 @@ these defaults:
   "python": null
 }
 ```
+
+Existing projects can still use their previous configuration filename. See
+[Existing projects and the Keywright rename](migration.md) for precedence and
+the handling of saved history and preferences.
 
 | Property | Meaning |
 | --- | --- |
@@ -363,7 +367,7 @@ with snapshots, network activity, console and Robot keyword groups.
 
 ### Compare run summaries
 
-**History** keeps the last 30 run summaries in `<outputDir>/.rfide-history.json`.
+**History** keeps the last 30 run summaries in `<outputDir>/.keywright-history.json`.
 It compares test statuses and timings against the preceding stored run: new
 failures, fixed tests, continuing failures, slower tests and newly seen tests.
 Runs without completed test results are not stored.

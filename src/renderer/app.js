@@ -4,7 +4,7 @@
 // (explorer + tabs). The Test Generator tab lives in generator.js.
 (function () {
   const $ = (selector) => document.querySelector(selector);
-  const api = window.rfide;
+  const api = window.keywright;
 
   function el(tag, props = {}, ...children) {
     const node = document.createElement(tag);
@@ -226,7 +226,7 @@
     showSidebar('explorer');
     renderTabs();
     refreshTree();
-    window.dispatchEvent(new CustomEvent('rfide:project-opened', { detail: project }));
+    window.dispatchEvent(new CustomEvent('keywright:project-opened', { detail: project }));
     setEditorStatus('Loading keywords…');
     loadKeywords();
   }
@@ -297,7 +297,7 @@
     editor, api,
     getFile: (path) => tabs.find((tab) => tab.path === path),
     status: (text, error) => setEditorStatus(text, error),
-    onSaved: (path) => window.dispatchEvent(new CustomEvent('rfide:file-saved', { detail: { path, fromEditor: true } })),
+    onSaved: (path) => window.dispatchEvent(new CustomEvent('keywright:file-saved', { detail: { path, fromEditor: true } })),
   });
   window.RFWorkspace = workspace;
   let editorMounted = false;
@@ -636,7 +636,7 @@
     // Unknown keywords are only reported when every imported library could be documented.
     const failedImports = (result.errors || []).filter((e) => e.import);
     editor.setKeywords(result.keywords || [], { complete: result.ok && failedImports.length === 0 });
-    window.dispatchEvent(new CustomEvent('rfide:keywords-loaded'));
+    window.dispatchEvent(new CustomEvent('keywright:keywords-loaded'));
     editor.revalidate();
     if (!result.ok) {
       setEditorStatus(result.error, true);
@@ -690,7 +690,7 @@
     if (!await closeAllTabs())
       return;
     await api.closeProject();
-    window.dispatchEvent(new CustomEvent('rfide:project-closed'));
+    window.dispatchEvent(new CustomEvent('keywright:project-closed'));
     showWelcome();
   });
 
@@ -711,14 +711,14 @@
     if (paths.some((p) => /\.(robot|resource|py)$/i.test(p)))
       scheduleKeywords();
     refreshTree();
-    window.dispatchEvent(new CustomEvent('rfide:files-changed', { detail: { paths } }));
+    window.dispatchEvent(new CustomEvent('keywright:files-changed', { detail: { paths } }));
   });
 
   // Requests from the Testing panel (tests.js).
-  window.addEventListener('rfide:open-file', (event) => openFile(event.detail.path, event.detail.line, event.detail.column, event.detail.length));
-  window.addEventListener('rfide:show-sidebar', (event) => showSidebar(event.detail.name));
-  window.addEventListener('rfide:show-testing', () => showSidebar('testing'));
-  window.addEventListener('rfide:status', (event) => setEditorStatus(event.detail.text));
+  window.addEventListener('keywright:open-file', (event) => openFile(event.detail.path, event.detail.line, event.detail.column, event.detail.length));
+  window.addEventListener('keywright:show-sidebar', (event) => showSidebar(event.detail.name));
+  window.addEventListener('keywright:show-testing', () => showSidebar('testing'));
+  window.addEventListener('keywright:status', (event) => setEditorStatus(event.detail.text));
 
   // Updates from GitHub Releases: a banner offers to download, then to restart and install.
   let updateState = { status: 'idle' };
@@ -764,7 +764,7 @@
   api.updateState().then(renderUpdate);
 
   // Format Document needs Robocop in the project's virtual environment: offer to install it.
-  window.addEventListener('rfide:format-failed', (event) => {
+  window.addEventListener('keywright:format-failed', (event) => {
     const { error, missing } = event.detail;
     if (!missing) {
       setEditorStatus(`Could not format: ${error}`, true);
@@ -796,14 +796,14 @@
 
   // Run glyphs and context menu of the editor: tests run from the saved file.
   editor.onRunTests(({ path, names }) => {
-    window.dispatchEvent(new CustomEvent('rfide:run-from-editor', { detail: { path, names } }));
+    window.dispatchEvent(new CustomEvent('keywright:run-from-editor', { detail: { path, names } }));
   });
-  window.addEventListener('rfide:show-results', () => {
+  window.addEventListener('keywright:show-results', () => {
     if (activeTab !== RESULTS_TAB)
       activate(RESULTS_TAB);
   });
 
-  window.addEventListener('rfide:file-saved', async (event) => {
+  window.addEventListener('keywright:file-saved', async (event) => {
     const detail = event.detail || {};
     if (!detail.fromEditor) {
       // Saved by the Test Generator: refresh open files that have no unsaved edits.
@@ -830,7 +830,7 @@
 
   function storeSidebarWidth(width) {
     try {
-      localStorage.setItem('rfide.sidebarWidth', String(width));
+      localStorage.setItem('keywright.sidebarWidth', String(width));
     } catch {
       // not kept
     }
@@ -839,7 +839,7 @@
   (() => {
     let stored = NaN;
     try {
-      stored = Number(localStorage.getItem('rfide.sidebarWidth'));
+      stored = Number(window.KeywrightSettings.readSetting(localStorage, 'keywright.sidebarWidth'));
     } catch {
       // default width
     }

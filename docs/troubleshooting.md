@@ -5,7 +5,7 @@ Playwright installation; test execution uses the selected project's Python and
 Browser library. Their browser installations are separate.
 
 Commands below are for **PowerShell**, run from the test project root. They assume
-the default `.venv`. If `rfide.json` selects another interpreter, use its path
+the default `.venv`. If `keywright.json` selects another interpreter, use its path
 instead. For an absolute executable path, PowerShell requires `&` before the
 quoted path, for example `& "C:\Environments\web-tests\Scripts\python.exe" --version`.
 
@@ -64,14 +64,14 @@ interpreter exists and can import the required packages:
 .\.venv\Scripts\python.exe -c "import robot, Browser; print('Imports OK')"
 ```
 
-For a shared or differently named environment, set `python` in `rfide.json` and
+For a shared or differently named environment, set `python` in `keywright.json` and
 reopen the project. See [project configuration](user-guide.md#project-configuration).
 Installing packages into a different system Python does not change the project's
 selected environment.
 
 ## Tests are missing from the Testing panel
 
-1. Check `testsDir` in `rfide.json`. The default is `tests`; set it to `.` for suites
+1. Check `testsDir` in `keywright.json`. The default is `tests`; set it to `.` for suites
    at the project root, or to the repository's actual suite directory.
 2. Check the project's interpreter and imported libraries.
 3. Clear the Testing text filter and review include/exclude tag patterns.

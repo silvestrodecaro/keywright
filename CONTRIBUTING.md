@@ -51,11 +51,13 @@ npm run install-browsers
 npm test
 ```
 
-Python-backed tests select `RFIDE_PYTHON` when set, otherwise a repository `.venv`.
+Python-backed tests select `KEYWRIGHT_PYTHON` when set, otherwise a repository `.venv`.
+The previous environment variable remains accepted as described in
+[migration notes](docs/migration.md#development-interfaces).
 To use another prepared interpreter in PowerShell:
 
 ```powershell
-$env:RFIDE_PYTHON = "C:\Environments\keywright-tests\Scripts\python.exe"
+$env:KEYWRIGHT_PYTHON = "C:\Environments\keywright-tests\Scripts\python.exe"
 npm test
 ```
 

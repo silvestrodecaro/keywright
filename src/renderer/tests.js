@@ -4,7 +4,7 @@
 // Suites and tests are identified by their Robot full name.
 (function () {
   const $ = (selector) => document.querySelector(selector);
-  const api = window.rfide;
+  const api = window.keywright;
 
   const STATUS_ICONS = { PASS: '✓', FAIL: '✕', SKIP: '↷', 'NOT RUN': '○', running: '◌', queued: '○', stopped: '■' };
   const MAX_OUTPUT = 500_000;
@@ -405,7 +405,7 @@
     const logBtn = el('button', { type: 'button', className: 'btn btn-sm', textContent: 'Open log' });
     logBtn.disabled = !result || running;
     logBtn.title = 'Robot Framework log, opened at this test';
-    logBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rfide:show-output', { detail: { file: 'log.html', anchor: result?.robotId } })));
+    logBtn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('keywright:show-output', { detail: { file: 'log.html', anchor: result?.robotId } })));
     const trace = traceFor(test.id);
     const traceBtn = el('button', {
       type: 'button',
@@ -499,13 +499,13 @@
   function select(testId) {
     selected = testId;
     scheduleRender();
-    window.dispatchEvent(new CustomEvent('rfide:show-results', { detail: { test: testId } }));
+    window.dispatchEvent(new CustomEvent('keywright:show-results', { detail: { test: testId } }));
   }
 
   function goToSource(testId) {
     const entry = testIndex.get(testId);
     if (entry && entry.test.source)
-      window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path: entry.test.source, line: entry.test.lineno } }));
+      window.dispatchEvent(new CustomEvent('keywright:open-file', { detail: { path: entry.test.source, line: entry.test.lineno } }));
   }
 
   function indexTests(suite, parents = []) {
@@ -568,8 +568,8 @@
         }
         if (!select) {
           const what = source.names ? `Test '${source.names.join("', '")}'` : `File ${source.path}`;
-          showError(`${what} was not found in the saved files. Only files in the tests folder (testsDir in rfide.json) can be run.`);
-          window.dispatchEvent(new CustomEvent('rfide:show-testing'));
+          showError(`${what} was not found in the saved files. Only files in the tests folder (testsDir in keywright.json) can be run.`);
+          window.dispatchEvent(new CustomEvent('keywright:show-testing'));
           return;
         }
       }
@@ -607,7 +607,7 @@
     running = true;
     scheduleRender();
     if (!background)
-      window.dispatchEvent(new CustomEvent('rfide:show-results'));
+      window.dispatchEvent(new CustomEvent('keywright:show-results'));
     debugging = $('#tests-debug').checked;
     paused = null;
     const debug = debugging ? { breakpoints: window.RFEditor.breakpoints(), pauseOnFailure: $('#tests-debug-failures').checked } : undefined;
@@ -656,13 +656,13 @@
     return run(null, { source: { path, names } });
   }
 
-  window.addEventListener('rfide:run-from-editor', (event) => runFromEditor(event.detail));
+  window.addEventListener('keywright:run-from-editor', (event) => runFromEditor(event.detail));
   // From the run history: show a test's details; refresh the trend when a run is recorded.
-  window.addEventListener('rfide:select-test', (event) => {
+  window.addEventListener('keywright:select-test', (event) => {
     if (testIndex.has(event.detail.id))
       select(event.detail.id);
   });
-  window.addEventListener('rfide:history-changed', () => scheduleRender());
+  window.addEventListener('keywright:history-changed', () => scheduleRender());
 
   // -------------------------------------------------------------------------
   // Runner events
@@ -711,10 +711,10 @@
       case 'debug-paused':
         paused = event;
         evaluateWatches();
-        window.dispatchEvent(new CustomEvent('rfide:show-testing'));
+        window.dispatchEvent(new CustomEvent('keywright:show-testing'));
         if (event.source && !/^([a-z]:)?[\\/]/i.test(event.source)) { // project file
           window.RFEditor.showDebugLine(event.source, event.lineno); // applied when the file opens
-          window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path: event.source, line: event.lineno } }));
+          window.dispatchEvent(new CustomEvent('keywright:open-file', { detail: { path: event.source, line: event.lineno } }));
         }
         break;
       case 'debug-resumed':
@@ -776,7 +776,7 @@
 
   function openLocation(frame) {
     if (frame.source && frame.lineno && !/^([a-z]:)?[\\/]/i.test(frame.source))
-      window.dispatchEvent(new CustomEvent('rfide:open-file', { detail: { path: frame.source, line: frame.lineno } }));
+      window.dispatchEvent(new CustomEvent('keywright:open-file', { detail: { path: frame.source, line: frame.lineno } }));
   }
 
   function renderVariable(variable) {
@@ -831,7 +831,7 @@
 
   function loadWatches() {
     try {
-      return JSON.parse(localStorage.getItem('rfide.watches') || '[]').map((expression) => ({ expression, result: null }));
+      return JSON.parse(window.KeywrightSettings.readSetting(localStorage, 'keywright.watches') || '[]').map((expression) => ({ expression, result: null }));
     } catch {
       return [];
     }
@@ -839,7 +839,7 @@
 
   function saveWatches() {
     try {
-      localStorage.setItem('rfide.watches', JSON.stringify(watches.map((w) => w.expression)));
+      localStorage.setItem('keywright.watches', JSON.stringify(watches.map((w) => w.expression)));
     } catch {
       // storage unavailable
     }
@@ -956,11 +956,11 @@
     }
   });
 
-  window.addEventListener('rfide:project-opened', (event) => {
-    breakpointsKey = event.detail && event.detail.root ? `rfide.breakpoints:${event.detail.root}` : null;
+  window.addEventListener('keywright:project-opened', (event) => {
+    breakpointsKey = event.detail && event.detail.root ? `keywright.breakpoints:${event.detail.root}` : null;
     let saved = {};
     try {
-      saved = JSON.parse((breakpointsKey && localStorage.getItem(breakpointsKey)) || '{}');
+      saved = JSON.parse((breakpointsKey && window.KeywrightSettings.readSetting(localStorage, breakpointsKey)) || '{}');
     } catch {
       saved = {};
     }
@@ -1011,11 +1011,11 @@
   for (const selector of [...Object.values(RUN_OPTION_FIELDS), '#run-dryrun'])
     $(selector).addEventListener(selector === '#run-browser' || selector === '#run-dryrun' ? 'change' : 'input', saveRunOptions);
 
-  window.addEventListener('rfide:project-opened', (event) => {
-    runOptionsKey = event.detail && event.detail.root ? `rfide.runOptions:${event.detail.root}` : null;
+  window.addEventListener('keywright:project-opened', (event) => {
+    runOptionsKey = event.detail && event.detail.root ? `keywright.runOptions:${event.detail.root}` : null;
     let saved = {};
     try {
-      saved = JSON.parse((runOptionsKey && localStorage.getItem(runOptionsKey)) || '{}');
+      saved = JSON.parse((runOptionsKey && window.KeywrightSettings.readSetting(localStorage, runOptionsKey)) || '{}');
     } catch {
       saved = {};
     }
@@ -1043,7 +1043,7 @@
       run(ids.length === tests.length ? [] : ids, { background: true });
   }
 
-  window.addEventListener('rfide:files-changed', (event) => {
+  window.addEventListener('keywright:files-changed', (event) => {
     for (const path of event.detail.paths)
       pendingChanges.add(path);
     if (!running && !preparing)
@@ -1068,7 +1068,7 @@
     scheduleRender();
   });
 
-  window.addEventListener('rfide:project-opened', () => {
+  window.addEventListener('keywright:project-opened', () => {
     rootSuite = null;
     testIndex = new Map();
     results.clear();

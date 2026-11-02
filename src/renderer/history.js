@@ -4,7 +4,7 @@
 // changed since the run before it. Runs are recorded by the main process.
 (function () {
   const $ = (selector) => document.querySelector(selector);
-  const api = window.rfide;
+  const api = window.keywright;
   const diff = window.RFRunDiff;
 
   const STATUS_ICONS = { PASS: ['✓', 'status-pass'], FAIL: ['✕', 'status-fail'], SKIP: ['↷', 'status-skip'] };
@@ -70,7 +70,7 @@
     const item = el('div', { className: 'history-test-item' }, row);
     if (test.status === 'FAIL' && test.message)
       item.append(el('div', { className: 'history-message', textContent: test.message }));
-    row.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rfide:select-test', { detail: { id } })));
+    row.addEventListener('click', () => window.dispatchEvent(new CustomEvent('keywright:select-test', { detail: { id } })));
     return item;
   }
 
@@ -172,7 +172,7 @@
   $('#output-reload').addEventListener('click', () => showOutput(`${view}.html`));
   $('#output-external').addEventListener('click', () => api.openTestOutput(`${view}.html`));
 
-  window.addEventListener('rfide:show-output', (event) => setView(event.detail.file.replace('.html', ''), event.detail.anchor));
+  window.addEventListener('keywright:show-output', (event) => setView(event.detail.file.replace('.html', ''), event.detail.anchor));
 
   // A finished run writes new files: show them.
   api.onTestsFinished(() => {
@@ -185,7 +185,7 @@
     if (!runs.some((run) => run.id === selectedRun))
       selectedRun = runs[0] ? runs[0].id : null;
     render();
-    window.dispatchEvent(new CustomEvent('rfide:history-changed'));
+    window.dispatchEvent(new CustomEvent('keywright:history-changed'));
   }
 
   for (const button of document.querySelectorAll('.results-switch-btn'))
@@ -196,16 +196,16 @@
     runs = [run, ...runs.filter((r) => r.id !== run.id)].slice(0, 30);
     selectedRun = run.id;
     render();
-    window.dispatchEvent(new CustomEvent('rfide:history-changed'));
+    window.dispatchEvent(new CustomEvent('keywright:history-changed'));
   });
 
   // Selecting a test shows its details; starting a run leaves the report and log, which it refreshes.
-  window.addEventListener('rfide:show-results', (event) => {
+  window.addEventListener('keywright:show-results', (event) => {
     if (view !== 'test' && (view === 'history' || (event.detail && event.detail.test)))
       setView('test');
   });
 
-  window.addEventListener('rfide:project-opened', () => {
+  window.addEventListener('keywright:project-opened', () => {
     runs = [];
     selectedRun = null;
     setView('test');

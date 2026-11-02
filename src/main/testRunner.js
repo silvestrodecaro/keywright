@@ -72,13 +72,13 @@ class TestRunner extends EventEmitter {
     const outputDir = path.resolve(project.root, project.config.outputDir);
     const args = [
       '-m', 'robot',
-      '--listener', 'rfide_runner.Listener',
+      '--listener', 'keywright_runner.Listener',
       '--outputdir', outputDir,
       '--consolecolors', 'off',
       '--consolemarkers', 'off',
     ];
     if (options.select && options.select.length)
-      args.push('--prerunmodifier', 'rfide_runner.SelectTests');
+      args.push('--prerunmodifier', 'keywright_runner.SelectTests');
     for (const [name, value] of Object.entries(options.variables || {}))
       args.push('--variable', `${name}:${value}`);
     for (const pattern of options.include || [])
@@ -94,14 +94,14 @@ class TestRunner extends EventEmitter {
     const child = spawn(project.python, args, {
       cwd: project.root,
       env: pythonEnv({
-        RFIDE_PORT: String(port),
-        RFIDE_SELECT: JSON.stringify(options.select || []),
+        KEYWRIGHT_PORT: String(port),
+        KEYWRIGHT_SELECT: JSON.stringify(options.select || []),
         // Browser library: record a Playwright trace for every `New Context`.
         ...(options.trace ? { ROBOT_FRAMEWORK_BROWSER_TRACING: 'true' } : {}),
         ...(breakpoints ? {
-          RFIDE_DEBUG: '1',
-          RFIDE_BREAKPOINTS: JSON.stringify(breakpoints),
-          RFIDE_PAUSE_ON_FAILURE: options.debug.pauseOnFailure ? '1' : '0',
+          KEYWRIGHT_DEBUG: '1',
+          KEYWRIGHT_BREAKPOINTS: JSON.stringify(breakpoints),
+          KEYWRIGHT_PAUSE_ON_FAILURE: options.debug.pauseOnFailure ? '1' : '0',
         } : {}),
       }),
       windowsHide: true,

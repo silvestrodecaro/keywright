@@ -1,5 +1,7 @@
 'use strict';
 
+const { environmentValue } = require('../src/main/compatibility');
+
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -10,7 +12,7 @@ const { collectCalls, checkCall, splitFromEquals } = require('../src/renderer/ed
 const { runHelper } = require('../src/main/pythonHelper');
 const { tempDir } = require('./helpers/tempDir');
 
-// Argument specs as produced by libdoc (see rfide_runner.py `_args`).
+// Argument specs as produced by libdoc (see keywright_runner.py `_args`).
 const arg = (name, kind, required = true) => ({ name, kind, required });
 const CLICK = { name: 'Click', library: 'Browser', args: [arg('selector', 'POSITIONAL_OR_NAMED'), arg('button', 'POSITIONAL_OR_NAMED', false)] };
 const NEW_CONTEXT = { name: 'New Context', library: 'Browser', args: [arg('', 'NAMED_ONLY_MARKER', false), arg('viewport', 'NAMED_ONLY', false)] };
@@ -82,7 +84,7 @@ test('user keyword names in messages', () => {
 
 // Compares the editor's messages with Robot's on real keywords.
 const root = path.join(__dirname, '..');
-const python = process.env.RFIDE_PYTHON || [
+const python = environmentValue(process.env, 'PYTHON') || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

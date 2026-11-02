@@ -5,7 +5,7 @@
 // Open files show their live problems, unsaved edits included.
 (function () {
   const $ = (selector) => document.querySelector(selector);
-  const api = window.rfide;
+  const api = window.keywright;
   const editor = window.RFEditor;
   const ROBOT_FILE = /\.(robot|resource)$/i;
 
@@ -98,7 +98,7 @@
           el('span', { className: iconClass, textContent: icon }),
           el('span', { className: 'problem-message', textContent: problem.message }),
           el('span', { className: 'problem-position muted', textContent: `${problem.line}:${problem.column}` }));
-        entry.addEventListener('click', () => window.dispatchEvent(new CustomEvent('rfide:open-file',
+        entry.addEventListener('click', () => window.dispatchEvent(new CustomEvent('keywright:open-file',
           { detail: { path, line: problem.line, column: problem.column } })));
         item.append(entry);
       }
@@ -145,18 +145,18 @@
     render();
   });
 
-  window.addEventListener('rfide:project-opened', () => {
+  window.addEventListener('keywright:project-opened', () => {
     projectOpen = true;
     results = new Map();
     collapsed.clear();
     render(); // the first check runs when the keywords are loaded
   });
-  window.addEventListener('rfide:keywords-loaded', () => schedule(0));
+  window.addEventListener('keywright:keywords-loaded', () => schedule(0));
 
   // Robocop lint: on by default, remembered in this browser profile.
   let lintEnabled = true;
   try {
-    lintEnabled = localStorage.getItem('rfide.lint') !== 'off';
+    lintEnabled = window.KeywrightSettings.readSetting(localStorage, 'keywright.lint') !== 'off';
   } catch {
     // storage unavailable
   }
@@ -164,7 +164,7 @@
   editor.setLintEnabled(lintEnabled);
   $('#problems-robocop').addEventListener('change', (event) => {
     try {
-      localStorage.setItem('rfide.lint', event.target.checked ? 'on' : 'off');
+      localStorage.setItem('keywright.lint', event.target.checked ? 'on' : 'off');
     } catch {
       // storage unavailable
     }
@@ -172,7 +172,7 @@
     editor.setLintEnabled(event.target.checked);
     schedule(300);
   });
-  window.addEventListener('rfide:lint-unavailable', () => { $('#problems-robocop-missing').hidden = false; });
+  window.addEventListener('keywright:lint-unavailable', () => { $('#problems-robocop-missing').hidden = false; });
   $('#problems-robocop-install').addEventListener('click', async () => {
     const button = $('#problems-robocop-install');
     button.disabled = true;
@@ -188,8 +188,8 @@
     editor.setLintEnabled(true);
     schedule(300);
   });
-  window.addEventListener('rfide:files-changed', () => schedule());
-  window.addEventListener('rfide:file-saved', () => schedule());
+  window.addEventListener('keywright:files-changed', () => schedule());
+  window.addEventListener('keywright:file-saved', () => schedule());
   $('#problems-refresh').addEventListener('click', checkAll);
 
   render();
