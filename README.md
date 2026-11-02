@@ -62,11 +62,9 @@ Python versions used by CI; exact tested package versions are listed in
 
 ### Install and launch
 
-Run these commands in PowerShell. They create a `keywright` folder in your user
-folder; use another short, writable location if you prefer.
+Open PowerShell in the folder where you want to clone Keywright, then run:
 
 ```powershell
-cd $env:USERPROFILE
 git clone https://github.com/silvestrodecaro/keywright.git
 cd keywright
 npm.cmd ci

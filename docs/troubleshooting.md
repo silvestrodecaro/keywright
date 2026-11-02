@@ -43,8 +43,8 @@ Test-Path .\package.json
 Test-Path .\package-lock.json
 ```
 
-Use `cd` to enter your clone, then rerun the failed command. With the README's
-default location, the folder is `$env:USERPROFILE\keywright`.
+Use `cd` to enter the `keywright` folder created by `git clone`, then rerun the
+failed command.
 
 ### Electron is missing or failed to install
 
