@@ -41,10 +41,14 @@ test('setup checks installed prerequisites from a long folder containing spaces'
   assert.ok(f.root.length > 85);
   const result = run(f, '--check');
   assert.equal(result.status, 0, result.stdout + result.stderr);
+  const reportedFolder = result.stdout.match(/^Folder: (.+)$/m)?.[1].trim();
+  assert.ok(reportedFolder, result.stdout);
+  assert.equal(fs.realpathSync.native(reportedFolder).toLowerCase(), fs.realpathSync.native(f.root).toLowerCase());
   assert.match(result.stdout, /24\.16\.0/);
   assert.match(result.stdout, /3\.13\.14/);
   assert.ok(!fs.existsSync(f.marker));
   assert.ok(!fs.existsSync(path.join(f.root, 'node_modules')));
+  assert.ok(fs.readdirSync(path.join(f.root, 'out/setup')).some((name) => name.startsWith('bootstrap-')));
 });
 
 test('declining a prerequisite installation stops setup without invoking WinGet', { skip: !windows }, () => {

@@ -25,7 +25,7 @@ echo Usage: setup.bat [--check] [--non-interactive] [--no-pause]
 exit /b 2
 
 :next
-shift
+shift /1
 goto options
 
 :run

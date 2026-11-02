@@ -71,7 +71,11 @@ jobs:
             }
           }
           if ($setupExit -ne 0) { exit $setupExit }
-          "KEYWRIGHT_PYTHON=$setupRoot\examples\browser-walkthrough\.venv\Scripts\python.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $setupPython = Join-Path $setupRoot 'examples\browser-walkthrough\.venv\Scripts\python.exe'
+          if (-not (Test-Path -LiteralPath $setupPython -PathType Leaf)) {
+            throw 'Setup did not create the example Python environment in the long checkout.'
+          }
+          "KEYWRIGHT_PYTHON=$setupPython" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Run the Keywright desktop UI tests
         run: npm run test:ui
       - name: Upload setup and desktop UI failure evidence
