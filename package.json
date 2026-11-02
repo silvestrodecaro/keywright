@@ -16,6 +16,7 @@
     "prestart": "npm run build",
     "start": "electron .",
     "test": "node --test \"test/*.test.js\"",
+    "test:ui": "npm run build && playwright test",
     "install-browsers": "playwright-core install chromium",
     "pack": "npm run build && electron-builder --win --dir",
     "dist": "npm run build && electron-builder --win",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@playwright/test": "1.64.1",
     "dompurify": "3.4.17",
     "electron": "^45.2.1",
     "electron-builder": "^26.18.0",

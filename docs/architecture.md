@@ -238,8 +238,9 @@ CLI need filesystem paths. Keep the unpacked-path rewrites in `pythonHelper.js`
 and `browserInstall.js` consistent with `package.json`.
 
 Packaged builds use `electron-updater`; source runs disable it. Public installer
-releases are on hold. The repository's CI verifies tests and the editor build;
-packaging is available as a separate local check. See
+releases are on hold. The repository's CI verifies component and integration tests,
+the editor build and desktop UI flows in the source app. Packaging is available
+as a separate local check. See
 [Contributing](../CONTRIBUTING.md).
 
 Dependency findings and the remaining packaging-tool advisories are recorded in

@@ -22,6 +22,6 @@ To run the same tests from PowerShell:
 .\.venv\Scripts\python.exe -m robot --outputdir results tests
 ```
 
-CI runs the supplied tests from the command line to check the example. Opening
-the project, recording and inspecting results in Keywright are manual steps in
-the walkthrough.
+CI checks the supplied tests directly and through Keywright's UI. The UI checks
+also cover a failing assertion, its screenshot and navigation back to the source.
+Recording a new test remains a manual step in the walkthrough.

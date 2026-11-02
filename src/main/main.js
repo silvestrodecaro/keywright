@@ -600,7 +600,9 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   // `electron . <folder>` opens a project directly.
-  const folderArg = process.argv.slice(app.isPackaged ? 1 : 2).find((arg) => !arg.startsWith('-'));
+  // Electron may put its debugger switches before the application entry path.
+  const positionalArgs = process.argv.slice(1).filter((arg) => !arg.startsWith('-'));
+  const folderArg = positionalArgs[app.isPackaged ? 0 : 1];
   if (folderArg) {
     try {
       await openProject(folderArg);

@@ -77,10 +77,39 @@ private Playwright recorder APIs, so generated-string tests alone are insufficie
 If a failure is intermittent, capture its output and determine the cause; a passing
 retry does not establish that it is fixed.
 
+### Desktop UI tests
+
+After preparing the integration-test environment above and installing Electron
+as described in the development setup, run:
+
+```powershell
+npm run test:ui
+```
+
+This builds the renderer and runs [Playwright tests](test/ui/keywright.spec.js)
+against the source app in Electron. Each test starts with a new profile and a
+temporary copy of the example project, using `KEYWRIGHT_PYTHON` or the repository
+`.venv`. Missing prerequisites fail the check rather than skipping it.
+
+The checks open the example through the welcome screen and run both tests using
+**Testing → Run all**. A second scenario changes an assertion in the temporary
+copy, checks the failure message and rendered screenshot, then uses **Go to source**
+to open the test in Monaco. Only the native folder dialog's selected path is
+supplied by the fixture; project loading, IPC, execution and result rendering run
+through the application. A startup check also verifies that a supplied project
+path is loaded when Electron debugger switches precede the app path. Profiles and
+project copies are removed after each test.
+
+Tests run one at a time without automatic retries. On failure, `out/ui-tests/`
+contains the window screenshot, Playwright trace, Electron log and available Robot
+results. The HTML report is in `out/ui-report/`. Inspect it with
+`npx playwright show-report out/ui-report`.
+
 The [Verify workflow](.github/workflows/verify.yml) prepares both browser toolchains,
-runs the test suite, executes the example's Robot Framework tests from the command
-line and builds the editor on Windows for pushes and pull requests. The example
-step does not launch Keywright or exercise its UI. GitHub branch protection must
+runs the component and integration tests, executes the example's Robot Framework
+tests from the command line, then builds and tests Keywright's UI on Windows for
+pushes and pull requests. Failed UI runs upload their evidence as the
+`keywright-ui-failure` artifact for seven days. GitHub branch protection must
 separately require the check if merges should depend on it.
 
 ## Verified environment

@@ -44,4 +44,15 @@ jobs:
       - run: npm test
       - name: Run the example Robot Framework tests
         run: .\.venv\Scripts\python.exe -m robot --outputdir examples/browser-walkthrough/results examples/browser-walkthrough/tests
-      - run: npm run build
+      - name: Run the Keywright desktop UI tests
+        run: npm run test:ui
+      - name: Upload desktop UI failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keywright-ui-failure
+          path: |
+            out/ui-tests/
+            out/ui-report/
+          if-no-files-found: ignore
+          retention-days: 7
