@@ -20,9 +20,13 @@ jobs:
         node: [24, 26]
     env:
       KEYWRIGHT_PYTHON: ${{ github.workspace }}\.venv\Scripts\python.exe
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}\keywright-browsers
     steps:
       - uses: actions/checkout@v4
+      - name: Configure shared browser storage
+        shell: pwsh
+        run: |
+          $browserCache = Join-Path $env:RUNNER_TEMP 'keywright-browsers'
+          "PLAYWRIGHT_BROWSERS_PATH=$browserCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
