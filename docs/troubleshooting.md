@@ -76,16 +76,44 @@ retrying. Current dependency audit findings are recorded in the
 
 ## Antivirus detects electron.exe
 
-If Defender or another security product reports a threat in
-`node_modules/electron/dist/electron.exe`, stop Keywright and keep the file
-quarantined while you review the detection. On a managed work computer, ask
-IT/security to review it and approve any restore or allow action under the
-organization's policy.
+### Suspected Microsoft Defender false positive
 
-The npm audit checks JavaScript dependency advisories. A clean audit does not
-classify the Electron executable or resolve an antivirus alert.
+Microsoft Defender has been reported to quarantine Electron 45.2.1 on Windows
+as **Trojan:Win32/Cinjo.O!cl**. The affected path is
+`node_modules/electron/dist/electron.exe` inside the Keywright source folder.
 
-If the executable is still available, collect these details without running it:
+We suspect a false positive: the local runtime we checked matches the official
+Electron release, and Keywright does not modify that executable. A sample was
+submitted to Microsoft for analysis on 2026-11-02.
+
+### Restore Electron on your own PC
+
+If you trust this runtime and choose to allow it on a PC you manage, Windows
+provides the following recovery steps. This makes an exception to Defender's
+block. If you are unsure which file was detected, keep it quarantined.
+
+On a managed work PC, ask IT/security to approve and handle recovery according
+to the organization's policy.
+
+1. Open **Start → Windows Security → Virus & threat protection → Protection history**.
+2. Expand the alert for `node_modules\electron\dist\electron.exe` inside your
+   Keywright folder. Check that the path and detection name match the issue above.
+3. For **Threat quarantined**, choose **Actions → Restore**.
+4. If Defender detects the restored file again, open the new alert for that file
+   and choose **Actions → Allow on device**.
+5. Start Keywright again with `npm.cmd start` from its source folder.
+
+Keep real-time protection enabled. To undo the exception, open
+**Virus & threat protection → Allowed threats**, select the entry and choose
+**Don't allow**. Microsoft's [Protection history instructions](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app)
+describe these actions. **Allow on device** permits execution; it is not a
+Microsoft safety verdict.
+
+<details>
+<summary>Technical details for IT and support</summary>
+
+These checks help identify the executable involved in a detection. They read
+the file without running it:
 
 ```powershell
 Get-FileHash .\node_modules\electron\dist\electron.exe -Algorithm SHA256
@@ -93,8 +121,8 @@ Get-AuthenticodeSignature .\node_modules\electron\dist\electron.exe | Select-Obj
 (Get-Content .\node_modules\electron\package.json | ConvertFrom-Json).version
 ```
 
-If it is quarantined, the first two commands report a missing file. Leave it in
-quarantine; IT can obtain its hash from the Defender incident details.
+If the executable is quarantined, the first two commands report a missing file.
+On a managed device, IT can obtain its hash from the Defender incident details.
 
 The local Windows x64 review on 2026-11-02 compared Electron 45.2.1 with its
 [official archive checksums](https://github.com/electron/electron/releases/download/v45.2.1/SHASUMS256.txt).
@@ -104,39 +132,21 @@ The installed executable matched the copy inside the verified archive. Its SHA-2
 32e357fc856feadd1e51531f47811d2621483e5a58815eb4999154d7c9baea3b
 ```
 
-That local copy returned `NotSigned` from the Authenticode check. These observations
-establish the provenance of the reviewed copy; they do not identify a quarantined
-file on another computer or establish that an antivirus detection is incorrect.
-For a suspected false positive, IT can use
+That copy returned `NotSigned` from the Authenticode check. The hash identifies
+the local Windows x64 copy checked above; it does not identify a file quarantined
+on another computer. Matching an official archive establishes provenance, while
+the antivirus classification requires separate analysis. The npm audit covers
+JavaScript dependency advisories rather than the runtime executable.
+
+Suspected false positives can be reported through
 [Microsoft's file analysis submission process](https://www.microsoft.com/en-us/wdsi/filesubmission).
-
-### Restore a file after confirming a false positive
-
-On a personally managed PC, use the following steps only after reviewing the
-specific file and confirming the detection is a false positive. On a managed
-work PC, have IT/security handle recovery according to its policy.
-
-1. Open **Start → Windows Security → Virus & threat protection → Protection history**.
-2. Expand the detection that names `node_modules\electron\dist\electron.exe`
-   inside your Keywright folder. Check the affected path and detection name.
-3. If its status is **Threat quarantined**, choose **Actions → Restore**.
-   Defender can detect the restored file again and create a new alert.
-4. If that happens, open the new alert for the same reviewed file and choose
-   **Actions → Allow on device**.
-5. Before starting Keywright, repeat the SHA-256 check above and compare it with
-   the exact file covered by your review. If it differs, stop and review that file.
-
-**Allow on device** overrides Defender's block for the selected detection; it
-does not certify the file as safe. Keep real-time protection enabled. To undo
-the allow decision, open **Virus & threat protection → Allowed threats**, select
-the entry and choose **Don't allow**. Labels can vary with Windows language and
-version; administrator privileges or company policy may restrict these actions.
-See Microsoft's [Protection history instructions](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app).
 
 Start never downloads a missing Electron runtime. Setup also stops before
 reinstallation if it finds an existing runtime's version file but no executable.
 Resolve the detection before attempting another installation; on a managed PC,
 follow IT/security's recovery decision.
+
+</details>
 
 ## Python or Node.js is not detected during project creation
 
