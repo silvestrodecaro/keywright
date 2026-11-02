@@ -78,8 +78,9 @@ retrying. Current dependency audit findings are recorded in the
 
 If Defender or another security product reports a threat in
 `node_modules/electron/dist/electron.exe`, stop Keywright and keep the file
-quarantined. On a managed work computer, ask IT/security to review the detection.
-Do not add an exclusion, restore the file or disable protection to get the app running.
+quarantined while you review the detection. On a managed work computer, ask
+IT/security to review it and approve any restore or allow action under the
+organization's policy.
 
 The npm audit checks JavaScript dependency advisories. A clean audit does not
 classify the Electron executable or resolve an antivirus alert.
@@ -109,9 +110,33 @@ file on another computer or establish that an antivirus detection is incorrect.
 For a suspected false positive, IT can use
 [Microsoft's file analysis submission process](https://www.microsoft.com/en-us/wdsi/filesubmission).
 
+### Restore a file after confirming a false positive
+
+On a personally managed PC, use the following steps only after reviewing the
+specific file and confirming the detection is a false positive. On a managed
+work PC, have IT/security handle recovery according to its policy.
+
+1. Open **Start → Windows Security → Virus & threat protection → Protection history**.
+2. Expand the detection that names `node_modules\electron\dist\electron.exe`
+   inside your Keywright folder. Check the affected path and detection name.
+3. If its status is **Threat quarantined**, choose **Actions → Restore**.
+   Defender can detect the restored file again and create a new alert.
+4. If that happens, open the new alert for the same reviewed file and choose
+   **Actions → Allow on device**.
+5. Before starting Keywright, repeat the SHA-256 check above and compare it with
+   the exact file covered by your review. If it differs, stop and review that file.
+
+**Allow on device** overrides Defender's block for the selected detection; it
+does not certify the file as safe. Keep real-time protection enabled. To undo
+the allow decision, open **Virus & threat protection → Allowed threats**, select
+the entry and choose **Don't allow**. Labels can vary with Windows language and
+version; administrator privileges or company policy may restrict these actions.
+See Microsoft's [Protection history instructions](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app).
+
 Start never downloads a missing Electron runtime. Setup also stops before
 reinstallation if it finds an existing runtime's version file but no executable.
-Resolve the security alert with IT before attempting another installation.
+Resolve the detection before attempting another installation; on a managed PC,
+follow IT/security's recovery decision.
 
 ## Python or Node.js is not detected during project creation
 
