@@ -10,7 +10,7 @@ const { tempDir } = require('./helpers/tempDir');
 const repository = path.resolve(__dirname, '..');
 const windows = process.platform === 'win32';
 
-function fixture({ node = '24.16.0', python = '3.13.14' } = {}) {
+function fixture({ node = '24.16.0', python = '3.13.14', pythonCommands = {} } = {}) {
   const root = path.join(tempDir('setup'), 'OneDrive - Company', 'Desktop', 'Keywright setup check');
   const bin = path.join(root, 'tools');
   fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
@@ -21,19 +21,30 @@ function fixture({ node = '24.16.0', python = '3.13.14' } = {}) {
   const command = (name, text) => fs.writeFileSync(path.join(bin, name + '.cmd'), '@echo off\r\n' + text + '\r\n');
   command('node', 'echo v' + node);
   command('npm', 'echo 12.0.1');
-  command('py', 'echo Python ' + python);
+  const pythonCalls = path.join(root, 'python-probes.log');
+  // Cover every candidate: an absent fallback would consult the runner's tools
+  // and PowerShell command discovery instead of the simulated environment.
+  for (const name of ['py', 'python', 'python3'])
+    command(name, `echo ${name}>> "${pythonCalls}"\r\necho Python ${pythonCommands[name] ?? python}\r\nexit /b 0`);
   command('git', 'echo git version 2.54.0');
   const marker = path.join(root, 'winget-called');
   command('winget', `echo called > "${marker}"\r\nexit /b 99`);
-  const env = { ...process.env, PATH: bin + path.delimiter + path.join(process.env.SystemRoot, 'System32') };
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
+  env.PATH = bin + path.delimiter + path.join(process.env.SystemRoot, 'System32');
   delete env.CI;
-  return { root, marker, env };
+  return { root, marker, env, pythonCalls };
 }
 
 function run(f, args, input = '') {
-  return spawnSync(process.env.ComSpec, ['/d', '/s', '/c', `""${path.join(f.root, 'setup.bat')}" ${args} --no-pause"`], {
+  const result = spawnSync(process.env.ComSpec, ['/d', '/s', '/c', `""${path.join(f.root, 'setup.bat')}" ${args} --no-pause"`], {
     env: f.env, input, encoding: 'utf8', timeout: 30_000, windowsHide: true, windowsVerbatimArguments: true,
   });
+  if (result.error) {
+    result.error.message += `\n${result.stdout || ''}${result.stderr || ''}`;
+    throw result.error;
+  }
+  return result;
 }
 
 test('setup checks installed prerequisites from a long folder containing spaces', { skip: !windows }, () => {
@@ -64,8 +75,23 @@ test('unattended setup fails clearly on an unsupported Python without installing
   const result = run(f, '--non-interactive');
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout + result.stderr, /Python 3\.13/);
+  assert.deepEqual(fs.readFileSync(f.pythonCalls, 'utf8').trim().split(/\r?\n/), ['py', 'python', 'python3']);
   assert.ok(!fs.existsSync(f.marker));
 });
+
+for (const [candidate, expectedCalls] of [
+  ['python', ['py', 'python']],
+  ['python3', ['py', 'python', 'python3']],
+]) {
+  test(`setup can find Python 3.13 through ${candidate} when earlier candidates are unsupported`, { skip: !windows }, () => {
+    const f = fixture({ python: '3.9.0', pythonCommands: { [candidate]: '3.13.14' } });
+    const result = run(f, '--check');
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /Python 3\.13\.14/);
+    assert.deepEqual(fs.readFileSync(f.pythonCalls, 'utf8').trim().split(/\r?\n/), expectedCalls);
+    assert.ok(!fs.existsSync(f.marker));
+  });
+}
 
 test('setup rejects unknown options instead of performing an installation', { skip: !windows }, () => {
   const f = fixture();
