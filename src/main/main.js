@@ -5,6 +5,8 @@ const fs = require('fs/promises');
 const { existsSync } = require('fs');
 const { pathToFileURL } = require('url');
 const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
+const { installStartupDiagnostics } = require('./startupDiagnostics');
+installStartupDiagnostics(app);
 const { RecorderSession } = require('./recorder');
 const { RecentProjects } = require('./recentProjects');
 const projects = require('./projects');

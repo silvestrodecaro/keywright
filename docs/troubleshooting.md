@@ -33,6 +33,37 @@ change dependency versions outside the lockfile. If findings appear, update to
 the latest reviewed repository revision and rerun setup. See the
 [dependency review](dependency-review.md) for the current audit results.
 
+### The window opens but stays blank
+
+The terminal's **OPEN** message means the Electron process has started. The
+welcome screen should appear without opening a project or waiting for Python.
+
+Close Keywright and start it from a normal, non-administrator PowerShell:
+
+```powershell
+npm.cmd start
+```
+
+The launcher prints the log path under `out/start/`. Startup records in that log
+begin with `[startup]` and include the Electron version, graphics feature status,
+page loading, preload errors, renderer console warnings and errors, and process
+crashes. A `page-state` record reports whether the application bridge is available
+and which shell view is visible; it does not establish that the window was painted
+correctly. If the page has not responded after 15 seconds, a `page-not-ready`
+record includes its loading state.
+
+While the blank window remains open, use a second PowerShell in the source folder
+to read the most recent launcher log:
+
+```powershell
+$log = Get-ChildItem .\out\start\*.log | Where-Object Name -Match '^\d{4}-' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+Get-Content -LiteralPath $log.FullName -Tail 100
+```
+
+Include that output when [reporting the problem](#reporting-a-problem). A missing
+page, a failed preload, an unresponsive renderer and a graphics failure need
+different fixes. An empty Chromium debug log alone does not distinguish them.
+
 ### PowerShell says `npm.ps1` cannot be loaded
 
 Use `npm.cmd` in place of `npm`, as in the README. For example, from the Keywright

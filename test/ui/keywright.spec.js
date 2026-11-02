@@ -42,6 +42,37 @@ test('opens the example from a clean profile and runs both tests through the UI'
   await expect(page.locator('#pane-results')).toBeVisible();
 });
 
+test('logs startup state and renderer errors before a renderer crash', async ({ desktop }) => {
+  const { app, page, processLog } = desktop;
+  await expect.poll(() => processLog.join('')).toMatch(/\[startup\] page-state .*"bridgeAvailable":true/);
+  await expect.poll(() => processLog.join('')).toMatch(/\[startup\] page-state .*"visibleViews":\["view-welcome"\]/);
+  await page.evaluate(() => console.error('Keywright renderer diagnostic probe'));
+  await expect.poll(() => processLog.join('')).toMatch(/\[startup\] renderer-console .*Keywright renderer diagnostic probe/);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer());
+  await expect.poll(() => processLog.join('')).toMatch(/\[startup\] render-process-gone .*"reason":"(?:crashed|killed)"/);
+});
+
+test('logs a failed page load instead of losing its error', async ({ desktop }) => {
+  const { app, project, processLog } = desktop;
+  await app.evaluate(async ({ BrowserWindow }, missing) => {
+    await BrowserWindow.getAllWindows()[0].loadFile(missing).catch(() => {});
+  }, path.join(project, 'missing-startup-page.html'));
+  await expect.poll(() => processLog.join('')).toMatch(/\[startup\] load-failed .*ERR_FILE_NOT_FOUND/);
+});
+
+test('logs a preload failure with its original error', async ({ desktop }) => {
+  const { app, project, processLog } = desktop;
+  const preload = path.join(project, 'broken-preload.js');
+  fs.writeFileSync(preload, "throw new Error('Keywright preload diagnostic probe');");
+  await app.evaluate(async ({ BrowserWindow }, preload) => {
+    const probe = new BrowserWindow({ show: false, webPreferences: {
+      preload, sandbox: true, contextIsolation: true, nodeIntegration: false,
+    } });
+    await probe.loadURL('data:text/html,<title>Startup diagnostic probe</title>');
+  }, preload);
+  await expect.poll(() => processLog.join('')).toMatch(/\[startup\] preload-error .*Keywright preload diagnostic probe/);
+});
+
 test('shows a failed assertion and its screenshot, then navigates to the test source', async ({ desktop }) => {
   const { page, project } = desktop;
   const source = path.join(project, 'tests/access.robot');

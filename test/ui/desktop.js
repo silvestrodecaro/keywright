@@ -66,7 +66,7 @@ const test = base.extend({
         await expect(page.getByText('No recent projects.', { exact: true })).toBeVisible();
       }
 
-      await use({ app, page, project, profile });
+      await use({ app, page, project, profile, processLog });
       expect(rendererErrors, 'Unexpected renderer exceptions').toEqual([]);
     } catch (error) {
       fixtureFailed = true;

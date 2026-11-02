@@ -247,6 +247,14 @@ and launches the app with the requested project arguments. It shares terminal
 progress and command logging with setup. Setup and start stop if an installed
 runtime has lost its executable; start never downloads a missing runtime.
 
+`startupDiagnostics.js` attaches window listeners before the first page load.
+It forwards page, preload, renderer-console and process-failure events through the
+main process into the launcher's log, since Windows child-process stderr may be
+absent. A small page query records bridge availability and visible shell view IDs;
+it reads no project source. The 15-second diagnostic timer reports a page that has
+not responded and is cleared on a response, load failure, renderer exit or window
+close. These records aid diagnosis without changing rendering or security settings.
+
 The repository's CI verifies the dependency audit, component and integration tests,
 the guided Windows setup, the editor build and desktop UI flows. See
 [Contributing](../CONTRIBUTING.md) and the dated
