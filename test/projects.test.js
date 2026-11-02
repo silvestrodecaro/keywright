@@ -23,6 +23,30 @@ test('checkProjectPathLength only limits Windows projects that install browsers'
   assert.strictEqual(projects.checkProjectPathLength('C:\\Projects\\shop', { installBrowsers: true, platform: 'win32' }), null);
 });
 
+test('project configuration selects its test layout and Python', () => {
+  const root = tempDir('project-config');
+  fs.writeFileSync(path.join(root, 'python.exe'), 'test interpreter placeholder');
+  fs.writeFileSync(path.join(root, 'keywright.json'), JSON.stringify({ testsDir: 'acceptance', outputDir: 'artifacts', python: 'python.exe' }));
+  const project = projects.loadProject(root);
+  assert.strictEqual(project.config.testsDir, 'acceptance');
+  assert.strictEqual(project.config.outputDir, 'artifacts');
+  assert.strictEqual(project.python, path.join(root, 'python.exe'));
+});
+
+test('omitted configuration properties use project defaults', () => {
+  const root = tempDir('config-defaults');
+  fs.writeFileSync(path.join(root, 'keywright.json'), '{"outputDir":"artifacts"}');
+  const project = projects.loadProject(root);
+  assert.strictEqual(project.config.testsDir, 'tests');
+  assert.strictEqual(project.config.outputDir, 'artifacts');
+});
+
+test('invalid project configuration reports the filename', () => {
+  const root = tempDir('invalid-config');
+  fs.writeFileSync(path.join(root, 'keywright.json'), '{broken');
+  assert.throws(() => projects.loadProject(root), /Invalid keywright\.json/);
+});
+
 test('saving refuses to overwrite a file changed since it was read', () => {
   const root = tempDir('save-conflict');
   fs.writeFileSync(path.join(root, 'example.robot'), 'original\n');

@@ -52,8 +52,6 @@ npm test
 ```
 
 Python-backed tests select `KEYWRIGHT_PYTHON` when set, otherwise a repository `.venv`.
-The previous environment variable remains accepted as described in
-[migration notes](docs/migration.md#development-interfaces).
 To use another prepared interpreter in PowerShell:
 
 ```powershell
@@ -151,10 +149,8 @@ An unsigned local package does not verify signing or the update path.
 For an isolated check, use
 `npx electron-builder --win --dir --publish never --config.directories.output=out/package-check`
 after building the renderer, then launch `Keywright.exe` with
-`--user-data-dir=<temporary-profile>` and a disposable project path. Create that
-profile's `recent-projects.json` containing `[]` before launch to prevent migration
-of settings from the earlier Robot Framework IDE app. This keeps the check's
-recent projects and editor settings separate from the normal profile.
+`--user-data-dir=<temporary-profile>` and a disposable project path. This keeps
+the check's recent projects and editor settings separate from the normal profile.
 
 Review both `npm audit` and `npm audit --omit=dev` when updating dependencies.
 The second command excludes Monaco and DOMPurify because they are build

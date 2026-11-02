@@ -839,7 +839,7 @@
   (() => {
     let stored = NaN;
     try {
-      stored = Number(window.KeywrightSettings.readSetting(localStorage, 'keywright.sidebarWidth'));
+      stored = Number(localStorage.getItem('keywright.sidebarWidth'));
     } catch {
       // default width
     }

@@ -107,13 +107,9 @@ these defaults:
 }
 ```
 
-Existing projects can still use their previous configuration filename. See
-[Existing projects and the Keywright rename](migration.md) for precedence and
-the handling of saved history and preferences.
-
 | Property | Meaning |
 | --- | --- |
-| `version` | Configuration version marker. The current loader does not perform schema migrations or validate this value. |
+| `version` | Configuration version marker; currently not validated by the loader. |
 | `testsDir` | Directory passed to Robot for discovery and execution, relative to the project root. Use `.` for root-level suites. |
 | `resourcesDir` | Resource-folder convention used by the template and explorer's initial expansion. Robot resolves actual imports from the suite source. |
 | `outputDir` | Results directory resolved against the project root. Used for reports, trace access, history and watcher exclusions. |

@@ -2,7 +2,6 @@
 
 const path = require('path');
 const { execFile } = require('child_process');
-const { normalizeEnvironment } = require('./compatibility');
 
 // In the packaged app the helper is unpacked from app.asar (see "asarUnpack" in
 // package.json): it is run by the project's Python, which cannot read archives.
@@ -11,7 +10,7 @@ const HELPER = path.join(HELPER_DIR, 'keywright_runner.py');
 
 /** Environment for the project's Python, with keywright_runner importable. */
 function pythonEnv(extra = {}) {
-  const env = { ...normalizeEnvironment(process.env), PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', ...normalizeEnvironment(extra) };
+  const env = { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', ...extra };
   env.PYTHONPATH = [HELPER_DIR, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
   return env;
 }

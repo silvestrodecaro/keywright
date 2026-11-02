@@ -1,6 +1,5 @@
 'use strict';
 
-const { environmentValue } = require('../src/main/compatibility');
 
 // Runs the fixture project with the real Robot Framework. Needs the same Python
 // as e2e.test.js (KEYWRIGHT_PYTHON or .venv in the project root); skipped otherwise.
@@ -14,7 +13,7 @@ const { discoverTests, TestRunner, screenshotsFromHtml } = require('../src/main/
 const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
-const python = environmentValue(process.env, 'PYTHON') || [
+const python = process.env.KEYWRIGHT_PYTHON || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

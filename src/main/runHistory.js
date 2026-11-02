@@ -5,7 +5,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { LEGACY_HISTORY_FILE } = require('./compatibility');
 
 const FILE_NAME = '.keywright-history.json';
 const MAX_RUNS = 30;
@@ -71,9 +70,7 @@ class RunHistory {
   /** Saved runs, newest first. */
   list(outputDir) {
     try {
-      const modern = path.join(outputDir, FILE_NAME);
-      const file = fs.existsSync(modern) ? modern : path.join(outputDir, LEGACY_HISTORY_FILE);
-      const runs = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const runs = JSON.parse(fs.readFileSync(path.join(outputDir, FILE_NAME), 'utf8'));
       return Array.isArray(runs) ? runs : [];
     } catch {
       return [];

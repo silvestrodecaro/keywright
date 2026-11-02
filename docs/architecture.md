@@ -28,17 +28,11 @@ The recorder's Playwright runs in the app's Node environment. Test execution and
 library inspection use the selected project Python. These are distinct toolchains
 and can require different browser binaries.
 
-[compatibility.js](../src/main/compatibility.js) holds legacy file names and
-environment aliases. [settings.js](../src/renderer/settings.js) reads and copies
-older preference keys on demand, preserving the originals and existing new values.
-See [migration notes](migration.md) for the precedence rules. Runtime operations
-and newly written files use Keywright names.
-
 ## Source ownership
 
 | Area | Source | Responsibility |
 | --- | --- | --- |
-| Application lifecycle | [main.js](../src/main/main.js), [preload.js](../src/main/preload.js) | Window, IPC, active project, services, shutdown and settings migration |
+| Application lifecycle | [main.js](../src/main/main.js), [preload.js](../src/main/preload.js) | Window, IPC, active project, services and shutdown |
 | Project setup and files | [projects.js](../src/main/projects.js), [projectTemplate.js](../src/main/projectTemplate.js) | Tool detection, scaffold, environment setup, configuration, tree and file access |
 | File changes | [projectWatcher.js](../src/main/projectWatcher.js) | Recursive watch, ignored paths and debounced change events |
 | Recent projects | [recentProjects.js](../src/main/recentProjects.js) | Application-level recent-project list |
@@ -204,9 +198,8 @@ The formatted text returns to the editor rather than silently saving the source.
 | Unsaved editor models | Renderer memory | Current session only |
 | Library docs and worker state | Main-process memory / helper process | Application or worker session |
 
-The app migrates selected settings from the earlier `Robot Framework IDE` user-data
-directory when starting under the Keywright name. Changing project locations changes
-the keys used for project-specific renderer settings.
+Changing project locations changes the keys used for project-specific renderer
+settings.
 
 `TraceServer` serves Playwright's viewer and permitted output paths on `127.0.0.1`.
 Malformed URL paths and paths containing NUL receive HTTP 400 before filesystem

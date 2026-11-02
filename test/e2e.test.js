@@ -1,6 +1,5 @@
 'use strict';
 
-const { environmentValue } = require('../src/main/compatibility');
 
 // Records real interactions with the Playwright recorder, generates a .robot
 // file and runs it with the Robot Framework Browser library.
@@ -19,7 +18,7 @@ const { generateRobot } = require('../src/generator/robotGenerator');
 const { tempDir } = require('./helpers/tempDir');
 
 const root = path.join(__dirname, '..');
-const python = environmentValue(process.env, 'PYTHON') || [
+const python = process.env.KEYWRIGHT_PYTHON || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

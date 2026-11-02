@@ -99,7 +99,6 @@ or test directory differs from the defaults.
 | [Walkthrough](docs/walkthrough.md) | Run the supplied example, record a test, reuse a resource and inspect a failure |
 | [User guide](docs/user-guide.md) | Projects, editor, recording, execution, debugging, configuration and shortcuts |
 | [Troubleshooting](docs/troubleshooting.md) | Environment setup, discovery, browser launch, missing traces and editor issues |
-| [Existing projects](docs/migration.md) | Configuration, history and preferences created before the Keywright rename |
 | [Contributing](CONTRIBUTING.md) | Development setup, tests, integration prerequisites and packaging |
 | [Architecture](docs/architecture.md) | Electron/Python boundaries, application flows, persistence and integration contracts |
 

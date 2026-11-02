@@ -33,11 +33,6 @@ MAX_TEXT = 4000
 TRACE_MESSAGE = re.compile(r"trace file will be saved to: (.+\.zip)\s*$", re.IGNORECASE)
 
 
-def _environment(name):
-    modern = os.environ.get(f"KEYWRIGHT_{name}")
-    return modern if modern is not None else os.environ.get(f"RFIDE_{name}")
-
-
 def _rel(path, root):
     if not path:
         return None
@@ -75,7 +70,7 @@ class SelectTests(SuiteVisitor):
     """Pre-run modifier keeping only the selected tests and suites."""
 
     def __init__(self):
-        self.names = set(json.loads(_environment("SELECT") or "[]"))
+        self.names = set(json.loads(os.environ.get("KEYWRIGHT_SELECT") or "[]"))
 
     def start_suite(self, suite):
         if not self.names or self._selected(suite):
@@ -176,8 +171,8 @@ class Debugger:
     def __init__(self, listener, sock):
         self._listener = listener
         self._commands = queue.Queue()
-        self._breakpoints = self._parse(json.loads(_environment("BREAKPOINTS") or "{}"))
-        self._pause_on_failure = _environment("PAUSE_ON_FAILURE") == "1"
+        self._breakpoints = self._parse(json.loads(os.environ.get("KEYWRIGHT_BREAKPOINTS") or "{}"))
+        self._pause_on_failure = os.environ.get("KEYWRIGHT_PAUSE_ON_FAILURE") == "1"
         self._mode = None  # None (run to breakpoints), "pause", "into", "over", "out"
         self._depth = 0  # body item depth of the last pause, for stepping
         self._failure_stopped = False  # stopped at a failure: its parents fail too, do not stop again
@@ -358,14 +353,14 @@ class Listener:
         self._test = None
         self._suites = []  # full names of the running suites
         self._debugger = None
-        port = _environment("PORT")
+        port = os.environ.get("KEYWRIGHT_PORT")
         if port:
             try:
                 self._socket = socket.create_connection(("127.0.0.1", int(port)), timeout=5)
                 self._socket.settimeout(None)  # the debugger waits for commands
             except OSError as error:
                 print(f"[keywright] cannot connect to the IDE: {error}", file=sys.__stderr__)
-        if self._socket and _environment("DEBUG") == "1":
+        if self._socket and os.environ.get("KEYWRIGHT_DEBUG") == "1":
             self._debugger = Debugger(self, self._socket)
 
     def _send(self, event):

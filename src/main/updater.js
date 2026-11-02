@@ -5,7 +5,6 @@
 // downloaded without the user's consent.
 
 const { app } = require('electron');
-const { environmentValue } = require('./compatibility');
 
 function plainNotes(notes) {
   if (!notes)
@@ -35,7 +34,7 @@ class Updater {
     this._updater = autoUpdater;
     // Another update server (e.g. an internal mirror, or a local one in tests): a folder served
     // over http(s) with latest.yml and the installer.
-    const updateUrl = environmentValue(process.env, 'UPDATE_URL');
+    const updateUrl = process.env.KEYWRIGHT_UPDATE_URL;
     if (updateUrl)
       autoUpdater.setFeedURL({ provider: 'generic', url: updateUrl });
     autoUpdater.autoDownload = false;

@@ -831,7 +831,7 @@
 
   function loadWatches() {
     try {
-      return JSON.parse(window.KeywrightSettings.readSetting(localStorage, 'keywright.watches') || '[]').map((expression) => ({ expression, result: null }));
+      return JSON.parse(localStorage.getItem('keywright.watches') || '[]').map((expression) => ({ expression, result: null }));
     } catch {
       return [];
     }
@@ -960,7 +960,7 @@
     breakpointsKey = event.detail && event.detail.root ? `keywright.breakpoints:${event.detail.root}` : null;
     let saved = {};
     try {
-      saved = JSON.parse((breakpointsKey && window.KeywrightSettings.readSetting(localStorage, breakpointsKey)) || '{}');
+      saved = JSON.parse((breakpointsKey && localStorage.getItem(breakpointsKey)) || '{}');
     } catch {
       saved = {};
     }
@@ -1015,7 +1015,7 @@
     runOptionsKey = event.detail && event.detail.root ? `keywright.runOptions:${event.detail.root}` : null;
     let saved = {};
     try {
-      saved = JSON.parse((runOptionsKey && window.KeywrightSettings.readSetting(localStorage, runOptionsKey)) || '{}');
+      saved = JSON.parse((runOptionsKey && localStorage.getItem(runOptionsKey)) || '{}');
     } catch {
       saved = {};
     }

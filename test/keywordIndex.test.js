@@ -1,6 +1,5 @@
 'use strict';
 
-const { environmentValue } = require('../src/main/compatibility');
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -10,7 +9,7 @@ const { KeywordIndex } = require('../src/main/keywordIndex');
 const { tempDir } = require('./helpers/tempDir');
 const { spawnSync } = require('node:child_process');
 
-const python = environmentValue(process.env, 'PYTHON') || [
+const python = process.env.KEYWRIGHT_PYTHON || [
   path.join(__dirname, '../.venv/Scripts/python.exe'),
   path.join(__dirname, '../.venv/bin/python'),
 ].find((file) => fs.existsSync(file));

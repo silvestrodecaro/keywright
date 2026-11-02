@@ -1,6 +1,5 @@
 'use strict';
 
-const { environmentValue } = require('../src/main/compatibility');
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -84,7 +83,7 @@ test('user keyword names in messages', () => {
 
 // Compares the editor's messages with Robot's on real keywords.
 const root = path.join(__dirname, '..');
-const python = environmentValue(process.env, 'PYTHON') || [
+const python = process.env.KEYWRIGHT_PYTHON || [
   path.join(root, '.venv', 'Scripts', 'python.exe'),
   path.join(root, '.venv', 'bin', 'python'),
 ].find((p) => fs.existsSync(p));

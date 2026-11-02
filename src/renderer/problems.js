@@ -156,7 +156,7 @@
   // Robocop lint: on by default, remembered in this browser profile.
   let lintEnabled = true;
   try {
-    lintEnabled = window.KeywrightSettings.readSetting(localStorage, 'keywright.lint') !== 'off';
+    lintEnabled = localStorage.getItem('keywright.lint') !== 'off';
   } catch {
     // storage unavailable
   }
