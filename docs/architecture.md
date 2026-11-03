@@ -23,6 +23,9 @@ The main window enables `contextIsolation` and sandboxing and disables Node
 integration. [preload.js](../src/main/preload.js) exposes specific methods and event
 subscriptions through `window.keywright`. [main.js](../src/main/main.js) registers IPC
 handlers, owns the active project and services, and publishes state to the renderer.
+The window denies every new window and page navigation. HTTP and HTTPS links, from
+keyword documentation, Robot logs or traces, open in the system browser; other
+schemes are ignored.
 
 The recorder's Playwright runs in the app's Node environment. Test execution and
 library inspection use the selected project Python. These are distinct toolchains

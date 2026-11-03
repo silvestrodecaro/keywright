@@ -34,6 +34,12 @@ releases yet; the version in `package.json` changes when a source version is tag
   and setup stops before reinstalling a runtime whose executable was removed.
 - Simplified the setup, first-run and update instructions.
 
+### Fixed
+
+- Links in keyword documentation, Robot logs and traces open in the system browser.
+  Previously they could open an unrestricted app window; the app now denies new
+  windows and navigation away from its page.
+
 ### Removed
 
 - Installer packaging, automatic updates and their dependencies. Installer releases

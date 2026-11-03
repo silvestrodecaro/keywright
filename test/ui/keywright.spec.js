@@ -217,3 +217,26 @@ test.describe('a project supplied on startup', () => {
     await expect(page.locator('#test-tree .is-test')).toHaveCount(2);
   });
 });
+
+test('web links open in the system browser instead of an app window', async ({ desktop }) => {
+  const { app, page } = desktop;
+  // The system browser is outside the test: record what would be handed to it.
+  await app.evaluate(({ shell }) => {
+    globalThis.openedExternally = [];
+    shell.openExternal = async (url) => { globalThis.openedExternally.push(url); };
+  });
+  const start = page.url();
+
+  // As a link in keyword documentation does when clicked.
+  await page.evaluate(() => window.open('https://robotframework-browser.org/', '_blank'));
+  await expect.poll(() => app.evaluate(() => globalThis.openedExternally)).toEqual(['https://robotframework-browser.org/']);
+  expect(app.windows()).toHaveLength(1);
+
+  // Other schemes are neither opened nor loaded in the app.
+  await page.evaluate(() => window.open('file:///C:/Windows/notepad.exe'));
+  await page.evaluate(() => { location.href = 'https://example.com/'; });
+  await page.waitForTimeout(500);
+  expect(page.url()).toBe(start);
+  expect(app.windows()).toHaveLength(1);
+  expect(await app.evaluate(() => globalThis.openedExternally)).toEqual(['https://robotframework-browser.org/', 'https://example.com/']);
+});

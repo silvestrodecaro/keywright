@@ -577,6 +577,17 @@ function explainLaunchError(error, browser) {
 // ---------------------------------------------------------------------------
 // Window
 
+function openWebLink(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  if (parsed.protocol === 'https:' || parsed.protocol === 'http:')
+    shell.openExternal(parsed.href).catch((error) => console.error(`Cannot open ${parsed.href}: ${error.message}`));
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -594,6 +605,16 @@ function createWindow() {
     },
   });
   mainWindow.setMenuBarVisibility(false);
+  // The app never opens other windows or leaves its page. Web links, such as those in
+  // keyword documentation, go to the system browser; anything else is ignored.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openWebLink(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    event.preventDefault();
+    openWebLink(url);
+  });
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.webContents.on('did-finish-load', () => {
     publishState();
