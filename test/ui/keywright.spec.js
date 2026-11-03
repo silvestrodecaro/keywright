@@ -121,6 +121,70 @@ test('reloads library documentation changed outside the project', async ({ deskt
   await expect(status).toHaveText(`${before + 1} keywords`, { timeout: 60_000 });
 });
 
+test('the command palette opens files and runs commands from the keyboard', async ({ desktop }, testInfo) => {
+  const { page } = desktop;
+  const palette = page.locator('#palette');
+  const input = page.locator('#palette-input');
+  const options = page.locator('#palette-list [role="option"]');
+
+  // Without a project only commands are offered, also through Ctrl+P.
+  await page.keyboard.press('Control+P');
+  await expect(palette).toBeVisible();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveAttribute('placeholder', 'Type a command');
+  await input.pressSequentially('open fold');
+  await expect(options.first()).toHaveText('Project: Open Folder…');
+  await page.keyboard.press('Escape');
+  await expect(palette).toBeHidden();
+
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
+  const code = page.locator('#pane-file .monaco-editor').first();
+  await page.locator('#pane-file .monaco-editor .view-lines').click();
+  await expect(code).toHaveClass(/\bfocused\b/);
+
+  // Ctrl+P from the code editor: files, best match first, then Enter opens it.
+  await page.keyboard.press('Control+P');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('');
+  await input.pressSequentially('acres');
+  await expect(options.first()).toHaveText('access.resourceresources');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Enter');
+  await expect(palette).toBeHidden();
+  await expect(page.getByRole('tab', { name: 'access.resource', exact: true })).toHaveAttribute('aria-selected', 'true');
+
+  // Ctrl+Shift+P: commands; arrows move the selection.
+  await page.keyboard.press('Control+Shift+P');
+  await expect(input).toHaveValue('>');
+  await input.pressSequentially('show');
+  await expect(options.nth(0)).toHaveText('View: Show Explorer');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true');
+  await expect(input).toHaveAttribute('aria-activedescendant', await options.nth(2).getAttribute('id'));
+  await expect(options.nth(2)).toHaveText('View: Show Problems');
+  await page.screenshot({ path: testInfo.outputPath('command-palette.png') });
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#sidebar-problems')).toBeVisible();
+
+  // Commands that do not apply now are not listed.
+  await page.keyboard.press('Control+Shift+P');
+  await input.pressSequentially('step over');
+  await expect(options).toHaveCount(0);
+  await expect(page.locator('#palette-empty')).toHaveText('No matching commands');
+  await page.locator('#palette').click({ position: { x: 5, y: 5 } }); // outside the box
+  await expect(palette).toBeHidden();
+
+  // Escape closes without running anything and gives the focus back.
+  await page.locator('#pane-file .monaco-editor .view-lines').click();
+  await page.keyboard.press('Control+Shift+P');
+  await page.keyboard.press('Escape');
+  await expect(palette).toBeHidden();
+  await expect(code).toHaveClass(/\bfocused\b/);
+});
+
 test('offers unsaved changes again after the window crashes', async ({ desktop }) => {
   let { page } = desktop;
   const { project, profile, relaunch } = desktop;

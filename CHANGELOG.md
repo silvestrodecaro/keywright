@@ -5,6 +5,11 @@ run from source; there are no installers yet.
 
 ## Unreleased
 
+### Added
+
+- Command palette. **Ctrl+P** opens a project file by name and **Ctrl+Shift+P**
+  lists the commands that apply at that moment, with their shortcuts.
+
 ### Documentation
 
 - A Code of Conduct, a Discussions link for questions and an email contact for

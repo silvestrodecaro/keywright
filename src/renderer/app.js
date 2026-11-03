@@ -977,6 +977,138 @@
   })();
 
   // -------------------------------------------------------------------------
+  // Command palette: commands reuse the buttons and functions above, so they
+  // behave exactly like the controls they stand for.
+
+  const inProject = () => !$('#view-project').hidden;
+  const fileTab = () => (inProject() && tabs.some((tab) => tab.path === activeTab) ? activeTab : null);
+  const editorFile = () => fileTab() && editor.currentPath() === fileTab();
+  const robotFile = () => editorFile() && editor.isRobotFile();
+  const usable = (selector) => {
+    const button = $(selector);
+    return !!button && !button.hidden && !button.disabled;
+  };
+  const debugging = () => inProject() && !$('#debug-panel').hidden;
+
+  function findInFiles() {
+    showSidebar('search');
+    $('#search-query').focus();
+    $('#search-query').select();
+  }
+
+  function buttonCommand(id, category, label, selector, { keys, when = inProject, before } = {}) {
+    return {
+      id, category, label, keys,
+      available: () => when() && usable(selector),
+      run: () => {
+        before?.();
+        $(selector).click();
+      },
+    };
+  }
+
+  const editorAction = (id, label, action, keys, when = editorFile) =>
+    ({ id, category: 'Editor', label, keys, available: when, run: () => editor.runAction(action) });
+
+  const COMMANDS = [
+    { id: 'file.goTo', category: 'File', label: 'Go to File…', keys: 'Ctrl+P', available: inProject, run: () => palette.open('files') },
+    { id: 'file.save', category: 'File', label: 'Save', keys: 'Ctrl+S', available: fileTab, run: () => saveFile(activeTab) },
+    { id: 'file.new', category: 'File', label: 'New File…', available: inProject, run: () => { showSidebar('explorer'); showNewFileInput(); } },
+    { id: 'file.close', category: 'File', label: 'Close Editor', available: fileTab, run: () => closeTab(activeTab) },
+    buttonCommand('file.reveal', 'File', 'Open Project Folder in File Manager', '#tree-reveal'),
+    buttonCommand('file.refresh', 'File', 'Refresh Explorer', '#tree-refresh'),
+
+    editorAction('editor.gotoLine', 'Go to Line…', 'editor.action.gotoLine', 'Ctrl+G'),
+    editorAction('editor.outline', 'Go to Symbol in File…', 'editor.action.quickOutline', 'Ctrl+Shift+O'),
+    editorAction('editor.nextProblem', 'Go to Next Problem', 'editor.action.marker.nextInFiles', 'F8'),
+    { id: 'editor.format', category: 'Editor', label: 'Format Document', keys: 'Shift+Alt+F', available: robotFile, run: () => editor.formatDocument() },
+    {
+      id: 'editor.breakpoint', category: 'Editor', label: 'Toggle Breakpoint', keys: 'F9', available: robotFile,
+      run: () => {
+        const line = editor.cursorLine();
+        if (line)
+          editor.toggleBreakpoint(activeTab, line);
+      },
+    },
+    editorAction('editor.runFile', 'Run Tests in File', 'keywright.runTestsInFile', null, robotFile),
+    editorAction('editor.runAtCursor', 'Run Test at Cursor', 'keywright.runTestAtCursor', null, robotFile),
+
+    { id: 'view.explorer', category: 'View', label: 'Show Explorer', available: inProject, run: () => showSidebar('explorer') },
+    { id: 'view.search', category: 'View', label: 'Find in Files', keys: 'Ctrl+Shift+F', available: inProject, run: findInFiles },
+    { id: 'view.testing', category: 'View', label: 'Show Testing', available: inProject, run: () => showSidebar('testing') },
+    { id: 'view.problems', category: 'View', label: 'Show Problems', available: inProject, run: () => showSidebar('problems') },
+    { id: 'view.generator', category: 'View', label: 'Show Test Generator', available: inProject, run: () => activate(GENERATOR_TAB) },
+    { id: 'view.results', category: 'View', label: 'Show Test Results', available: inProject, run: () => activate(RESULTS_TAB) },
+
+    buttonCommand('testing.runAll', 'Testing', 'Run All Tests', '#tests-run-all'),
+    buttonCommand('testing.stop', 'Testing', 'Stop Tests', '#tests-stop'),
+    buttonCommand('testing.watch', 'Testing', 'Toggle Watch Mode', '#tests-watch'),
+    buttonCommand('testing.reload', 'Testing', 'Reload Tests', '#tests-refresh'),
+
+    buttonCommand('debug.continue', 'Debug', 'Continue', '#debug-continue', { keys: 'F5', when: debugging }),
+    buttonCommand('debug.over', 'Debug', 'Step Over', '#debug-over', { keys: 'F10', when: debugging }),
+    buttonCommand('debug.into', 'Debug', 'Step Into', '#debug-into', { keys: 'F11', when: debugging }),
+    buttonCommand('debug.out', 'Debug', 'Step Out', '#debug-out', { keys: 'Shift+F11', when: debugging }),
+    buttonCommand('debug.pause', 'Debug', 'Pause', '#debug-pause', { when: debugging }),
+    buttonCommand('debug.stop', 'Debug', 'Stop Debugging', '#debug-stop', { when: debugging }),
+
+    {
+      id: 'recorder.record', category: 'Recorder', label: 'Record a New Test…', available: () => inProject() && usable('#record'),
+      run: () => {
+        activate(GENERATOR_TAB);
+        $('#url').focus();
+        $('#url').select();
+      },
+    },
+    buttonCommand('recorder.pick', 'Recorder', 'Pick Locator', '#pick', { before: () => activate(GENERATOR_TAB) }),
+    buttonCommand('recorder.recordAtCursor', 'Recorder', 'Record at Cursor', '#record-at-cursor', { when: editorFile }),
+    buttonCommand('recorder.pickAtCursor', 'Recorder', 'Pick Locator at Cursor', '#pick-at-cursor', { when: editorFile }),
+
+    buttonCommand('problems.refresh', 'Problems', 'Check All Files Again', '#problems-refresh', { before: () => showSidebar('problems') }),
+    buttonCommand('project.reloadLibraries', 'Project', 'Reload Libraries', '#reload-libraries'),
+    buttonCommand('project.close', 'Project', 'Close Project', '#project-close'),
+    buttonCommand('project.new', 'Project', 'New Project…', '#welcome-new', { when: () => !$('#view-welcome').hidden }),
+    buttonCommand('project.open', 'Project', 'Open Folder…', '#welcome-open', { when: () => !$('#view-welcome').hidden }),
+  ];
+
+  async function paletteFiles() {
+    if (!inProject())
+      return null;
+    const paths = [];
+    const collect = (nodes) => {
+      for (const node of nodes) {
+        if (node.type === 'dir')
+          collect(node.children || []);
+        else
+          paths.push(node.path);
+      }
+    };
+    collect(await api.projectTree());
+    // Open files first, in tab order; then the rest alphabetically.
+    const open = tabs.map((tab) => tab.path).filter((path) => paths.includes(path));
+    const rest = paths.filter((path) => !open.includes(path)).sort((a, b) => a.localeCompare(b));
+    return [...open, ...rest];
+  }
+
+  const palette = window.RFCommandPalette.create({
+    commands: () => COMMANDS.filter((command) => command.available()),
+    files: paletteFiles,
+    openFile: (path) => openFile(path),
+  });
+
+  // Captured, so the shortcuts also work while the code editor has the focus.
+  window.addEventListener('keydown', (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 'p')
+      return;
+    // Not over the new-project form or a save conflict comparison.
+    if ((!inProject() && $('#view-welcome').hidden) || !$('#compare-view').hidden)
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    palette.open(event.shiftKey ? 'commands' : 'files');
+  }, true);
+
+  // -------------------------------------------------------------------------
 
   (async () => {
     const project = await api.currentProject();

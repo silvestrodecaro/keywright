@@ -1747,6 +1747,16 @@ const RFEditor = (() => {
     projectProblems,
     openPaths: () => [...files.keys()],
     formatDocument: () => editor?.getAction('editor.action.formatDocument')?.run(),
+    /** Focuses the editor and runs one of its actions; false when it is unavailable here. */
+    runAction(id) {
+      const action = editor?.getModel() ? editor.getAction(id) : null;
+      if (!action || !action.isSupported())
+        return false;
+      editor.focus();
+      action.run();
+      return true;
+    },
+    isRobotFile: () => isRobotFile(),
     /** Replaces search matches ({ line, column, length, replacement }) in an open file, as one undoable edit. */
     replaceMatches(path, matches) {
       const model = files.get(path)?.model;

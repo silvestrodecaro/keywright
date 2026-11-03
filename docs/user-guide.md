@@ -247,6 +247,17 @@ listed results; **Replace all** asks for a second click. Open files receive unsa
 undoable edits. Other files are written to disk. Regex replacements accept capture
 groups such as `$1`.
 
+### Command palette
+
+**Ctrl+P** opens a project file by name. Type any letters of its path in order:
+`acres` finds `resources/access.resource`. Open files are listed first.
+
+**Ctrl+Shift+P**, or `>` at the start of the Ctrl+P box, lists commands: saving,
+editor navigation, panels, test runs, debugger steps, recording and project
+actions. Only commands that apply at that moment are listed; the debugger steps,
+for example, appear during a debug run. Up and Down select, Enter runs, Escape
+closes.
+
 ## Test Generator
 
 ### Record a standalone test
@@ -463,6 +474,8 @@ an already-running Robot process.
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+S | Save current file |
+| Ctrl+P | Open a file by name |
+| Ctrl+Shift+P | Command palette |
 | Up / Down, Home / End in Explorer or Testing | Move focus through visible tree items |
 | Left / Right in Explorer or Testing | Collapse/expand a folder or move to its parent/child |
 | Enter / Space in Explorer or Testing | Activate the focused row |
