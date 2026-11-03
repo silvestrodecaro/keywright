@@ -10,12 +10,12 @@ const { tempDir } = require('./helpers/tempDir');
 const repository = path.resolve(__dirname, '..');
 const windows = process.platform === 'win32';
 
-function fixture({ node = '24.16.0', python = '3.13.14', pythonCommands = {} } = {}) {
+function fixture({ node = '24.16.0', python = '3.13.14', pythonCommands = {}, banner = true } = {}) {
   const root = path.join(tempDir('setup'), 'OneDrive - Company', 'Desktop', 'Keywright setup check');
   const bin = path.join(root, 'tools');
   fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
   fs.mkdirSync(bin);
-  for (const name of ['setup.bat', 'scripts/setup.ps1', 'package.json']) {
+  for (const name of ['setup.bat', 'scripts/setup.ps1', 'package.json', ...(banner ? ['scripts/banner.txt'] : [])]) {
     if (fs.existsSync(path.join(repository, name))) fs.copyFileSync(path.join(repository, name), path.join(root, name));
   }
   const command = (name, text) => fs.writeFileSync(path.join(bin, name + '.cmd'), '@echo off\r\n' + text + '\r\n');
@@ -57,6 +57,10 @@ test('setup checks installed prerequisites from a long folder containing spaces'
   assert.equal(fs.realpathSync.native(reportedFolder).toLowerCase(), fs.realpathSync.native(f.root).toLowerCase());
   assert.match(result.stdout, /24\.16\.0/);
   assert.match(result.stdout, /3\.13\.14/);
+  // Redirected output gets the plain title rather than the pixel-art banner.
+  assert.match(result.stdout, /^ {2}KEYWRIGHT {2}\d+\.\d+\.\d+$/m);
+  assert.match(result.stdout, /^ {2}Record, edit and run Robot Framework web tests {2}· {2}Setup for Windows$/m);
+  assert.doesNotMatch(result.stdout, /[▀▄█]/);
   assert.ok(!fs.existsSync(f.marker));
   assert.ok(!fs.existsSync(path.join(f.root, 'node_modules')));
   assert.ok(fs.readdirSync(path.join(f.root, 'out/setup')).some((name) => name.startsWith('bootstrap-')));
@@ -92,6 +96,14 @@ for (const [candidate, expectedCalls] of [
     assert.ok(!fs.existsSync(f.marker));
   });
 }
+
+test('setup continues with its plain title when the banner file is missing', { skip: !windows }, () => {
+  const f = fixture({ banner: false });
+  const result = run(f, '--check');
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^ {2}KEYWRIGHT {2}\d+\.\d+\.\d+$/m);
+  assert.match(result.stdout, /Prerequisite checks passed/);
+});
 
 test('setup rejects unknown options instead of performing an installation', { skip: !windows }, () => {
   const f = fixture();
