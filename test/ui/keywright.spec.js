@@ -232,6 +232,64 @@ test('the command palette opens files and runs commands from the keyboard', asyn
   await expect(code).toHaveClass(/\bfocused\b/);
 });
 
+test('project settings are validated, saved to keywright.json and applied by reopening the project', async ({ desktop }, testInfo) => {
+  const { app, page, project } = desktop;
+  const config = path.join(project, 'keywright.json');
+  // The fixture selects the repository's Python through keywright.json.
+  const { python } = JSON.parse(fs.readFileSync(config, 'utf8'));
+  fs.writeFileSync(config, JSON.stringify({ ...JSON.parse(fs.readFileSync(config, 'utf8')), custom: 'kept' }, null, 2));
+  fs.mkdirSync(path.join(project, 'suites'));
+  fs.writeFileSync(path.join(project, 'suites', 'smoke.robot'), '*** Test Cases ***\nOnly Smoke Test\n    Log    smoke\n');
+  await openExample(desktop);
+
+  const dialog = page.getByRole('dialog', { name: 'Project settings' });
+  const tests = dialog.getByRole('textbox', { name: 'Tests folder' });
+  await page.getByRole('button', { name: 'Project settings' }).click();
+  await expect(dialog).toBeVisible();
+  await expect(tests).toBeFocused();
+  await expect(tests).toHaveValue('tests');
+  await expect(dialog.getByRole('textbox', { name: 'Results folder' })).toHaveValue('results');
+  await expect(dialog.getByRole('textbox', { name: 'Python interpreter' })).toHaveValue(python);
+  await page.screenshot({ path: testInfo.outputPath('project-settings.png') });
+
+  // A missing folder is reported on its field and nothing is written.
+  const before = fs.readFileSync(config, 'utf8');
+  await tests.fill('missing');
+  await dialog.getByRole('button', { name: 'Save and reopen' }).click();
+  await expect(dialog.locator('#settings-tests-error')).toHaveText('Folder not found in the project: missing');
+  await expect(tests).toHaveAttribute('aria-invalid', 'true');
+  await expect(tests).toBeFocused();
+  expect(fs.readFileSync(config, 'utf8')).toBe(before);
+
+  // Browse returns an absolute path; the field shows it relative to the project.
+  await app.evaluate(({ dialog: native }, folder) => {
+    native.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] });
+  }, path.join(project, 'suites'));
+  await dialog.getByRole('button', { name: 'Browse for the tests folder' }).click();
+  await expect(tests).toHaveValue('suites');
+
+  await dialog.getByRole('button', { name: 'Save and reopen' }).click();
+  await expect(dialog).toBeHidden();
+  const saved = JSON.parse(fs.readFileSync(config, 'utf8'));
+  expect(saved).toMatchObject({ testsDir: 'suites', resourcesDir: 'resources', outputDir: 'results', python: python.replace(/\\/g, '/'), custom: 'kept' });
+
+  // The reopened project discovers the suites in the new folder.
+  await page.getByRole('tab', { name: 'Testing', exact: true }).click();
+  await expect(page.locator('#test-tree .is-test')).toHaveCount(1);
+  await expect(page.locator('#test-tree')).toContainText('Only Smoke Test');
+
+  // Escape closes without saving.
+  await page.keyboard.press('Control+Shift+P');
+  await page.locator('#palette-input').pressSequentially('project settings');
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+  await expect(tests).toHaveValue('suites');
+  await tests.fill('tests');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  expect(JSON.parse(fs.readFileSync(config, 'utf8')).testsDir).toBe('suites');
+});
+
 test('offers unsaved changes again after the window crashes', async ({ desktop }) => {
   let { page } = desktop;
   const { project, profile, relaunch } = desktop;

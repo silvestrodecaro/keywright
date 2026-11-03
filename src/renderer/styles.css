@@ -879,3 +879,18 @@ input:disabled, select:disabled { opacity: .55; }
 .source-update-help p { margin: 10px 0; line-height: 1.5; }
 .source-update-help pre { margin: 10px 0; padding: 10px 12px; overflow-x: auto; background: var(--log-bg); border: 1px solid var(--border); border-radius: var(--radius); }
 .source-update-help code { font: 12px/1.5 var(--mono); color: var(--text); }
+
+/* Project Settings dialog */
+.settings-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); box-shadow: 0 16px 40px rgb(0 0 0 / 45%); }
+.settings-dialog::backdrop { background: rgb(0 0 0 / 40%); }
+.settings-form { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+.settings-form h2 { margin: 0; color: var(--text); font-size: 16px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.settings-form > p { margin: -8px 0 0; font-size: 12px; line-height: 1.5; }
+.settings-fields { display: flex; flex-direction: column; gap: 14px; }
+.settings-field { display: flex; flex-direction: column; gap: 6px; }
+.settings-field > label { font-size: 12px; font-weight: 600; }
+.settings-help, .settings-error { margin: 0; font-size: 12px; line-height: 1.4; }
+.settings-help { color: var(--muted); }
+.settings-error { color: var(--error-text); }
+.settings-field input[aria-invalid="true"] { border-color: var(--record); }
+.settings-form > .error { margin: 0; border-radius: var(--radius); }

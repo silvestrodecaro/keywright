@@ -9,6 +9,9 @@ run from source; there are no installers yet.
 
 - Command palette. **Ctrl+P** opens a project file by name and **Ctrl+Shift+P**
   lists the commands that apply at that moment, with their shortcuts.
+- **Project settings** dialog for the tests, resources and results folders and the
+  Python interpreter. It checks each field, saves `keywright.json` and reopens the
+  project, instead of editing the file by hand and reopening it.
 - Local crash reports. When the window stops, Keywright saves a report with versions
   and recent app events and offers to reload; the project then offers its unsaved
   files for recovery. Reports stay on the computer.

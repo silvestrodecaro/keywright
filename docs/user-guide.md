@@ -128,6 +128,15 @@ permissions, then close the tab and reopen the file to retry.
 
 ## Project configuration
 
+**Project settings** in the title bar, or **Project: Open Project Settings** in the
+command palette, edits the folders and the Python interpreter. Each field is checked
+before saving: the tests folder must exist inside the project, the resources folder
+must be inside it, and results need a folder of their own. Paths inside the project
+are saved relative to it. **Save and reopen** writes `keywright.json`, keeping any
+other properties in it, then reopens the project so every panel uses the new
+settings. Open files close first, after the usual unsaved-changes prompt, and a
+running test stops.
+
 `keywright.json` is optional JSON stored at the project root. Omitted properties use
 these defaults:
 
@@ -152,7 +161,7 @@ these defaults:
 Use forward slashes in JSON paths, or escape backslashes as `\\`. The loader merges
 the file with the defaults and currently validates JSON syntax rather than a full
 configuration schema. Keep directory values as strings and use a dedicated output
-directory. Close and reopen the project after changing its configuration so its
+directory. After editing the file by hand, close and reopen the project so its
 watcher and interface state are recreated consistently.
 
 ## Editor

@@ -208,6 +208,7 @@
   let tabs = [];
   let activeTab = GENERATOR_TAB;
   let currentConfig = null;
+  let currentRoot = null;
 
   function showProject(project) {
     showView('project');
@@ -221,6 +222,7 @@
     expanded.add(project.config.resourcesDir);
     tabs = [];
     currentConfig = project.config;
+    currentRoot = project.root;
     activeTab = GENERATOR_TAB;
     $('#new-file').hidden = true;
     showSidebar('explorer');
@@ -829,6 +831,27 @@
 
   $('#tree-refresh').addEventListener('click', refreshTree);
   $('#tree-reveal').addEventListener('click', () => api.revealInExplorer(null));
+  // Project Settings: after a save, reopen the project so every panel, the
+  // watcher and the language worker use the new configuration.
+  async function reopenProject() {
+    if (!await closeAllTabs()) {
+      setEditorStatus('Settings saved. Reopen the project to apply them.');
+      return;
+    }
+    recoveryReady = false;
+    $('#recovery-notice').hidden = true;
+    const result = await api.openProject(currentRoot);
+    if (!result.ok) {
+      setEditorStatus(result.error, true);
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('keywright:project-closed'));
+    showProject(result.project);
+  }
+
+  const projectSettings = window.RFProjectSettings.create({ api, root: () => currentRoot, reopen: reopenProject });
+  $('#project-settings').addEventListener('click', () => projectSettings.open());
+
   $('#project-close').addEventListener('click', async () => {
     if (!await closeAllTabs())
       return;
@@ -1066,6 +1089,7 @@
 
     buttonCommand('problems.refresh', 'Problems', 'Check All Files Again', '#problems-refresh', { before: () => showSidebar('problems') }),
     buttonCommand('project.reloadLibraries', 'Project', 'Reload Libraries', '#reload-libraries'),
+    { id: 'project.settings', category: 'Project', label: 'Open Project Settings', available: inProject, run: () => projectSettings.open() },
     buttonCommand('project.close', 'Project', 'Close Project', '#project-close'),
     buttonCommand('project.new', 'Project', 'New Project…', '#welcome-new', { when: () => !$('#view-welcome').hidden }),
     buttonCommand('project.open', 'Project', 'Open Folder…', '#welcome-open', { when: () => !$('#view-welcome').hidden }),
@@ -1101,8 +1125,8 @@
   window.addEventListener('keydown', (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== 'p')
       return;
-    // Not over the new-project form or a save conflict comparison.
-    if ((!inProject() && $('#view-welcome').hidden) || !$('#compare-view').hidden)
+    // Not over the new-project form, a save conflict comparison or a dialog.
+    if ((!inProject() && $('#view-welcome').hidden) || !$('#compare-view').hidden || $('#settings').open)
       return;
     event.preventDefault();
     event.stopPropagation();

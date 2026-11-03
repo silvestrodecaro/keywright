@@ -102,6 +102,7 @@
       <span id="project-name" class="project-name"></span>
       <span id="project-root" class="muted project-root"></span>
       <span class="spacer"></span>
+      <button id="project-settings" class="btn" type="button">Project settings</button>
       <button id="project-close" class="btn" type="button">Close project</button>
     </header>
 
@@ -387,6 +388,57 @@
     </footer>
   </section>
 
+  <dialog id="settings" class="settings-dialog" aria-labelledby="settings-title" aria-describedby="settings-intro">
+    <form id="settings-form" class="settings-form" novalidate>
+      <h2 id="settings-title">Project settings</h2>
+      <p id="settings-intro" class="muted">Saved in <code>keywright.json</code> at the project root.
+        Saving reopens the project: open files close, after asking about unsaved changes, and a running test stops.</p>
+      <div class="settings-fields">
+        <div class="settings-field">
+          <label for="settings-tests">Tests folder</label>
+          <div class="field-row">
+            <input id="settings-tests" type="text" spellcheck="false" autocomplete="off" aria-describedby="settings-tests-help settings-tests-error">
+            <button id="settings-tests-browse" class="btn" type="button" aria-label="Browse for the tests folder">Browse…</button>
+          </div>
+          <p id="settings-tests-help" class="settings-help">Robot finds and runs the suites in this folder. Use <code>.</code> for the project folder.</p>
+          <p id="settings-tests-error" class="settings-error" hidden></p>
+        </div>
+        <div class="settings-field">
+          <label for="settings-resources">Resources folder</label>
+          <div class="field-row">
+            <input id="settings-resources" type="text" spellcheck="false" autocomplete="off" aria-describedby="settings-resources-help settings-resources-error">
+            <button id="settings-resources-browse" class="btn" type="button" aria-label="Browse for the resources folder">Browse…</button>
+          </div>
+          <p id="settings-resources-help" class="settings-help">Expanded in the explorer when the project opens.</p>
+          <p id="settings-resources-error" class="settings-error" hidden></p>
+        </div>
+        <div class="settings-field">
+          <label for="settings-output">Results folder</label>
+          <div class="field-row">
+            <input id="settings-output" type="text" spellcheck="false" autocomplete="off" aria-describedby="settings-output-help settings-output-error">
+            <button id="settings-output-browse" class="btn" type="button" aria-label="Browse for the results folder">Browse…</button>
+          </div>
+          <p id="settings-output-help" class="settings-help">Reports, logs, screenshots, traces and run history are written here.</p>
+          <p id="settings-output-error" class="settings-error" hidden></p>
+        </div>
+        <div class="settings-field">
+          <label for="settings-python">Python interpreter</label>
+          <div class="field-row">
+            <input id="settings-python" type="text" spellcheck="false" autocomplete="off" aria-describedby="settings-python-help settings-python-error">
+            <button id="settings-python-browse" class="btn" type="button" aria-label="Browse for the Python interpreter">Browse…</button>
+          </div>
+          <p id="settings-python-help" class="settings-help">Leave empty to use the project&#39;s <code>.venv</code>.</p>
+          <p id="settings-python-error" class="settings-error" hidden></p>
+        </div>
+      </div>
+      <div id="settings-form-error" class="error" role="alert" hidden></div>
+      <div class="form-actions">
+        <button id="settings-cancel" class="btn" type="button">Cancel</button>
+        <button id="settings-save" class="btn btn-primary" type="submit">Save and reopen</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="palette" class="palette" hidden>
     <div class="palette-box" role="dialog" aria-modal="true" aria-label="Command palette">
       <input id="palette-input" class="palette-input" type="text" role="combobox" aria-expanded="true"
@@ -412,6 +464,7 @@
   <script src="search.js"></script>
   <script src="paletteCore.js"></script>
   <script src="palette.js"></script>
+  <script src="projectSettings.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

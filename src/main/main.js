@@ -40,6 +40,7 @@ function writeCrashReport(event, facts) {
 const { RecorderSession } = require('./recorder');
 const { RecentProjects } = require('./recentProjects');
 const projects = require('./projects');
+const projectSettings = require('./projectSettings');
 const { discoverTests, TestRunner, screenshotsFromHtml } = require('./testRunner');
 const { KeywordIndex } = require('./keywordIndex');
 const { RecoveryStore } = require('./recoveryStore');
@@ -168,12 +169,35 @@ ipcMain.handle('projects:default-location', () => app.getPath('documents'));
 ipcMain.handle('projects:validate-name', (_event, name) => projects.validateProjectName(name));
 ipcMain.handle('projects:current', () => projectInfo());
 
-ipcMain.handle('projects:pick-folder', async (_event, title) => {
+ipcMain.handle('projects:pick-folder', async (_event, title, defaultPath) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: title || 'Choose folder',
+    defaultPath: typeof defaultPath === 'string' && defaultPath ? defaultPath : undefined,
     properties: ['openDirectory', 'createDirectory'],
   });
   return canceled ? null : filePaths[0];
+});
+
+ipcMain.handle('projects:pick-python', async (_event, defaultPath) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose the Python interpreter',
+    defaultPath: typeof defaultPath === 'string' && defaultPath ? defaultPath : undefined,
+    filters: process.platform === 'win32' ? [{ name: 'Python', extensions: ['exe'] }] : [],
+    properties: ['openFile'],
+  });
+  return canceled ? null : filePaths[0];
+});
+
+// Project Settings: keywright.json. The renderer reopens the project after a save.
+ipcMain.handle('project:settings', () => (currentProject ? projectSettings.readSettings(currentProject.root) : null));
+ipcMain.handle('project:save-settings', (_event, values) => {
+  if (!currentProject)
+    return { ok: false, errors: {}, error: 'No project is open.' };
+  try {
+    return projectSettings.writeSettings(currentProject.root, values || {});
+  } catch (error) {
+    return { ok: false, errors: {}, error: error.message };
+  }
 });
 
 ipcMain.handle('projects:open', async (_event, root) => {
