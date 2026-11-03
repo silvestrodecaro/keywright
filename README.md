@@ -29,7 +29,7 @@ user keywords as the suite grows.
 
 ## Scope and status
 
-Keywright is in early development, currently version **0.2.0**. Run it from source
+Keywright is in early development, currently version **0.3.0**. Run it from source
 while the project is being tested and refined. Installer releases are on hold until
 they can be code-signed.
 Settings and behavior may change before 1.0.
@@ -42,6 +42,15 @@ Settings and behavior may change before 1.0.
   SeleniumLibrary tests or translate existing SeleniumLibrary suites.
 - **Projects:** a project-local `.venv` by default, or an explicit Python path in
   `keywright.json`. Existing layouts can configure the test and results directories.
+
+How dependable each part is today:
+
+| Area | Status |
+| --- | --- |
+| Opening projects, editing, running tests, results with screenshots, save conflicts and recovery of unsaved files | Exercised by desktop UI tests in CI on every push |
+| Test Generator and locator picker | Built on Playwright's private recorder API. Playwright is pinned to a tested version because an update can change that API |
+| Installer and automatic updates | Not available. They return once releases can be code-signed |
+| macOS and Linux | Not tested |
 
 See the guide for [configuration](docs/user-guide.md#project-configuration) and
 [current limitations](docs/user-guide.md#current-limitations), including saved-file
@@ -132,7 +141,7 @@ folder reads its files; environment setup is a separate step.
 | [Troubleshooting](docs/troubleshooting.md) | Environment setup, discovery, browser launch, missing traces and editor issues |
 | [Contributing](CONTRIBUTING.md) | Development setup, tests, integration prerequisites and dependency review |
 | [Architecture](docs/architecture.md) | Electron/Python boundaries, application flows, persistence and integration contracts |
-| [Changelog](CHANGELOG.md) | Changes since the 0.2.0 baseline |
+| [Changelog](CHANGELOG.md) | Changes in each version |
 
 ## Local data and network access
 

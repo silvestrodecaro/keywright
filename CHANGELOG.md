@@ -1,9 +1,11 @@
 # Changelog
 
-Notable changes to Keywright. Keywright runs from source and has no published
-releases yet; the version in `package.json` changes when a source version is tagged.
+Notable changes to Keywright. Each version is a Git tag such as `v0.3.0` that you
+run from source; there are no installers yet.
 
 ## Unreleased
+
+## 0.3.0 - 2026-11-03
 
 ### Added
 
@@ -33,6 +35,8 @@ releases yet; the version in `package.json` changes when a source version is tag
 - `npm.cmd start` stops instead of downloading a missing Electron executable again,
   and setup stops before reinstalling a runtime whose executable was removed.
 - Simplified the setup, first-run and update instructions.
+- For contributors: Biome lint, CodeQL analysis and Dependabot updates run on the
+  repository, and workflow actions are pinned to commit hashes.
 
 ### Fixed
 

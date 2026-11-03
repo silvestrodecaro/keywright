@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Keywright runs from source and has no published releases. Security fixes are made
-on the `main` branch. Update your checkout as described in
+Keywright runs from source. Security fixes are made on the `main` branch and
+included in the next tagged version; earlier versions are not patched. Update your checkout as described in
 [updates and local settings](docs/user-guide.md#updates-and-local-settings) before
 reporting a problem.
 
