@@ -184,6 +184,11 @@ unsaved, and **Discard** deletes the copy. A file that changed on disk in the
 meantime raises the usual save conflict when you save it. Choosing **Close Without
 Saving** deletes the copy.
 
+If the window itself stops, Keywright saves a crash report and offers **Reload
+Window**, **Show Crash Report** or **Quit**. After a reload the project opens again
+with the same restore offer. Edits typed in the last second before the crash may
+not be in the copy.
+
 ### Completion and navigation
 
 **Ctrl+Space** opens keyword completion. Documentation and required argument

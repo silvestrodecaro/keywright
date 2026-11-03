@@ -211,6 +211,7 @@ The formatted text returns to the editor rather than silently saving the source.
 | Sidebar width, lint preference and watches | Renderer local storage | Shared application settings |
 | Unsaved editor models | Renderer memory | Current session only |
 | Recovery copies of unsaved files | `recovery/<hash>.json` in Electron `userData`, written by [recoveryStore.js](../src/main/recoveryStore.js) | Per project; written at most once a second while files are unsaved, deleted when none remain or the user discards them |
+| Crash reports | `crash-reports/*.txt` in Electron `userData`, written by [crashReports.js](../src/main/crashReports.js) | Versions, the failure reason and the last 100 startup-diagnostic events; the 20 most recent are kept |
 | Library docs and worker state | Main-process memory / helper process | Application or worker session |
 
 Changing project locations changes the keys used for project-specific renderer

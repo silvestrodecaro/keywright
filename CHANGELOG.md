@@ -9,6 +9,9 @@ run from source; there are no installers yet.
 
 - Command palette. **Ctrl+P** opens a project file by name and **Ctrl+Shift+P**
   lists the commands that apply at that moment, with their shortcuts.
+- Local crash reports. When the window stops, Keywright saves a report with versions
+  and recent app events and offers to reload; the project then offers its unsaved
+  files for recovery. Reports stay on the computer.
 
 ### Documentation
 

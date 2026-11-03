@@ -2,8 +2,12 @@
 
 // Forward renderer and child-process failures through the main process: on
 // Windows their stderr is not reliably inherited by the source launcher.
-function installStartupDiagnostics(app) {
-  const log = (event, details = {}) => console.error(`[startup] ${event} ${JSON.stringify(details)}`);
+// onEvent receives the same events, e.g. for local crash reports.
+function installStartupDiagnostics(app, { onEvent = () => {} } = {}) {
+  const log = (event, details = {}) => {
+    console.error(`[startup] ${event} ${JSON.stringify(details)}`);
+    onEvent(event, details);
+  };
   app.whenReady().then(() => log('runtime', {
     electron: process.versions.electron, chromium: process.versions.chrome,
     platform: process.platform, architecture: process.arch,

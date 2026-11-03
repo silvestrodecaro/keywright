@@ -5,8 +5,38 @@ const fs = require('fs/promises');
 const { existsSync } = require('fs');
 const { pathToFileURL } = require('url');
 const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
+const os = require('os');
 const { installStartupDiagnostics } = require('./startupDiagnostics');
-installStartupDiagnostics(app);
+const { CrashReports } = require('./crashReports');
+// The folder is set once the user-data path is final (app ready).
+const crashReports = new CrashReports(null, {
+  versions: {
+    keywright: app.getVersion(),
+    electron: process.versions.electron,
+    chromium: process.versions.chrome,
+    node: process.versions.node,
+    os: `${os.type()} ${os.release()} ${process.arch}`,
+  },
+});
+installStartupDiagnostics(app, {
+  onEvent: (event, details) => {
+    crashReports.note(event, details);
+    if (event === 'child-process-gone' && !['clean-exit', 'killed'].includes(details.reason))
+      writeCrashReport(`${details.type} process stopped`, { reason: details.reason, exitCode: details.exitCode });
+  },
+});
+
+/** @returns {string | null} the report's path, null if it could not be written */
+function writeCrashReport(event, facts) {
+  if (!crashReports.folder)
+    return null;
+  try {
+    return crashReports.write(event, facts);
+  } catch (error) {
+    console.error(`Could not write a crash report: ${error.message}`);
+    return null;
+  }
+}
 const { RecorderSession } = require('./recorder');
 const { RecentProjects } = require('./recentProjects');
 const projects = require('./projects');
@@ -637,8 +667,43 @@ function createWindow() {
         recovery.clear(currentProject.root); // the changes were discarded deliberately
     }
   });
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (details.reason !== 'clean-exit')
+      windowStopped(details);
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+/** The page crashed or was killed: save a report and offer to reload it. */
+async function windowStopped({ reason, exitCode }) {
+  const report = writeCrashReport('Window stopped', { reason, exitCode });
+  if (!mainWindow || mainWindow.isDestroyed())
+    return;
+  const buttons = report ? ['Reload Window', 'Show Crash Report', 'Quit'] : ['Reload Window', 'Quit'];
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'error',
+    buttons,
+    defaultId: 0,
+    cancelId: 0,
+    message: 'The Keywright window stopped unexpectedly.',
+    detail: [
+      `Reason: ${reason}.`,
+      'Reload the window to continue. When the project opens again, Keywright offers to restore files with unsaved changes.',
+      report ? `A crash report was saved in ${path.dirname(report)}.` : 'The crash report could not be saved.',
+    ].join('\n\n'),
+  });
+  if (!mainWindow || mainWindow.isDestroyed())
+    return;
+  const choice = buttons[response];
+  if (choice === 'Quit') {
+    app.quit();
+    return;
+  }
+  if (choice === 'Show Crash Report')
+    shell.showItemInFolder(report);
+  mainWindow.webContents.reload();
+}
+
 
 app.whenReady().then(async () => {
   // The IDE has a dark UI: dark native dialogs and scrollbars, and the embedded
@@ -646,6 +711,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
+  crashReports.folder = path.join(app.getPath('userData'), 'crash-reports');
   // `electron . <folder>` opens a project directly.
   // Electron may put its debugger switches before the application entry path.
   const positionalArgs = process.argv.slice(1).filter((arg) => !arg.startsWith('-'));
@@ -662,6 +728,13 @@ app.whenReady().then(async () => {
 });
 
 ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('app:open-crash-reports', async () => {
+  const folder = crashReports.folder;
+  await fs.mkdir(folder, { recursive: true });
+  const error = await shell.openPath(folder);
+  if (error)
+    throw new Error(error);
+});
 
 app.on('window-all-closed', async () => {
   runner.stop();

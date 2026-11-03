@@ -350,6 +350,21 @@ Report and trace requests also stay within their configured output folders after
 resolving links. Keep report assets in that output folder if an embedded report
 cannot load an asset stored elsewhere.
 
+## The window stopped unexpectedly
+
+When the window crashes or is ended from Task Manager, Keywright saves a crash
+report in `%APPDATA%\keywright\crash-reports` and offers to reload the window.
+A crash of a GPU or other helper process is saved there too, without a prompt.
+**Help: Open Crash Reports Folder** in the command palette (Ctrl+Shift+P) opens
+the folder; the 20 most recent reports are kept.
+
+A report lists the Keywright, Electron, Chromium, Node.js and Windows versions,
+the reason and the app's last 100 diagnostic events. These are the startup events,
+renderer errors and process failures that the launch log under `out/start/` also
+records. File contents are not included, but error messages can contain file
+paths and project names. Nothing is sent anywhere. Read the report before you
+attach it to an issue.
+
 ## Reporting a problem
 
 Include the Keywright version, Windows version, selected Python path, package

@@ -18,6 +18,17 @@ async function openExample({ app, page, project }) {
   await expect(page.locator('#tests-run-all')).toBeEnabled();
 }
 
+// The crash dialog is native UI: record its options and choose Reload Window.
+async function answerCrashDialog(app) {
+  await app.evaluate(({ dialog }) => {
+    global.__crashDialogs = [];
+    dialog.showMessageBox = async (_window, options) => {
+      global.__crashDialogs.push(options);
+      return { response: 0 };
+    };
+  });
+}
+
 async function runAll(page, passed, failed) {
   await page.getByRole('button', { name: /Run all$/ }).click();
   await expect(page.locator('#tests-summary .status-pass')).toHaveText(`✓ ${passed}`, { timeout: 90_000 });
@@ -48,8 +59,44 @@ test('logs startup state and renderer errors before a renderer crash', async ({ 
   await expect.poll(() => processLog.join('')).toMatch(/\[startup\] page-state .*"visibleViews":\["view-welcome"\]/);
   await page.evaluate(() => console.error('Keywright renderer diagnostic probe'));
   await expect.poll(() => processLog.join('')).toMatch(/\[startup\] renderer-console .*Keywright renderer diagnostic probe/);
+  await answerCrashDialog(app);
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer());
   await expect.poll(() => processLog.join('')).toMatch(/\[startup\] render-process-gone .*"reason":"(?:crashed|killed)"/);
+});
+
+test('a window crash saves a report and reloads, offering the unsaved changes', async ({ desktop }) => {
+  const { app, page, profile } = desktop;
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
+  await page.locator('#pane-file .monaco-editor .view-lines').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.insertText('\nPrivate Test Body\n    Log    not in the crash report');
+  const recovery = path.join(profile, 'recovery');
+  await expect.poll(() => fs.existsSync(recovery) && fs.readdirSync(recovery).length).toBe(1);
+
+  await answerCrashDialog(app);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer());
+
+  const reports = path.join(profile, 'crash-reports');
+  await expect.poll(() => fs.existsSync(reports) && fs.readdirSync(reports).length).toBe(1);
+  const report = fs.readFileSync(path.join(reports, fs.readdirSync(reports)[0]), 'utf8');
+  expect(report).toMatch(/^Event: Window stopped\nreason: (?:crashed|killed)\n/m);
+  expect(report).toMatch(/Keywright 0\.\d+\.\d+, Electron \d+/);
+  expect(report).toMatch(/ render-process-gone /);
+  expect(report).not.toContain('Private Test Body');
+
+  const [dialog] = await app.evaluate(() => global.__crashDialogs);
+  expect(dialog.message).toBe('The Keywright window stopped unexpectedly.');
+  expect(dialog.buttons).toEqual(['Reload Window', 'Show Crash Report', 'Quit']);
+  expect(dialog.detail).toContain(reports);
+
+  // Reload Window: the project opens again and offers the unsaved file. Playwright's
+  // page does not survive the crash, so the new page is read through Electron.
+  const notice = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(
+    "document.querySelector('#recovery-notice').hidden ? '' : document.querySelector('#recovery-notice-text').textContent",
+  )).catch(() => '');
+  await expect.poll(notice, { timeout: 30_000 }).toContain('1 file');
 });
 
 test('logs a failed page load instead of losing its error', async ({ desktop }) => {

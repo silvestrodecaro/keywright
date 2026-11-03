@@ -54,5 +54,5 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Relevant output from out/setup/, out/start/ or the Robot log, with sensitive data removed.
+      description: Relevant output from out/setup/, out/start/, a crash report (Help - Open Crash Reports Folder) or the Robot log, with sensitive data removed.
       render: text

@@ -1069,6 +1069,7 @@
     buttonCommand('project.close', 'Project', 'Close Project', '#project-close'),
     buttonCommand('project.new', 'Project', 'New Project…', '#welcome-new', { when: () => !$('#view-welcome').hidden }),
     buttonCommand('project.open', 'Project', 'Open Folder…', '#welcome-open', { when: () => !$('#view-welcome').hidden }),
+    { id: 'help.crashReports', category: 'Help', label: 'Open Crash Reports Folder', available: () => true, run: () => api.openCrashReports() },
   ];
 
   async function paletteFiles() {
