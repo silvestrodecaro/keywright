@@ -11,7 +11,9 @@ module.exports = defineConfig({
   globalTimeout: 600_000,
   expect: { timeout: 15_000 },
   outputDir: './out/ui-tests',
+  // On GitHub, failures also become annotations on the workflow run.
   reporter: [
+    ...(process.env.GITHUB_ACTIONS ? [['github']] : []),
     ['list'],
     ['html', { outputFolder: 'out/ui-report', open: 'never' }],
   ],
