@@ -182,8 +182,10 @@ user guide when a user-visible behavior changes, and add the change to the
 
 ## Dependency review and distribution
 
-Keywright currently runs from source. Installer distribution is deferred, and the
-repository has no packaging or publishing commands. Electron Builder and its
+Keywright currently runs from source. Installer distribution is deferred until the
+installer and its updates can be code-signed, because unsigned builds can be blocked
+by antivirus software on managed Windows devices. The repository has no packaging
+or publishing commands. Electron Builder and its
 dependency chain are excluded from the app's development setup.
 
 Review both `npm audit` and `npm audit --omit=dev` when updating dependencies.

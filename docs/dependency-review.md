@@ -23,8 +23,8 @@ Its dependency tree still contains affected minimatch versions. The fix proposed
 by npm downgrades Electron Builder to 20.23.1; forcing minimatch 11 across older
 consumers also changes their API contract.
 
-Installer distribution is deferred while Keywright is developed and tested from
-source. Electron Builder and its transitive dependencies have therefore been
+Installer distribution is deferred until the installer and its updates can be
+code-signed; meanwhile Keywright is developed and tested from source. Electron Builder and its transitive dependencies have therefore been
 removed from `package.json` and the lockfile. The packaging configuration,
 `pack`, `dist` and `release` commands, and installer metadata script were removed
 with them. The source app, renderer build and tests do not use these tools.

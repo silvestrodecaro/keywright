@@ -30,7 +30,8 @@ user keywords as the suite grows.
 ## Scope and status
 
 Keywright is in early development, currently version **0.2.0**. Run it from source
-while the project is being tested and refined. Installer releases are on hold.
+while the project is being tested and refined. Installer releases are on hold until
+they can be code-signed.
 Settings and behavior may change before 1.0.
 
 - **Platform:** Windows 10/11. Development and integration tests currently target

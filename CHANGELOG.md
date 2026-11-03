@@ -37,8 +37,9 @@ releases yet; the version in `package.json` changes when a source version is tag
 ### Removed
 
 - Installer packaging, automatic updates and their dependencies. Installer releases
-  are on hold until the packaging toolchain passes the dependency audit; see the
-  [dependency review](docs/dependency-review.md).
+  are on hold until Keywright has a code-signing solution: unsigned installers and
+  updates can be blocked by antivirus software on managed Windows devices. The
+  packaging toolchain also needs a new [dependency review](docs/dependency-review.md).
 
 ### Documentation
 
