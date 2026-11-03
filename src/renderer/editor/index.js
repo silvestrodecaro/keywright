@@ -1694,6 +1694,8 @@ const RFEditor = (() => {
       fontSize: 13,
       lineHeight: 21,
       renderSideBySide: true,
+      // The labels above name the two sides, so narrow windows must not switch to the inline view.
+      useInlineViewWhenSpaceIsLimited: false,
       originalEditable: false,
       readOnly: false,
       ignoreTrimWhitespace: false,

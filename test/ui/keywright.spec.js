@@ -186,13 +186,17 @@ test('a save conflict can be compared side by side and saved as a combined versi
   await app.evaluate(({ dialog }) => {
     dialog.showMessageBox = async () => ({ response: 1 });
   });
+  // At the minimum window width the comparison must stay side by side, as its labels say.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 700));
 
   await page.keyboard.press('Control+S');
   const view = page.getByRole('dialog', { name: 'tests/access.robot changed on disk' });
   await expect(view).toBeVisible();
   await expect(view.locator('.editor.original .view-lines')).toContainText('# added on disk');
-  await expect(view.locator('.editor.modified .view-lines')).toContainText('# added in Keywright');
-  await view.locator('.editor.modified .view-lines').click();
+  await expect(view.locator('.editor.original')).toBeVisible();
+  await expect(view.locator('.editor.modified .line-delete')).toHaveCount(0); // no inline view
+  await expect(view.locator('.editor.modified .view-lines:not(.line-delete)')).toContainText('# added in Keywright');
+  await view.locator('.editor.modified .view-lines:not(.line-delete)').click();
   await page.keyboard.press('Control+Home');
   await page.keyboard.insertText('# added on disk\n');
   await view.getByRole('button', { name: 'Save Your Version' }).click();
