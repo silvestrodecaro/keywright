@@ -1,5 +1,7 @@
 <p align="center"><img src="docs/images/logo.svg" alt="Keywright" width="560"></p>
 
+<p align="center"><a href="https://github.com/silvestrodecaro/keywright/actions/workflows/verify.yml"><img src="https://github.com/silvestrodecaro/keywright/actions/workflows/verify.yml/badge.svg?branch=main" alt="Verify"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a></p>
+
 Keywright is a desktop IDE for [Robot Framework](https://robotframework.org/) web tests
 using [Browser library](https://robotframework-browser.org/). Record a browser interaction
 as Robot keywords, edit the test, run it, and inspect the failed keyword, screenshot
@@ -129,6 +131,7 @@ folder reads its files; environment setup is a separate step.
 | [Troubleshooting](docs/troubleshooting.md) | Environment setup, discovery, browser launch, missing traces and editor issues |
 | [Contributing](CONTRIBUTING.md) | Development setup, tests, integration prerequisites and dependency review |
 | [Architecture](docs/architecture.md) | Electron/Python boundaries, application flows, persistence and integration contracts |
+| [Changelog](CHANGELOG.md) | Changes since the 0.2.0 baseline |
 
 ## Local data and network access
 
@@ -149,6 +152,7 @@ Report a reproducible problem or propose a change in the
 [issue tracker](https://github.com/silvestrodecaro/keywright/issues).
 Include the Keywright version, project Python and relevant package versions, the
 steps to reproduce, and a small example with sensitive data removed.
+Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
 Development instructions are in [CONTRIBUTING.md](CONTRIBUTING.md).
 Keywright is available under the [MIT license](LICENSE).

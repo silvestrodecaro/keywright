@@ -111,30 +111,19 @@ retrying. Current dependency audit findings are recorded in the
 
 ## Antivirus detects electron.exe
 
-### Confirmed Microsoft Defender false positive
+Microsoft Defender may quarantine `node_modules\electron\dist\electron.exe` as
+**Trojan:Win32/Cinjo.O!cl**. On 2026-11-02 Microsoft reviewed the Electron 45.2.1
+sample, classified it as **Not malware** and removed the detection. To recover:
 
-On 2026-11-02, Microsoft reviewed the submitted Electron 45.2.1 Windows x64 sample,
-classified it as **Not malware** and removed the **Trojan:Win32/Cinjo.O!cl**
-detection. The affected file was `node_modules/electron/dist/electron.exe`
-inside the Keywright source folder. The sample's hash is listed below.
+1. In **Windows Security → Virus & threat protection → Protection updates**, choose
+   **Check for updates** and wait for it to finish.
+2. In **Protection history**, open the alert for `electron.exe` inside your Keywright
+   folder and choose **Actions → Restore**.
+3. Run `npm.cmd start` from the Keywright folder.
 
-### Update Defender and restore Electron
-
-For this detection:
-
-1. Open **Windows Security → Virus & threat protection → Protection updates →
-   Check for updates** and wait for the update to finish.
-2. Open **Protection history** and find the alert for
-   `node_modules\electron\dist\electron.exe` inside your Keywright folder.
-3. For **Threat quarantined**, choose **Actions → Restore**.
-4. Start Keywright with `npm.cmd start` from its source folder.
-
-If the same alert returns after updating, use the cache-reset procedure in the
-technical details below. Other detection names or Electron versions need their
-own review. See Microsoft's guides to [security intelligence updates](https://www.microsoft.com/en-us/wdsi/defenderupdates)
-and [Protection history](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app).
-
-On a managed device, follow your administrator's recovery instructions.
+If the alert returns, clear the cached signatures as described below. Other
+detection names or Electron versions need their own review. On a managed device,
+follow your administrator's instructions.
 
 <details>
 <summary>Technical details and cached detections</summary>

@@ -177,7 +177,8 @@ integration contracts. The main areas are:
 
 Keep public documentation and UI copy in English. Use real UI labels, explain
 failure recovery and keep examples aligned with the implementation. Update the
-user guide when a user-visible behavior changes.
+user guide when a user-visible behavior changes, and add the change to the
+**Unreleased** section of [CHANGELOG.md](CHANGELOG.md).
 
 ## Dependency review and distribution
 

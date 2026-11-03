@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in Keywright does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [Troubleshooting](https://github.com/silvestrodecaro/keywright/blob/main/docs/troubleshooting.md) first.
+        Remove credentials and private application data from logs, screenshots and traces.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps, ideally with the included example or a small project.
+      placeholder: |
+        1. Open examples/browser-walkthrough
+        2. Select Testing → Run all
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Setup or launch (setup.bat, npm.cmd start)
+        - Test Generator or locator picker
+        - Editor
+        - Running tests
+        - Debugger
+        - Results, screenshots or traces
+        - Project creation or configuration
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Keywright version or commit (`git rev-parse --short HEAD`), Windows version, and the output of
+        `node --version` and the project's `python -m pip show robotframework robotframework-browser`.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output from out/setup/, out/start/ or the Robot log, with sensitive data removed.
+      render: text
