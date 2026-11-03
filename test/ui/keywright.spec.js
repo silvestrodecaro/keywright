@@ -131,7 +131,7 @@ test('offers unsaved changes again after the window crashes', async ({ desktop }
   await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
   await page.locator('#pane-file .monaco-editor .view-lines').click();
   await page.keyboard.press('Control+End');
-  await page.keyboard.type('\nRecovered Test\n    Log    kept after a crash');
+  await page.keyboard.insertText('\nRecovered Test\n    Log    kept after a crash');
   await expect(page.getByRole('tab', { name: 'access.robot, unsaved changes' })).toBeVisible();
   const recovery = path.join(profile, 'recovery');
   await expect.poll(() => fs.existsSync(recovery) && fs.readdirSync(recovery).length).toBe(1);
@@ -161,7 +161,7 @@ test('discarding recovered changes keeps the files on disk unchanged', async ({ 
   await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
   await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
   await page.locator('#pane-file .monaco-editor .view-lines').click();
-  await page.keyboard.type('# unsaved\n');
+  await page.keyboard.insertText('# unsaved\n');
   const recovery = path.join(profile, 'recovery');
   await expect.poll(() => fs.existsSync(recovery) && fs.readdirSync(recovery).length).toBe(1);
 
@@ -180,7 +180,7 @@ test('a save conflict can be compared side by side and saved as a combined versi
   await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
   await page.locator('#pane-file .monaco-editor .view-lines').click();
   await page.keyboard.press('Control+End');
-  await page.keyboard.type('\n# added in Keywright');
+  await page.keyboard.insertText('\n# added in Keywright');
   fs.writeFileSync(source, '# added on disk\n' + fs.readFileSync(source, 'utf8'));
   // The native conflict dialog is OS UI: only its answer, Compare, is supplied.
   await app.evaluate(({ dialog }) => {
@@ -194,7 +194,7 @@ test('a save conflict can be compared side by side and saved as a combined versi
   await expect(view.locator('.editor.modified .view-lines')).toContainText('# added in Keywright');
   await view.locator('.editor.modified .view-lines').click();
   await page.keyboard.press('Control+Home');
-  await page.keyboard.type('# added on disk\n');
+  await page.keyboard.insertText('# added on disk\n');
   await view.getByRole('button', { name: 'Save Your Version' }).click();
 
   await expect(view).toBeHidden();

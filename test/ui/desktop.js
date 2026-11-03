@@ -107,7 +107,14 @@ const test = base.extend({
           await testInfo.attach('trace', { path: trace, contentType: 'application/zip' });
       }
       try {
-        if (app) await app.close();
+        if (app) {
+          // A failed test can leave unsaved edits, whose native "close without saving"
+          // dialog would block app.close() until the suite times out.
+          await app.evaluate(({ BrowserWindow }) => {
+            for (const window of BrowserWindow.getAllWindows()) window.destroy();
+          }).catch(() => {});
+          await app.close();
+        }
       } finally {
         if (failed) {
           fs.mkdirSync(testInfo.outputDir, { recursive: true });

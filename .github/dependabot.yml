@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Actions are pinned to commit hashes; Dependabot updates the hash and its version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Electron gets its own pull requests: each major version needs the full UI check.
+      development:
+        dependency-type: development
+        exclude-patterns: ['electron']
+      runtime:
+        dependency-type: production
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

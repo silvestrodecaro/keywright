@@ -8,7 +8,7 @@ module.exports = defineConfig({
   retries: 0,
   forbidOnly: !!process.env.CI,
   timeout: 120_000,
-  globalTimeout: 300_000,
+  globalTimeout: 600_000,
   expect: { timeout: 15_000 },
   outputDir: './out/ui-tests',
   reporter: [

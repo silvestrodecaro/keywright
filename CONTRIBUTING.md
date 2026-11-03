@@ -144,7 +144,13 @@ from the nested location while finding executables in the shared cache. Both
 Node.js versions run these checks on pushes and pull requests. Failed runs upload
 their evidence as `keywright-failure-node-24` or `keywright-failure-node-26` for
 seven days. GitHub branch protection must
-separately require the check if merges should depend on it.
+separately require the check if merges should depend on it. A newer push to the
+same branch cancels the run it supersedes.
+
+Workflow actions are pinned to commit hashes, with the release in a comment.
+[Dependabot](.github/dependabot.yml) proposes weekly updates for the actions, npm
+packages and the Python test baseline. Electron updates arrive as separate pull
+requests; review its release notes and run the desktop UI tests before merging.
 
 ## Verified environment
 
