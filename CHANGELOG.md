@@ -1,11 +1,19 @@
 # Changelog
 
-Notable changes to Keywright. Each version is a Git tag such as `v0.3.0` that you
+Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
 ## Unreleased
 
-## 0.3.0 - 2026-11-03
+## 0.1.0 - 2026-11-03
+
+The first Keywright release. It includes Test Generator recording, the Monaco
+editor with Robot Framework analysis, test execution with streamed keyword
+results, failure investigation with screenshots and traces, the Robot debugger and
+local run history.
+
+The sections below list the changes from the earlier Robot Framework IDE source
+this repository starts from.
 
 ### Added
 
@@ -55,10 +63,3 @@ run from source; there are no installers yet.
 
 - Recovery steps for the Microsoft Defender detection of Electron 45.2.1, which
   Microsoft confirmed as a false positive on 2026-11-02.
-
-## 0.2.0 - project baseline
-
-The source baseline from which this repository starts: Test Generator recording,
-the Monaco editor with Robot Framework analysis, test execution with streamed
-keyword results, failure investigation with screenshots and traces, the Robot
-debugger and local run history.
