@@ -45,6 +45,18 @@ environment.
 does not automatically reload the Electron window. Generated files under
 `src/renderer/dist/` should not be edited or committed.
 
+## Lint
+
+```powershell
+npm.cmd run lint
+```
+
+[Biome](https://biomejs.dev/) checks the JavaScript with its recommended rules,
+configured in [biome.json](biome.json). Rules that conflict with deliberate
+patterns, such as Robot `${variables}` inside ordinary strings, are switched off
+there. Biome is a single binary without dependencies. ESLint was not adopted
+because its dependency tree fails the CI audit. CI runs the lint before the tests.
+
 ## Tests
 
 ```powershell

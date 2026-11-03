@@ -43,7 +43,6 @@ test('checks unsaved Robot content and survives a crash', { skip: !python && 'no
 });
 
 test('lints unsaved content with Robocop and the project configuration', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
-  const os = require('os');
   const dir = tempDir('lint');
   fs.mkdirSync(path.join(dir, 'tests'));
   const worker = new LanguageWorker(python, dir);

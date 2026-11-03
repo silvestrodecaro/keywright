@@ -145,7 +145,7 @@ function setKeywords(list, { complete = true } = {}) {
 }
 
 function findKeywords(name) {
-  let text = name.trim();
+  const text = name.trim();
   let found = byName.get(normalizeKeyword(text)) || [];
   // `Library.Keyword` and `resource.Keyword` qualified names.
   const dot = text.lastIndexOf('.');

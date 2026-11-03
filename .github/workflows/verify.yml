@@ -37,6 +37,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: npm ci
+      - name: Lint JavaScript
+        run: npm run lint
       - name: Audit app and development dependencies
         run: npm audit --audit-level=moderate
       - name: Install the Electron runtime

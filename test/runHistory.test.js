@@ -3,7 +3,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { RunHistory, FILE_NAME, MAX_RUNS } = require('../src/main/runHistory');
 const { compareRuns, counts, trend } = require('../src/renderer/runDiff');

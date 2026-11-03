@@ -3,7 +3,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const projects = require('../src/main/projects');
 const { RecentProjects } = require('../src/main/recentProjects');
