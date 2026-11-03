@@ -12,8 +12,7 @@ reporting a problem.
 Report vulnerabilities privately through the repository's
 [security advisories](https://github.com/silvestrodecaro/keywright/security/advisories/new)
 page (**Security → Report a vulnerability**). Do not open a public issue for them.
-If private reporting is unavailable, open an issue that asks for a private contact
-and leave out the details.
+If you cannot use that page, email inquire.silvestro@gmail.com.
 
 Include:
 

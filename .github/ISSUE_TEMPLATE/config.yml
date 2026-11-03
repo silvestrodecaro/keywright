@@ -3,6 +3,9 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/silvestrodecaro/keywright/security/advisories/new
     about: Report vulnerabilities privately, not in a public issue.
+  - name: Ask a question
+    url: https://github.com/silvestrodecaro/keywright/discussions
+    about: Usage questions and ideas that are not a reproducible defect.
   - name: Troubleshooting
     url: https://github.com/silvestrodecaro/keywright/blob/main/docs/troubleshooting.md
     about: Setup, launch, browser and environment problems with known solutions.

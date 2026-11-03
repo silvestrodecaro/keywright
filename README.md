@@ -163,6 +163,9 @@ Report a reproducible problem or propose a change in the
 Include the Keywright version, project Python and relevant package versions, the
 steps to reproduce, and a small example with sensitive data removed.
 Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Ask questions and share ideas in
+[Discussions](https://github.com/silvestrodecaro/keywright/discussions).
+Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Development instructions are in [CONTRIBUTING.md](CONTRIBUTING.md).
 Keywright is available under the [MIT license](LICENSE).

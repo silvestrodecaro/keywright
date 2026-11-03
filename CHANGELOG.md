@@ -5,6 +5,11 @@ run from source; there are no installers yet.
 
 ## Unreleased
 
+### Documentation
+
+- A Code of Conduct, a Discussions link for questions and an email contact for
+  security reports.
+
 ## 0.1.0 - 2026-11-03
 
 The first Keywright release. It includes Test Generator recording, the Monaco

@@ -3,7 +3,9 @@
 Use the [issue tracker](https://github.com/silvestrodecaro/keywright/issues) for
 reproducible defects and proposed changes. For a change of more than a few lines,
 open an issue first to agree on its scope. Include a small example and remove
-credentials and private application data from attached artifacts.
+credentials and private application data from attached artifacts. Ask usage
+questions in [Discussions](https://github.com/silvestrodecaro/keywright/discussions).
+Participation in the project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
