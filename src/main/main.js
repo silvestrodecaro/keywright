@@ -12,6 +12,7 @@ const { RecentProjects } = require('./recentProjects');
 const projects = require('./projects');
 const { discoverTests, TestRunner, screenshotsFromHtml } = require('./testRunner');
 const { KeywordIndex } = require('./keywordIndex');
+const { RecoveryStore } = require('./recoveryStore');
 const { LanguageWorker } = require('./languageWorker');
 const { installBrowser } = require('./browserInstall');
 const { ProjectWatcher } = require('./projectWatcher');
@@ -43,6 +44,7 @@ let projectWatcher = null;
 let runOutputDir = null;
 let generatorOptions = { ...DEFAULT_OPTIONS };
 let recentProjects = null;
+let recovery = null;
 
 // Browser choices offered in the UI: the Playwright browser to record with and
 // the matching `New Browser` arguments of the generated test.
@@ -236,6 +238,25 @@ ipcMain.handle('project:keywords', async () => {
   return keywordIndex.build(currentProject);
 });
 
+// Unsaved editor buffers of the open project, kept for recovery after a crash.
+ipcMain.handle('recovery:read', () => (currentProject && recovery ? recovery.read(currentProject.root) : []));
+ipcMain.handle('recovery:store', (_event, entries) => {
+  if (!currentProject || !recovery || !Array.isArray(entries))
+    return;
+  try {
+    recovery.write(currentProject.root, entries.filter((entry) => typeof entry?.path === 'string' && typeof entry.content === 'string'));
+  } catch (error) {
+    console.error(`Cannot store unsaved changes for recovery: ${error.message}`);
+  }
+});
+
+// Packages installed or libraries changed outside the watched project folder are
+// not noticed automatically: forget their documentation and the Python worker's imports.
+ipcMain.handle('project:reload-libraries', () => {
+  keywordIndex.clear();
+  stopLanguageWorker();
+});
+
 ipcMain.handle('editor:check', async (_event, relative, text) => {
   const worker = projectLanguageWorker();
   if (!worker)
@@ -298,15 +319,15 @@ ipcMain.handle('dialog:run-changes', async (_event, names) => {
 ipcMain.handle('dialog:file-conflict', async (_event, relative, deleted) => {
   const { response } = await dialog.showMessageBox(mainWindow, {
     type: 'warning',
-    buttons: deleted ? ['Keep Editing', 'Recreate File'] : ['Keep Editing', 'Overwrite File', 'Reload from Disk'],
+    buttons: deleted ? ['Keep Editing', 'Recreate File'] : ['Keep Editing', 'Compare…', 'Overwrite File', 'Reload from Disk'],
     defaultId: 0,
     cancelId: 0,
     message: `${relative} ${deleted ? 'was deleted' : 'changed'} on disk.`,
     detail: deleted
       ? 'Keep editing to cancel this save, or recreate the file with your editor contents.'
-      : 'Keep editing to cancel this save. Overwrite replaces the disk contents with your editor version. Reload discards your editor changes and opens the disk version.',
+      : 'Keep editing to cancel this save. Compare shows both versions side by side so you can combine them. Overwrite replaces the disk contents with your editor version. Reload discards your editor changes and opens the disk version.',
   });
-  return ['cancel', 'overwrite', 'reload'][response];
+  return (deleted ? ['cancel', 'overwrite'] : ['cancel', 'compare', 'overwrite', 'reload'])[response];
 });
 
 ipcMain.handle('project:reveal', (_event, relative) => {
@@ -589,8 +610,11 @@ function createWindow() {
       message: 'Some files have unsaved changes.',
       detail: 'Your changes will be lost if you close the window.',
     });
-    if (choice === 0)
+    if (choice === 0) {
       event.preventDefault(); // ignore beforeunload and close
+      if (currentProject && recovery)
+        recovery.clear(currentProject.root); // the changes were discarded deliberately
+    }
   });
   mainWindow.on('closed', () => { mainWindow = null; });
 }
@@ -600,6 +624,7 @@ app.whenReady().then(async () => {
   // Playwright trace viewer follows prefers-color-scheme.
   nativeTheme.themeSource = 'dark';
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
+  recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   // `electron . <folder>` opens a project directly.
   // Electron may put its debugger switches before the application entry path.
   const positionalArgs = process.argv.slice(1).filter((arg) => !arg.startsWith('-'));

@@ -102,6 +102,109 @@ test('shows a failed assertion and its screenshot, then navigates to the test so
   await expect(page.locator('#pane-file .monaco-editor .view-lines')).toContainText('Welcome back');
 });
 
+test('reloads library documentation changed outside the project', async ({ desktop }) => {
+  const { page, project } = desktop;
+  // A library outside the project folder is not watched, as with an installed package.
+  const library = path.join(path.dirname(project), 'external', 'ExternalKeywords.py');
+  fs.mkdirSync(path.dirname(library), { recursive: true });
+  fs.writeFileSync(library, 'def first_external_keyword():\n    pass\n');
+  fs.writeFileSync(path.join(project, 'resources/external.resource'),
+    `*** Settings ***\nLibrary    ${library.replace(/\\/g, '/')}\n`);
+
+  await openExample(desktop);
+  const status = page.locator('#editor-status');
+  await expect(status).toHaveText(/^\d+ keywords$/, { timeout: 60_000 });
+  const before = Number((await status.textContent()).match(/\d+/)[0]);
+
+  fs.writeFileSync(library, 'def first_external_keyword():\n    pass\n\ndef second_external_keyword():\n    pass\n');
+  await page.getByRole('button', { name: 'Reload libraries' }).click();
+  await expect(status).toHaveText(`${before + 1} keywords`, { timeout: 60_000 });
+});
+
+test('offers unsaved changes again after the window crashes', async ({ desktop }) => {
+  let { page } = desktop;
+  const { project, profile, relaunch } = desktop;
+  const source = path.join(project, 'tests/access.robot');
+  const original = fs.readFileSync(source, 'utf8');
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
+  await page.locator('#pane-file .monaco-editor .view-lines').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\nRecovered Test\n    Log    kept after a crash');
+  await expect(page.getByRole('tab', { name: 'access.robot, unsaved changes' })).toBeVisible();
+  const recovery = path.join(profile, 'recovery');
+  await expect.poll(() => fs.existsSync(recovery) && fs.readdirSync(recovery).length).toBe(1);
+
+  ({ page } = await relaunch());
+  const notice = page.locator('#recovery-notice');
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText('1 file');
+  await page.getByRole('button', { name: 'Restore', exact: true }).click();
+  await expect(notice).toBeHidden();
+  await expect(page.getByRole('tab', { name: 'access.robot, unsaved changes' })).toBeVisible();
+  await expect(page.locator('#pane-file .monaco-editor .view-lines')).toContainText('kept after a crash');
+  expect(fs.readFileSync(source, 'utf8')).toBe(original); // restored as unsaved, not written
+
+  await page.keyboard.press('Control+S');
+  await expect(page.getByRole('tab', { name: 'access.robot', exact: true })).toBeVisible();
+  expect(fs.readFileSync(source, 'utf8')).toContain('kept after a crash');
+  await expect.poll(() => fs.readdirSync(recovery).length).toBe(0);
+});
+
+test('discarding recovered changes keeps the files on disk unchanged', async ({ desktop }) => {
+  let { page } = desktop;
+  const { project, profile, relaunch } = desktop;
+  const source = path.join(project, 'tests/access.robot');
+  const original = fs.readFileSync(source, 'utf8');
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
+  await page.locator('#pane-file .monaco-editor .view-lines').click();
+  await page.keyboard.type('# unsaved\n');
+  const recovery = path.join(profile, 'recovery');
+  await expect.poll(() => fs.existsSync(recovery) && fs.readdirSync(recovery).length).toBe(1);
+
+  ({ page } = await relaunch());
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await expect(page.locator('#recovery-notice')).toBeHidden();
+  await expect.poll(() => fs.readdirSync(recovery).length).toBe(0);
+  expect(fs.readFileSync(source, 'utf8')).toBe(original);
+});
+
+test('a save conflict can be compared side by side and saved as a combined version', async ({ desktop }) => {
+  const { app, page, project } = desktop;
+  const source = path.join(project, 'tests/access.robot');
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
+  await page.locator('#pane-file .monaco-editor .view-lines').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n# added in Keywright');
+  fs.writeFileSync(source, '# added on disk\n' + fs.readFileSync(source, 'utf8'));
+  // The native conflict dialog is OS UI: only its answer, Compare, is supplied.
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () => ({ response: 1 });
+  });
+
+  await page.keyboard.press('Control+S');
+  const view = page.getByRole('dialog', { name: 'tests/access.robot changed on disk' });
+  await expect(view).toBeVisible();
+  await expect(view.locator('.editor.original .view-lines')).toContainText('# added on disk');
+  await expect(view.locator('.editor.modified .view-lines')).toContainText('# added in Keywright');
+  await view.locator('.editor.modified .view-lines').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.type('# added on disk\n');
+  await view.getByRole('button', { name: 'Save Your Version' }).click();
+
+  await expect(view).toBeHidden();
+  await expect(page.getByRole('tab', { name: 'access.robot', exact: true })).toBeVisible();
+  const saved = fs.readFileSync(source, 'utf8');
+  expect(saved.startsWith('# added on disk\n')).toBe(true);
+  expect(saved).toContain('# added in Keywright');
+  await expect(page.locator('#pane-file .monaco-editor .view-lines').first()).toContainText('# added on disk');
+});
+
 test.describe('a project supplied on startup', () => {
   test.use({ projectOnLaunch: true });
 

@@ -9,8 +9,12 @@
     root.RFWorkspaceFiles = exports;
 })(typeof window === 'object' ? window : globalThis, function () {
   class WorkspaceFiles {
-    constructor({ editor, api, getFile, onSaved = () => {}, status = () => {} }) {
-      Object.assign(this, { editor, api, getFile, onSaved, status });
+    /**
+     * `compare({ path, disk, mine })` shows both versions of a conflicting file and
+     * resolves to { choice: 'save', content } | { choice: 'reload' } | { choice: 'cancel' }.
+     */
+    constructor({ editor, api, getFile, onSaved = () => {}, status = () => {}, compare = async () => ({ choice: 'cancel' }) }) {
+      Object.assign(this, { editor, api, getFile, onSaved, status, compare });
       this.pending = new Map();
     }
 
@@ -45,20 +49,43 @@
       const file = this.getFile(path);
       if (!file)
         return false;
-      const snapshot = this.editor.snapshot(path);
+      let snapshot = this.editor.snapshot(path);
       let revision = file.revision;
+      const readDisk = async () => {
+        const disk = await this.api.readProjectFile(path);
+        if (disk.content === null)
+          throw new Error(disk.reason);
+        return disk;
+      };
+      const reloadFrom = (disk) => {
+        this.editor.reload(path, disk.content, { discardChanges: true });
+        Object.assign(file, { content: disk.content, revision: disk.revision });
+        this.status(`Reloaded ${path} from disk.`);
+        return false;
+      };
       try {
         let result = await this.api.writeProjectFile(path, snapshot.content, revision);
         while (result.conflict) {
           const choice = await this.api.confirmFileConflict(path, result.revision === null);
-          if (choice === 'reload') {
-            const disk = await this.api.readProjectFile(path);
-            if (disk.content === null)
-              throw new Error(disk.reason);
-            this.editor.reload(path, disk.content, { discardChanges: true });
-            Object.assign(file, { content: disk.content, revision: disk.revision });
-            this.status(`Reloaded ${path} from disk.`);
-            return false;
+          if (choice === 'reload')
+            return reloadFrom(await readDisk());
+          if (choice === 'compare') {
+            const disk = await readDisk();
+            const outcome = await this.compare({ path, disk: disk.content, mine: snapshot.content });
+            if (outcome?.choice === 'reload')
+              return reloadFrom(disk);
+            if (outcome?.choice !== 'save') {
+              this.status(`Save cancelled: ${path} changed on disk.`, true);
+              return false;
+            }
+            // The merged text goes into the editor first, so a further conflict cannot lose it.
+            if (outcome.content !== snapshot.content) {
+              this.editor.restoreContent(path, outcome.content);
+              snapshot = this.editor.snapshot(path);
+            }
+            revision = disk.revision;
+            result = await this.api.writeProjectFile(path, snapshot.content, revision);
+            continue;
           }
           if (choice !== 'overwrite') {
             this.status(`Save cancelled: ${path} changed on disk.`, true);

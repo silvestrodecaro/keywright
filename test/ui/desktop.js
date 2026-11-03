@@ -39,34 +39,54 @@ const test = base.extend({
       fs.writeFileSync(configPath, JSON.stringify({ ...config, python: path.resolve(python) }));
       const env = { ...process.env };
       delete env.ELECTRON_RUN_AS_NODE;
-      app = await electron.launch({
-        executablePath: require('electron'),
-        args: [root, `--user-data-dir=${profile}`, ...(projectOnLaunch ? [project] : [])],
-        cwd: root,
-        env,
-        timeout: 30_000,
-      });
-      for (const stream of ['stdout', 'stderr'])
-        app.process()[stream]?.on('data', (chunk) => processLog.push(`[${stream}] ${chunk}`));
-      processLog.push('[launch] ' + JSON.stringify(await app.evaluate(({ app }) => ({
-        argv: process.argv, isPackaged: app.isPackaged, defaultApp: process.defaultApp, appPath: app.getAppPath(),
-      }))) + '\n');
-      page = await app.firstWindow();
-      page.setDefaultTimeout(15_000);
-      page.on('pageerror', (error) => rendererErrors.push(error.stack || error.message));
-      page.on('console', (message) => {
-        if (message.type() === 'error') processLog.push(`[renderer] ${message.text()}\n`);
-      });
-      await app.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
-      tracing = true;
-      // firstWindow() can expose the HTML before its synchronous scripts bind controls.
-      await page.waitForLoadState('domcontentloaded');
+      const launch = async (openProject) => {
+        app = await electron.launch({
+          executablePath: require('electron'),
+          args: [root, `--user-data-dir=${profile}`, ...(openProject ? [project] : [])],
+          cwd: root,
+          env,
+          timeout: 30_000,
+        });
+        for (const stream of ['stdout', 'stderr'])
+          app.process()[stream]?.on('data', (chunk) => processLog.push(`[${stream}] ${chunk}`));
+        processLog.push('[launch] ' + JSON.stringify(await app.evaluate(({ app }) => ({
+          argv: process.argv, isPackaged: app.isPackaged, defaultApp: process.defaultApp, appPath: app.getAppPath(),
+        }))) + '\n');
+        page = await app.firstWindow();
+        page.setDefaultTimeout(15_000);
+        page.on('pageerror', (error) => rendererErrors.push(error.stack || error.message));
+        page.on('console', (message) => {
+          if (message.type() === 'error') processLog.push(`[renderer] ${message.text()}\n`);
+        });
+        await app.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+        tracing = true;
+        // firstWindow() can expose the HTML before its synchronous scripts bind controls.
+        await page.waitForLoadState('domcontentloaded');
+      };
+      await launch(projectOnLaunch);
       if (!projectOnLaunch) {
         await expect(page.locator('#view-welcome')).toBeVisible();
         await expect(page.getByText('No recent projects.', { exact: true })).toBeVisible();
       }
 
-      await use({ app, page, project, profile, processLog });
+      // Ends Electron without closing its window, as a crash or a forced shutdown
+      // does, then starts it again with the same profile and the project open.
+      const relaunch = async () => {
+        tracing = false;
+        await app.context().tracing.stop().catch(() => {});
+        const exited = new Promise((resolve) => app.process().once('exit', resolve));
+        // Child processes (renderer, Python language worker) go too, as in a crash
+        // of the whole application; a survivor would keep the project folder in use.
+        if (process.platform === 'win32')
+          execFileSync('taskkill', ['/pid', String(app.process().pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true });
+        else
+          app.process().kill('SIGKILL');
+        await exited;
+        await launch(true);
+        return { app, page };
+      };
+
+      await use({ app, page, project, profile, processLog, relaunch });
       expect(rendererErrors, 'Unexpected renderer exceptions').toEqual([]);
     } catch (error) {
       fixtureFailed = true;

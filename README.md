@@ -136,9 +136,9 @@ folder reads its files; environment setup is a separate step.
 ## Local data and network access
 
 Project files and Robot output are stored in the project directories. Run summaries
-are kept in the configured results folder; recent projects and interface settings
-are stored in Electron's user-data directory. Keywright has no analytics or telemetry
-integration in the application source.
+are kept in the configured results folder; recent projects, interface settings and
+copies of unsaved files are stored in Electron's user-data directory. Keywright has
+no analytics or telemetry integration in the application source.
 
 Source runs do not check for application updates. Project setup downloads Python
 packages and Browser dependencies; browser installation downloads browser binaries.

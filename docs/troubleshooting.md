@@ -307,7 +307,8 @@ documentation; unknown-keyword diagnostics are deliberately suppressed in that c
 Confirm the library is installed in that interpreter. Saved Python changes inside
 the project refresh the keyword index. Each rebuild checks the documented library
 source, and failed imports are retried. After installing packages or changing code
-outside the watched project, close and reopen the project to force a rebuild.
+outside the project folder, choose **Reload libraries** in the status bar to read
+all library documentation again.
 
 Variables supplied only through Robot command-line arguments may be reported as
 undefined by static analysis. Where appropriate, provide a default in a Variables

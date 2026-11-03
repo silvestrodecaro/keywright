@@ -318,7 +318,18 @@ input:disabled, select:disabled { opacity: .55; }
 .tree-row.is-file .tree-icon { color: var(--tok-keyword); }
 .tree-label { overflow: hidden; text-overflow: ellipsis; }
 
-.editor-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.editor-area { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* Save conflict comparison, covering the editor area */
+.compare-view { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--bg); }
+.compare-view[hidden] { display: none; }
+.compare-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.compare-heading { min-width: 0; }
+.compare-heading h2 { margin: 0; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; text-transform: none; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.compare-heading p { margin: 2px 0 0; font-size: 12px; }
+.compare-actions { display: flex; flex: none; gap: 8px; }
+.compare-labels { display: grid; grid-template-columns: 1fr 1fr; padding: 4px 16px; border-bottom: 1px solid var(--border); color: var(--muted); font: 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .05em; }
+.compare-editor { flex: 1; min-height: 0; }
 
 .tabs {
   display: flex;
@@ -662,6 +673,10 @@ input:disabled, select:disabled { opacity: .55; }
 .statusbar-right { display: flex; gap: 16px; min-width: 0; }
 #editor-status { white-space: nowrap; }
 #editor-status.is-error { color: var(--warn); }
+.statusbar-button { padding: 0; border: 0; background: none; color: var(--muted); font-size: inherit; white-space: nowrap; cursor: pointer; }
+.statusbar-button:hover:not(:disabled) { color: var(--text); text-decoration: underline; }
+.statusbar-button:disabled { opacity: .6; cursor: default; }
+.statusbar-button[hidden] { display: none; }
 
 .file-header-right { display: flex; gap: 16px; }
 .file-problems { display: flex; gap: 10px; }

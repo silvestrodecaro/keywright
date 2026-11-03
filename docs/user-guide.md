@@ -166,11 +166,23 @@ files offers to cancel or close without saving.
 
 Files changed externally reload when their editor tabs have no unsaved edits.
 Modified tabs keep their editor contents. Saving checks the disk revision read by
-the editor. If it changed, choose **Keep Editing**, **Overwrite File**, or **Reload
-from Disk**. Reload discards the editor changes. A deleted file offers **Recreate
-File** instead. There is no side-by-side conflict comparison.
+the editor. If it changed, choose **Keep Editing**, **Compare…**, **Overwrite File**,
+or **Reload from Disk**. Reload discards the editor changes. A deleted file offers
+**Recreate File** instead.
+
+**Compare…** shows the file on disk on the left and your version on the right.
+Edit the right side to combine both, then choose **Save Your Version**. **Use Disk
+Version** discards your changes; **Keep Editing** or Escape returns to the editor
+without saving. If the file changes again while you compare, saving raises a new
+conflict and your combined text stays in the editor.
 Edits made while a save is in progress remain marked as unsaved.
-Unsaved editor buffers are not restored after an application crash.
+
+While you edit, Keywright keeps a copy of unsaved files in its user-data directory.
+If it crashes or is closed without its usual prompt, reopening the project shows
+which files had unsaved changes. **Restore** reopens them with those changes, still
+unsaved, and **Discard** deletes the copy. A file that changed on disk in the
+meantime raises the usual save conflict when you save it. Choosing **Close Without
+Saving** deletes the copy.
 
 ### Completion and navigation
 
@@ -216,9 +228,10 @@ Formatting applies the project's supported configuration in `robocop.toml`,
 `pyproject.toml` or `robot.toml` and leaves the result in the editor to be saved.
 If Robocop is missing, Keywright offers to install it in the project environment.
 
-Library documentation is cached for the application session. If a changed or newly
-installed Python library still has stale completion, restart Keywright; see
-[completion troubleshooting](troubleshooting.md#completion-or-diagnostics-are-missing-or-stale).
+Library documentation is cached while the project is open. Saved Python files inside
+the project refresh it automatically. After installing packages or changing a
+library outside the project folder, choose **Reload libraries** in the status bar;
+see [completion troubleshooting](troubleshooting.md#completion-or-diagnostics-are-missing-or-stale).
 
 ### Search and replace
 
@@ -488,9 +501,9 @@ continuing. For a ZIP download, extract the latest archive into a new folder and
 run `setup.bat` there. Keep Robot test projects in their existing folders.
 The app does not download updates or change its source files.
 
-Recent projects, sidebar
-width, breakpoints, watches and run options are stored in Electron's user-data
-directory, separately from your test source. Some settings are per project; pinned
+Recent projects, sidebar width, breakpoints, watches, run options and copies of
+unsaved files are stored in Electron's user-data directory, separately from your
+test source. Some settings are per project; pinned
 watches and sidebar width are shared application settings.
 
 ## Current limitations
@@ -498,9 +511,8 @@ watches and sidebar width are shared application settings.
 - Browser library is the supported browser integration; SeleniumLibrary is not.
 - Python dependencies are installed separately for each selected project environment.
 - Test execution uses saved disk contents, with the save behavior described above.
-- Save conflicts offer reload, overwrite or cancellation, without a side-by-side diff.
-- Unsaved buffers are not persisted for crash recovery.
-- Package installations and changes outside the watched project may require closing and reopening the project to refresh library documentation.
+- Save conflicts can be compared side by side, but there is no automatic three-way merge.
+- Package installations and library changes outside the project folder are not detected automatically. Use **Reload libraries** in the status bar.
 - History retains summaries rather than complete run artifacts.
 - Traces depend on explicit Browser contexts and their successful closure.
 - The Test Generator depends on private Playwright recorder APIs; upgrades require

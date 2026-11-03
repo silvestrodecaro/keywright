@@ -23,6 +23,11 @@ function fixture() {
       model.content = content;
       model.savedVersion = ++model.version;
     },
+    restoreContent(name, content) {
+      const model = models.get(name);
+      model.content = content;
+      model.version++;
+    },
   };
   const api = {
     readProjectFile: async (name) => projects.readProjectFile(root, name),
@@ -31,7 +36,13 @@ function fixture() {
     confirmRunChanges: async () => 'save',
     confirmUnsaved: async () => 'save',
   };
-  const workspace = new WorkspaceFiles({ editor, api, getFile: (name) => tabs.get(name) });
+  const comparisons = [];
+  let compareChoice = { choice: 'cancel' };
+  const compare = async (request) => {
+    comparisons.push(request);
+    return typeof compareChoice === 'function' ? compareChoice(request) : compareChoice;
+  };
+  const workspace = new WorkspaceFiles({ editor, api, getFile: (name) => tabs.get(name), compare });
   function open(name, content) {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
     fs.writeFileSync(path.join(root, name), content);
@@ -47,7 +58,11 @@ function fixture() {
     tabs.set(name, disk);
     models.set(name, { content: disk.content, version: 1, savedVersion: 1 });
   }
-  return { root, api, workspace, editor, open, edit, reopen, read: (name) => fs.readFileSync(path.join(root, name), 'utf8') };
+  return {
+    root, api, workspace, editor, open, edit, reopen, comparisons,
+    answerCompare: (choice) => { compareChoice = choice; },
+    read: (name) => fs.readFileSync(path.join(root, name), 'utf8'),
+  };
 }
 
 test('opening an external link produces an explanatory read-only file state', async () => {
@@ -177,6 +192,67 @@ test('reloading a conflict replaces the buffer but cancels the pending save', as
   assert.equal(f.editor.isDirty('a.robot'), false);
   f.edit('a.robot', 'next edit');
   assert.equal(await f.workspace.save('a.robot'), true);
+});
+
+test('comparing a conflict shows the disk and editor versions and can be cancelled', async () => {
+  const f = fixture();
+  f.open('a.robot', 'original');
+  f.edit('a.robot', 'editor');
+  fs.writeFileSync(path.join(f.root, 'a.robot'), 'external');
+  f.api.confirmFileConflict = async () => 'compare';
+  assert.equal(await f.workspace.save('a.robot'), false);
+  assert.deepEqual(f.comparisons, [{ path: 'a.robot', disk: 'external', mine: 'editor' }]);
+  assert.equal(f.read('a.robot'), 'external');
+  assert.equal(f.editor.snapshot('a.robot').content, 'editor');
+  assert.equal(f.editor.isDirty('a.robot'), true);
+});
+
+test('a version merged in the comparison is saved and replaces the editor content', async () => {
+  const f = fixture();
+  f.open('a.robot', 'original');
+  f.edit('a.robot', 'editor');
+  fs.writeFileSync(path.join(f.root, 'a.robot'), 'external');
+  f.api.confirmFileConflict = async () => 'compare';
+  f.answerCompare({ choice: 'save', content: 'external + editor' });
+  assert.equal(await f.workspace.save('a.robot'), true);
+  assert.equal(f.read('a.robot'), 'external + editor');
+  assert.equal(f.editor.snapshot('a.robot').content, 'external + editor');
+  assert.equal(f.editor.isDirty('a.robot'), false);
+  f.edit('a.robot', 'next edit');
+  assert.equal(await f.workspace.save('a.robot'), true);
+  assert.equal(f.read('a.robot'), 'next edit');
+});
+
+test('the disk version chosen in the comparison replaces the buffer without saving', async () => {
+  const f = fixture();
+  f.open('a.robot', 'original');
+  f.edit('a.robot', 'editor');
+  fs.writeFileSync(path.join(f.root, 'a.robot'), 'external');
+  f.api.confirmFileConflict = async () => 'compare';
+  f.answerCompare({ choice: 'reload' });
+  assert.equal(await f.workspace.save('a.robot'), false);
+  assert.equal(f.editor.snapshot('a.robot').content, 'external');
+  assert.equal(f.editor.isDirty('a.robot'), false);
+  assert.equal(f.read('a.robot'), 'external');
+});
+
+test('a file changed again during the comparison raises a new conflict', async () => {
+  const f = fixture();
+  f.open('a.robot', 'original');
+  f.edit('a.robot', 'editor');
+  fs.writeFileSync(path.join(f.root, 'a.robot'), 'external');
+  const answers = ['compare', 'cancel'];
+  f.api.confirmFileConflict = async () => answers.shift();
+  f.answerCompare(() => {
+    fs.writeFileSync(path.join(f.root, 'a.robot'), 'external again');
+    return { choice: 'save', content: 'merged' };
+  });
+  assert.equal(await f.workspace.save('a.robot'), false);
+  assert.deepEqual(answers, []);
+  assert.equal(f.read('a.robot'), 'external again');
+  // The merged version stays in the editor, unsaved, rather than being lost.
+  assert.equal(f.editor.snapshot('a.robot').content, 'merged');
+  assert.equal(f.editor.isDirty('a.robot'), true);
 });
 
 test('preparing a run saves dirty resources as well as test files', async () => {

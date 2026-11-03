@@ -240,6 +240,26 @@
 
       <div class="editor-area">
         <nav id="tabs" class="tabs" role="tablist" aria-label="Workspace"></nav>
+        <div id="compare-view" class="compare-view" role="dialog" aria-modal="true" aria-labelledby="compare-title" hidden>
+          <div class="compare-header">
+            <div class="compare-heading">
+              <h2 id="compare-title"></h2>
+              <p class="muted">Left: the file on disk. Right: your version, which you can edit to combine both.</p>
+            </div>
+            <div class="compare-actions">
+              <button id="compare-cancel" class="btn btn-sm" type="button">Keep Editing</button>
+              <button id="compare-reload" class="btn btn-sm" type="button">Use Disk Version</button>
+              <button id="compare-save" class="btn btn-sm btn-primary" type="button">Save Your Version</button>
+            </div>
+          </div>
+          <div class="compare-labels"><span>On disk</span><span>Your version</span></div>
+          <div id="compare-editor" class="compare-editor"></div>
+        </div>
+        <div id="recovery-notice" class="notice" role="status" hidden>
+          <span id="recovery-notice-text"></span>
+          <button id="recovery-restore" class="btn btn-sm btn-primary" type="button">Restore</button>
+          <button id="recovery-discard" class="btn btn-sm" type="button">Discard</button>
+        </div>
 
         <!-- Test generator tab -->
         <div id="pane-generator" class="pane pane-generator" role="tabpanel">
@@ -361,6 +381,7 @@
       <span id="status"><span class="status-dot"></span><span class="status-text">Idle</span></span>
       <span class="statusbar-right">
         <span id="editor-status" class="muted"></span>
+        <button id="reload-libraries" class="statusbar-button" type="button" title="Read library documentation again, after installing packages or changing libraries outside the project" hidden>Reload libraries</button>
         <span id="python-status" class="muted"></span>
       </span>
     </footer>

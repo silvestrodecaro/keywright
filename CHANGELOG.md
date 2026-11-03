@@ -7,6 +7,12 @@ releases yet; the version in `package.json` changes when a source version is tag
 
 ### Added
 
+- **Compare…** in the save conflict dialog shows the disk and editor versions side
+  by side. Edit your version to combine both, then save it.
+- Recovery of unsaved files after a crash. Reopening the project offers to restore
+  the unsaved changes or discard them.
+- **Reload libraries** in the status bar reads library documentation again after
+  packages are installed or libraries change outside the project folder.
 - Guided Windows setup through `setup.bat`. It checks Node.js, npm, Python and Git,
   offers WinGet installation of missing prerequisites after confirmation, prepares
   the included example and records its output under `out/setup/`.

@@ -1669,12 +1669,59 @@ const RFEditor = (() => {
     return true;
   }
 
+  /** Puts recovered unsaved content into an open file as one undoable edit, leaving it unsaved. */
+  function restoreContent(path, content) {
+    const model = files.get(path)?.model;
+    if (!model || model.getValue() === content)
+      return false;
+    model.pushEditOperations([], [{ range: model.getFullModelRange(), text: content }], () => null);
+    return true;
+  }
+
+  /**
+   * Side-by-side comparison of the disk version (left, read-only) with the editor
+   * version (right, editable) of a file whose save conflicted.
+   */
+  function createComparison(container, { path, disk, mine }) {
+    const language = languageForPath(path);
+    const stamp = Date.now();
+    const original = monaco.editor.createModel(disk, language, monaco.Uri.from({ scheme: 'keywright-compare', path: `/${stamp}/disk/${path}` }));
+    const modified = monaco.editor.createModel(mine, language, monaco.Uri.from({ scheme: 'keywright-compare', path: `/${stamp}/mine/${path}` }));
+    const diff = monaco.editor.createDiffEditor(container, {
+      theme: 'keywright-dark',
+      automaticLayout: true,
+      fontFamily: '"IBM Plex Mono", "Cascadia Code", Consolas, monospace',
+      fontSize: 13,
+      lineHeight: 21,
+      renderSideBySide: true,
+      originalEditable: false,
+      readOnly: false,
+      ignoreTrimWhitespace: false,
+      renderOverviewRuler: true,
+      scrollBeyondLastLine: false,
+      minimap: { enabled: false },
+      useShadowDOM: false,
+    });
+    diff.setModel({ original, modified });
+    diff.getModifiedEditor().focus();
+    return {
+      content: () => modified.getValue(),
+      dispose() {
+        diff.dispose();
+        original.dispose();
+        modified.dispose();
+      },
+    };
+  }
+
   return {
     mount,
     open,
     close,
     markSaved,
     reload,
+    restoreContent,
+    createComparison,
     isDirty,
     has: (path) => files.has(path),
     snapshot: (path) => ({ content: files.get(path).model.getValue(), version: files.get(path).model.getAlternativeVersionId() }),

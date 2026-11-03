@@ -81,8 +81,12 @@ advance the revision of a dirty model or apply a response made stale by a newer 
 the destination and renames the replacement. It returns either the new revision
 or a conflict without overwriting. A deleted destination has revision `null` and
 requires explicit recreation. This is optimistic conflict detection, not a
-filesystem lock against arbitrary concurrent writers. Native dialogs offer cancel,
-overwrite or reload; there is no automatic merge or comparison view.
+filesystem lock against arbitrary concurrent writers. A native dialog offers cancel,
+compare, overwrite or reload. Compare opens a Monaco diff editor over the editor
+area, with the disk version read-only and the editor version editable. Saving from
+it first puts the combined text into the editor model, then writes it against the
+revision read for the comparison, so a further change on disk raises a new
+conflict without losing the combined text. There is no automatic merge.
 
 `WorkspaceFiles.read()` turns file-opening failures into a non-editable tab with
 a reason and recovery guidance. It removes the Electron IPC wrapper from errors;
@@ -172,7 +176,8 @@ are retried on the next build. Libraries without an inspectable source are rebui
 
 The project watcher clears library documentation on saved Python changes, including
 changes to modules imported by a library. Opening or closing a project also clears
-it. Each build records the invalidation generation and retries if a newer change
+it, and **Reload libraries** clears it and stops the language worker so the next
+check imports the libraries again. Each build records the invalidation generation and retries if a newer change
 arrived while Python was generating documentation. For library path imports, libdoc
 bypasses existing Python bytecode without creating or deleting cache files, so
 same-size source edits are read correctly even with unchanged modification times.
@@ -201,6 +206,7 @@ The formatted text returns to the editor rather than silently saving the source.
 | Breakpoints and run options | Renderer local storage in Electron `userData` | Keyed by project root |
 | Sidebar width, lint preference and watches | Renderer local storage | Shared application settings |
 | Unsaved editor models | Renderer memory | Current session only |
+| Recovery copies of unsaved files | `recovery/<hash>.json` in Electron `userData`, written by [recoveryStore.js](../src/main/recoveryStore.js) | Per project; written at most once a second while files are unsaved, deleted when none remain or the user discards them |
 | Library docs and worker state | Main-process memory / helper process | Application or worker session |
 
 Changing project locations changes the keys used for project-specific renderer
