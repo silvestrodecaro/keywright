@@ -1,6 +1,6 @@
 {
   "name": "keywright",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "IDE for Robot Framework (Browser library) with a Playwright-style test generator",
   "author": "Silvestro De Caro",
