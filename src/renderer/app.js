@@ -21,7 +21,14 @@
   function showView(name) {
     for (const view of document.querySelectorAll('.view'))
       view.hidden = view.id !== `view-${name}`;
+    const inProjectView = name === 'project';
+    $('#titlebar-actions').hidden = !inProjectView;
+    $('#project-root').hidden = !inProjectView;
+    if (!inProjectView)
+      $('#project-name').textContent = 'Keywright';
   }
+
+  api.onWindowActive((active) => document.body.classList.toggle('window-inactive', !active));
 
   // -------------------------------------------------------------------------
   // Welcome
@@ -214,6 +221,7 @@
     showView('project');
     $('#project-name').textContent = project.name;
     $('#project-root').textContent = project.root;
+    $('#project-root').title = project.root;
     $('#python-status').textContent = project.python
       ? `Python: ${project.python}`
       : 'No project virtual environment (.venv) found';

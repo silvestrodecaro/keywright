@@ -11,6 +11,7 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld('keywright', {
   appVersion: () => ipcRenderer.invoke('app:version'),
   openCrashReports: () => ipcRenderer.invoke('app:open-crash-reports'),
+  onWindowActive: (callback) => subscribe('window:active', callback),
   // Projects
   recentProjects: () => ipcRenderer.invoke('projects:recent'),
   removeRecentProject: (root) => ipcRenderer.invoke('projects:remove-recent', root),

@@ -642,6 +642,21 @@ function openWebLink(url) {
     shell.openExternal(parsed.href).catch((error) => console.error(`Cannot open ${parsed.href}: ${error.message}`));
 }
 
+// The page draws the title bar; the system keeps drawing the window buttons, which
+// preserves Snap Layouts. One pixel shorter than the page's bar, whose bottom border
+// continues under the buttons. The colors match --surface, --text and --muted.
+const TITLE_BAR_OVERLAY = { color: '#232a30', symbolColor: '#e2e1d7', height: 35 };
+const INACTIVE_SYMBOL_COLOR = '#a3afb5';
+
+// Decided here because the page cannot tell: a focused frame, such as a Robot report,
+// blurs the page while the window stays active.
+function publishWindowActive() {
+  const active = mainWindow.isFocused();
+  // macOS has no such method: its window buttons follow window focus by themselves.
+  mainWindow.setTitleBarOverlay?.(active ? TITLE_BAR_OVERLAY : { ...TITLE_BAR_OVERLAY, symbolColor: INACTIVE_SYMBOL_COLOR });
+  mainWindow.webContents.send('window:active', active);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -651,6 +666,8 @@ function createWindow() {
     title: 'Keywright',
     icon: path.join(__dirname, '../renderer/images/icon-256.png'),
     backgroundColor: '#1c2227',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: TITLE_BAR_OVERLAY,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -659,6 +676,8 @@ function createWindow() {
     },
   });
   mainWindow.setMenuBarVisibility(false);
+  mainWindow.on('focus', publishWindowActive);
+  mainWindow.on('blur', publishWindowActive);
   // The app never opens other windows or leaves its page. Web links, such as those in
   // keyword documentation, go to the system browser; anything else is ignored.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -673,6 +692,7 @@ function createWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     publishState();
     publishCode();
+    publishWindowActive();
   });
   mainWindow.on('page-title-updated', (event) => event.preventDefault());
   // The renderer cancels unload (beforeunload) while files have unsaved changes.

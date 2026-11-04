@@ -3,6 +3,15 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
+## Unreleased
+
+### Changed
+
+- The title bar is now part of the app, in its colors and on every screen. It holds
+  the open project's name and path, **Project settings** and **Close project**, which
+  replaces the separate project header and gives the editor more room. The window
+  buttons remain the system's, so Snap Layouts still work.
+
 ## 0.2.0 - 2026-11-04
 
 ### Added

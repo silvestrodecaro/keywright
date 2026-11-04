@@ -27,6 +27,16 @@ The window denies every new window and page navigation. HTTP and HTTPS links, fr
 keyword documentation, Robot logs or traces, open in the system browser; other
 schemes are ignored.
 
+The page draws the title bar in `index.html`, outside the views. The window uses
+`titleBarStyle: 'hidden'` with `titleBarOverlay`, so the system still draws the
+window buttons over the page and provides Snap Layouts, the system menu and top-edge
+resizing. The overlay colors in `main.js` repeat the CSS tokens. The bar's padding
+reads the `titlebar-area-*` environment variables to stay clear of the buttons.
+`-webkit-app-region: drag` makes the bar move the window and takes its clicks, so its
+controls and any layer that can cover it, such as the palette, set `no-drag`. The main
+process reports window focus to the page, because a focused frame blurs the page
+while the window stays active.
+
 The recorder's Playwright runs in the app's Node environment. Test execution and
 library inspection use the selected project Python. These are distinct toolchains
 and can require different browser binaries.

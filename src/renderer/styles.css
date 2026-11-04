@@ -20,6 +20,9 @@
   --error-text: #ffb4a9;
   --log-bg: #161b1f;
   --radius: 3px;
+  --titlebar-height: 36px;
+  /* Dims the page but not the bar: the system's window buttons cannot be dimmed with it. */
+  --page-scrim: linear-gradient(transparent var(--titlebar-height), rgb(0 0 0 / 30%) 0);
 
   --tok-section: #c9a6e9;
   --tok-name: #e0d3a3;
@@ -76,7 +79,41 @@ h2, .panel-header, .sidebar-tab, .results-switch-btn, .pane-results h3, .steps-s
 ::-webkit-scrollbar-thumb:hover { background-color: var(--border-strong); }
 ::-webkit-scrollbar-button { display: none; }
 
-.view { height: 100%; }
+.view { height: calc(100% - var(--titlebar-height)); }
+
+/* Title bar -------------------------------------------------------------- */
+/* The system draws the window buttons over the page, in the part of the bar outside
+   the title bar area. The main process's overlay colors match this background. */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--titlebar-height);
+  padding-left: calc(env(titlebar-area-x, 0px) + 10px);
+  padding-right: calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%) + 6px);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+.titlebar-mark { display: block; flex: none; width: 18px; height: 18px; }
+.project-name { flex: none; font-weight: 600; white-space: nowrap; }
+.project-root { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar-actions { display: flex; flex: none; gap: 2px; -webkit-app-region: no-drag; }
+.titlebar-actions .btn {
+  height: 26px;
+  padding: 0 10px;
+  background: none;
+  border-color: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.titlebar-actions .btn:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; color: var(--text); }
+.window-inactive .titlebar-mark { opacity: .55; }
+.window-inactive .project-name, .window-inactive .project-root { color: var(--tok-comment); }
+
+/* Layers that can cover the bar take their own clicks instead of moving the window. */
+.palette, .settings-dialog, .context-view, .monaco-menu-container { -webkit-app-region: no-drag; }
 
 /* Shared controls -------------------------------------------------------- */
 .brand-mark { display: block; flex: none; width: 30px; height: 30px; }
@@ -261,16 +298,6 @@ input:disabled, select:disabled { opacity: .55; }
 /* Project ---------------------------------------------------------------- */
 .view-project { display: flex; flex-direction: column; }
 
-.titlebar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-.project-name { font-weight: 600; }
-.project-root { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .spacer { flex: 1; }
 
 .project-body {
@@ -332,7 +359,7 @@ input:disabled, select:disabled { opacity: .55; }
 .compare-editor { flex: 1; min-height: 0; }
 
 /* Command palette (Ctrl+P files, Ctrl+Shift+P commands) */
-.palette { position: fixed; inset: 0; z-index: 100; display: flex; justify-content: center; align-items: flex-start; padding: 48px 16px 16px; background: rgb(0 0 0 / 30%); }
+.palette { position: fixed; inset: 0; z-index: 100; display: flex; justify-content: center; align-items: flex-start; padding: 48px 16px 16px; background: var(--page-scrim); }
 .palette-box { display: flex; flex-direction: column; width: min(640px, 100%); max-height: 100%; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); box-shadow: 0 16px 40px rgb(0 0 0 / 45%); }
 .palette .palette-input { flex: none; width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: var(--bg); font-size: 14px; }
 .palette .palette-input:focus { border-color: var(--accent); }
@@ -882,7 +909,7 @@ input:disabled, select:disabled { opacity: .55; }
 
 /* Project Settings dialog */
 .settings-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); box-shadow: 0 16px 40px rgb(0 0 0 / 45%); }
-.settings-dialog::backdrop { background: rgb(0 0 0 / 40%); }
+.settings-dialog::backdrop { background: var(--page-scrim); }
 .settings-form { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
 .settings-form h2 { margin: 0; color: var(--text); font-size: 16px; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .settings-form > p { margin: -8px 0 0; font-size: 12px; line-height: 1.5; }

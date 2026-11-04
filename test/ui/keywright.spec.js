@@ -413,3 +413,65 @@ test('web links open in the system browser instead of an app window', async ({ d
   expect(app.windows()).toHaveLength(1);
   expect(await app.evaluate(() => globalThis.openedExternally)).toEqual(['https://robotframework-browser.org/', 'https://example.com/']);
 });
+
+test('the title bar replaces the native one and follows the open project', async ({ desktop }, testInfo) => {
+  const { page, project } = desktop;
+  const bar = page.locator('#titlebar');
+  const appRegion = (locator) => locator.evaluate((element) => getComputedStyle(element).webkitAppRegion);
+
+  expect(await page.evaluate(() => navigator.windowControlsOverlay.visible)).toBe(true);
+  await expect(bar).toBeVisible();
+  expect(await appRegion(bar)).toBe('drag');
+  await expect(page.locator('#project-name')).toHaveText('Keywright');
+  await expect(page.locator('#project-root')).toBeHidden();
+  await expect(page.locator('#project-close')).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('titlebar-welcome.png') });
+
+  await openExample(desktop);
+  await expect(page.locator('#project-root')).toHaveText(project);
+  await expect(page.locator('#project-name')).not.toHaveText('Keywright');
+  await page.screenshot({ path: testInfo.outputPath('titlebar-project.png') });
+
+  // The native window buttons draw over the page: nothing clickable may sit under them.
+  const controls = await page.evaluate(() => navigator.windowControlsOverlay.getTitlebarAreaRect());
+  expect(controls.width).toBeGreaterThan(0);
+  for (const id of ['#project-settings', '#project-close']) {
+    const button = page.locator(id);
+    await expect(button).toBeVisible();
+    expect(await appRegion(button)).toBe('no-drag');
+    const box = await button.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(controls.x + controls.width);
+  }
+
+  // Layers that can cover the bar must receive their own clicks instead of moving the window.
+  await page.keyboard.press('Control+Shift+P');
+  await expect(page.locator('#palette')).toBeVisible();
+  expect(await appRegion(page.locator('#palette'))).toBe('no-drag');
+  await page.keyboard.press('Escape');
+  expect(await appRegion(page.locator('#settings'))).toBe('no-drag');
+
+  // The bar follows the window's focus as the main process reports it.
+  await desktop.app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    window.isFocused = () => false;
+    window.emit('blur');
+  });
+  await expect(page.locator('body')).toHaveClass(/window-inactive/);
+  await desktop.app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    window.isFocused = () => true;
+    window.emit('focus');
+  });
+  await expect(page.locator('body')).not.toHaveClass(/window-inactive/);
+
+  // The page still fills the window, with the status bar at its bottom edge.
+  const statusbar = await page.locator('.statusbar').boundingBox();
+  const height = await page.evaluate(() => window.innerHeight);
+  expect(statusbar.y + statusbar.height).toBe(height);
+
+  await page.locator('#project-close').click();
+  await expect(page.locator('#view-welcome')).toBeVisible();
+  await expect(page.locator('#project-name')).toHaveText('Keywright');
+  await expect(page.locator('#project-root')).toBeHidden();
+  await expect(page.locator('#project-close')).toBeHidden();
+});

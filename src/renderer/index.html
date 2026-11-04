@@ -8,6 +8,17 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <header id="titlebar" class="titlebar">
+    <img class="titlebar-mark" src="images/symbol.svg" alt="">
+    <span id="project-name" class="project-name">Keywright</span>
+    <span id="project-root" class="muted project-root" hidden></span>
+    <span class="spacer"></span>
+    <div id="titlebar-actions" class="titlebar-actions" hidden>
+      <button id="project-settings" class="btn" type="button">Project settings</button>
+      <button id="project-close" class="btn" type="button">Close project</button>
+    </div>
+  </header>
+
   <!-- Welcome --------------------------------------------------------------->
   <section id="view-welcome" class="view view-welcome">
     <div class="welcome">
@@ -97,15 +108,6 @@
 
   <!-- Project --------------------------------------------------------------->
   <section id="view-project" class="view view-project" hidden>
-    <header class="titlebar">
-      <img class="brand-mark" src="images/symbol.svg" alt="">
-      <span id="project-name" class="project-name"></span>
-      <span id="project-root" class="muted project-root"></span>
-      <span class="spacer"></span>
-      <button id="project-settings" class="btn" type="button">Project settings</button>
-      <button id="project-close" class="btn" type="button">Close project</button>
-    </header>
-
     <div class="project-body">
       <aside class="sidebar">
         <div class="sidebar-switch" role="tablist" aria-label="Project tools">
