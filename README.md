@@ -30,7 +30,7 @@ user keywords as the suite grows.
 
 ## Scope and status
 
-Keywright is in early development, currently version **0.4.0**. Run it from source
+Keywright is in early development, currently version **0.4.1**. Run it from source
 while the project is being tested and refined. Installer releases are on hold until
 they can be code-signed.
 Settings and behavior may change before 1.0.
