@@ -3,7 +3,7 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
-## Unreleased
+## 0.4.0 - 2026-11-10
 
 ### Added
 
