@@ -65,6 +65,7 @@ executables out of `.venv` makes their paths independent of the project director
 | UI shell | [app.js](../src/renderer/app.js), [index.html](../src/renderer/index.html), [styles.css](../src/renderer/styles.css) | Welcome/setup, project tabs, file saves, shared structure and visual tokens |
 | Workspace saves | [workspaceFiles.js](../src/renderer/workspaceFiles.js) | Per-file save queue, editor snapshots, disk revision conflicts and shared run preparation |
 | Keyboard navigation | [treeNavigation.js](../src/renderer/treeNavigation.js) | Visible-tree navigation, focus restoration and tab-group keyboard behavior |
+| Explorer file actions | [fileNames.js](../src/renderer/fileNames.js), [contextMenu.js](../src/renderer/contextMenu.js), `app.js` | New-file extension rules, path remapping after a rename, the page-drawn context menu; rename and delete go through `projects.renameProjectPath()` and the main process's Recycle Bin handler |
 | Project settings | [projectSettings.js](../src/main/projectSettings.js) (main), [projectSettings.js](../src/renderer/projectSettings.js) (dialog) | Reading, validating and atomically writing `keywright.json` while keeping unknown properties; the renderer reopens the project after a save |
 | Command palette | [paletteCore.js](../src/renderer/paletteCore.js), [palette.js](../src/renderer/palette.js) | Fuzzy matching and ranking; the overlay and its keyboard handling. The command list in `app.js` reuses existing buttons and functions, and each command lists only when it applies |
 | Feature panels | [generator.js](../src/renderer/generator.js), [tests.js](../src/renderer/tests.js), [problems.js](../src/renderer/problems.js), [history.js](../src/renderer/history.js) | Feature state, rendering and interaction |
@@ -116,6 +117,13 @@ root may itself be a link. Read, save, create and disk replacement use this chec
 Saving resolves the requested path again before replacement so a retargeted link
 cannot silently mark a different file saved. These are checks at the time of each
 operation, not a filesystem sandbox or a lock against concurrent directory changes.
+
+Rename and delete act on the entry itself inside its canonical parent folder, so a
+link is renamed or moved to the Recycle Bin as a link; a link whose destination is
+outside the project is refused. A rename keeps the entry in its folder and refuses
+names with path separators, Windows-reserved characters or names, and existing
+destinations other than a case-only change. Delete asks for confirmation in the
+main process and uses `shell.trashItem`; it never falls back to a permanent delete.
 
 ## Recording and generation
 

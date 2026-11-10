@@ -39,7 +39,7 @@
   function bind(tree) {
     tree.addEventListener('click', (event) => {
       const item = event.target.closest('[role="treeitem"]');
-      if (item && !event.target.closest('button')) focusItem(tree, item);
+      if (item && !event.target.closest('button, input')) focusItem(tree, item);
     }, true);
     tree.addEventListener('keydown', (event) => {
       if (event.altKey || event.ctrlKey || event.metaKey || event.target.closest('button, input, select')) return;
@@ -93,5 +93,5 @@
       [...list.querySelectorAll('[role="tab"]')].find((tab) => tab.id === id)?.focus();
     });
   }
-  return { treeAction, bind, replace, bindTabs };
+  return { treeAction, bind, replace, bindTabs, focusItem };
 });

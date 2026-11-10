@@ -206,3 +206,44 @@ test('RecentProjects keeps existing projects, most recent first', () => {
   recent.remove(b);
   assert.deepStrictEqual(recent.list().map((p) => p.name), ['a']);
 });
+
+test('renaming a project file or folder keeps it in its folder and refuses unsafe names', () => {
+  const root = tempDir('rename-entry');
+  fs.mkdirSync(path.join(root, 'tests/pages'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'tests/login.robot'), 'login\n');
+  fs.writeFileSync(path.join(root, 'tests/other.robot'), 'other\n');
+  fs.writeFileSync(path.join(root, 'tests/pages/home.resource'), 'home\n');
+
+  assert.strictEqual(projects.renameProjectPath(root, 'tests/login.robot', 'sign-in.robot'), 'tests/sign-in.robot');
+  assert.strictEqual(fs.readFileSync(path.join(root, 'tests/sign-in.robot'), 'utf8'), 'login\n');
+  assert.ok(!fs.existsSync(path.join(root, 'tests/login.robot')));
+
+  assert.strictEqual(projects.renameProjectPath(root, 'tests/pages', 'views'), 'tests/views');
+  assert.ok(fs.existsSync(path.join(root, 'tests/views/home.resource')));
+
+  assert.strictEqual(projects.renameProjectPath(root, 'tests/other.robot', 'Other.robot'), 'tests/Other.robot');
+  assert.deepStrictEqual(fs.readdirSync(path.join(root, 'tests')).sort(), ['Other.robot', 'sign-in.robot', 'views']);
+
+  assert.throws(() => projects.renameProjectPath(root, 'tests/sign-in.robot', 'Other.robot'), /already exists/);
+  for (const bad of ['', '..', '../escape.robot', 'a/b.robot', 'a\b', 'what?.robot', 'name.', 'CON', 'nul.txt'])
+    assert.throws(() => projects.renameProjectPath(root, 'tests/sign-in.robot', bad), Error, `expected "${bad}" to be rejected`);
+  assert.throws(() => projects.renameProjectPath(root, 'tests/missing.robot', 'x.robot'), /no longer exists/);
+  assert.throws(() => projects.renameProjectPath(root, '', 'x'), /project folder itself/);
+  assert.throws(() => projects.renameProjectPath(root, '../outside', 'x'), /outside the project/);
+  assert.strictEqual(fs.readFileSync(path.join(root, 'tests/sign-in.robot'), 'utf8'), 'login\n');
+});
+
+test('a linked folder is renamed as a link, and a link leaving the project is refused', () => {
+  const root = tempDir('rename-link');
+  const outside = tempDir('rename-link-outside');
+  fs.mkdirSync(path.join(root, 'actual'));
+  fs.writeFileSync(path.join(root, 'actual/a.robot'), 'a\n');
+  fs.symlinkSync(path.join(root, 'actual'), path.join(root, 'linked'), 'junction');
+  fs.symlinkSync(outside, path.join(root, 'escape'), 'junction');
+
+  assert.strictEqual(projects.renameProjectPath(root, 'linked', 'alias'), 'alias');
+  assert.ok(fs.lstatSync(path.join(root, 'alias')).isSymbolicLink());
+  assert.ok(fs.existsSync(path.join(root, 'actual/a.robot')));
+  assert.throws(() => projects.renameProjectPath(root, 'escape', 'x'), /outside the project/);
+  assert.ok(fs.existsSync(outside));
+});

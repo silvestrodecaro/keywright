@@ -127,7 +127,16 @@
             </span>
           </div>
           <form id="new-file" class="new-file" hidden>
-            <input id="new-file-name" type="text" spellcheck="false" autocomplete="off" aria-label="New file path">
+            <input id="new-file-name" type="text" spellcheck="false" autocomplete="off" aria-label="New file path" aria-describedby="new-file-hint">
+            <div class="new-file-row">
+              <select id="new-file-type" aria-label="File type">
+                <option value="robot">Test suite (.robot)</option>
+                <option value="resource">Resource (.resource)</option>
+                <option value="other">Other (type the extension)</option>
+              </select>
+              <button class="btn btn-primary" type="submit">Create</button>
+            </div>
+            <div id="new-file-hint" class="new-file-hint" aria-live="polite"></div>
             <div id="new-file-error" class="error" hidden></div>
           </form>
           <ul id="tree" class="tree" role="tree" aria-label="Project files"></ul>
@@ -459,6 +468,8 @@
   <script src="tagPatterns.js"></script>
   <script src="runDiff.js"></script>
   <script src="treeNavigation.js"></script>
+  <script src="fileNames.js"></script>
+  <script src="contextMenu.js"></script>
   <script src="workspaceFiles.js"></script>
   <script src="tests.js"></script>
   <script src="history.js"></script>

@@ -258,8 +258,17 @@
   window.RFTree.bindTabs($('.sidebar-switch'));
   window.RFTree.bind($('#tree'));
 
+  const treeNodes = new Map(); // path -> node of the rendered tree
+  let renaming = null; // the path whose row shows the rename field
+
   async function refreshTree() {
+    // Re-rendering would remove the rename field: refresh when renaming ends.
+    if (renaming)
+      return;
     const tree = await api.projectTree();
+    if (renaming)
+      return;
+    treeNodes.clear();
     window.RFTree.replace($('#tree'), tree.map((node) => renderNode(node, 0)), activeTab);
   }
 
@@ -278,6 +287,12 @@
     const item = el('li', { role: 'treeitem' }, row);
     item.dataset.treeId = node.path;
     item.tabIndex = -1;
+    treeNodes.set(node.path, node);
+    row.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      window.RFTree.focusItem($('#tree'), item);
+      openExplorerMenu(node, event.clientX, event.clientY);
+    });
     if (node.type === 'dir') {
       item.setAttribute('aria-expanded', String(isOpen));
       row.addEventListener('click', () => {
@@ -808,34 +823,288 @@
   // -------------------------------------------------------------------------
   // New file
 
-  function showNewFileInput() {
-    const form = $('#new-file');
-    form.hidden = false;
+  const names = window.RFFileNames;
+  let newFileKindChosen = false; // the type was picked by hand, not suggested by the folder
+
+  function showNewFileInput(folder = currentConfig.testsDir) {
+    $('#new-file').hidden = false;
     const input = $('#new-file-name');
-    input.value = `${currentConfig.testsDir}/`;
+    input.value = folder ? `${folder}/` : '';
+    newFileKindChosen = false;
     showError($('#new-file-error'), '');
+    updateNewFileHint();
     input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
   }
 
-  $('#tree-new-file').addEventListener('click', showNewFileInput);
+  function hideNewFileInput() {
+    const returnFocus = $('#new-file').contains(document.activeElement);
+    $('#new-file').hidden = true;
+    if (returnFocus)
+      $('#tree [role="treeitem"][tabindex="0"]')?.focus();
+  }
+
+  /** A typed extension selects the type; without one the folder suggests it until the user picks. */
+  function updateNewFileHint() {
+    const name = $('#new-file-name').value.trim().replace(/\\/g, '/');
+    const select = $('#new-file-type');
+    const typed = names.kindOf(name);
+    if (typed)
+      select.value = typed;
+    else if (!newFileKindChosen)
+      select.value = names.defaultKind(names.parentOf(name), currentConfig);
+    const target = names.withExtension(name, select.value);
+    $('#new-file-hint').textContent = names.baseName(target) ? `Creates ${target}` : '';
+  }
+
+  $('#tree-new-file').addEventListener('click', () => showNewFileInput());
+  $('#new-file-name').addEventListener('input', updateNewFileHint);
+  $('#new-file-type').addEventListener('change', () => {
+    newFileKindChosen = true;
+    // Choosing another type replaces a .robot or .resource extension already typed.
+    const input = $('#new-file-name');
+    const kind = $('#new-file-type').value;
+    const typed = names.kindOf(input.value.trim());
+    if (typed && typed !== 'other' && typed !== kind)
+      input.value = input.value.trim().replace(/\.[^./]+$/, names.EXTENSIONS[kind] || '');
+    updateNewFileHint();
+  });
   $('#new-file').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const name = $('#new-file-name').value.trim();
+    const name = names.withExtension($('#new-file-name').value, $('#new-file-type').value);
     const result = await api.createProjectFile(name);
     if (!result.ok) {
       showError($('#new-file-error'), result.error);
       return;
     }
     $('#new-file').hidden = true;
-    const folders = result.path.split('/').slice(0, -1);
-    folders.forEach((_, i) => expanded.add(folders.slice(0, i + 1).join('/')));
+    expandTo(names.parentOf(result.path));
     await refreshTree();
     openFile(result.path);
   });
-  $('#new-file-name').addEventListener('keydown', (event) => {
-    if (event.key === 'Escape')
-      $('#new-file').hidden = true;
+  $('#new-file').addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      hideNewFileInput();
+    }
   });
+
+  function expandTo(folder) {
+    const parts = folder ? folder.split('/') : [];
+    parts.forEach((_, i) => expanded.add(parts.slice(0, i + 1).join('/')));
+  }
+
+  // -------------------------------------------------------------------------
+  // Explorer: rename, delete and context menu
+
+  function absolutePath(relative) {
+    const separator = currentRoot.includes('\\') ? '\\' : '/';
+    return currentRoot.replace(/[\\/]+$/, '') + separator + relative.split('/').join(separator);
+  }
+
+  async function copyText(text) {
+    await api.copyToClipboard(text);
+    setEditorStatus(`Copied ${text}`);
+  }
+
+  function explorerMenu(node) {
+    if (!node) {
+      return [
+        { label: 'New File…', run: () => showNewFileInput() },
+        { separator: true },
+        { label: 'Open Project Folder in File Manager', run: () => api.revealInExplorer(null) },
+        { label: 'Refresh Explorer', run: refreshTree },
+      ];
+    }
+    const folder = node.type === 'dir' ? node.path : names.parentOf(node.path);
+    return [
+      ...(node.type === 'file' ? [{ label: 'Open', run: () => openFile(node.path) }] : []),
+      { label: 'New File…', run: () => { expandTo(folder); refreshTree(); showNewFileInput(folder); } },
+      { separator: true },
+      { label: 'Rename…', keys: 'F2', run: () => startRename(node.path) },
+      { label: 'Delete', keys: 'Del', run: () => deletePath(node.path) },
+      { separator: true },
+      { label: 'Copy Path', run: () => copyText(absolutePath(node.path)) },
+      { label: 'Copy Relative Path', run: () => copyText(node.path) },
+      { label: 'Reveal in File Manager', run: () => api.revealInExplorer(node.path) },
+    ];
+  }
+
+  function openExplorerMenu(node, x, y) {
+    if (renaming)
+      return;
+    window.RFContextMenu.open({ x, y, items: explorerMenu(node), label: node ? node.name : 'Explorer' });
+  }
+
+  // Right-click below the files: project-level actions.
+  $('#tree').addEventListener('contextmenu', (event) => {
+    if (event.defaultPrevented || event.target.closest('input'))
+      return;
+    event.preventDefault();
+    openExplorerMenu(null, event.clientX, event.clientY);
+  });
+
+  $('#tree').addEventListener('keydown', (event) => {
+    if (event.target.closest('input') || event.altKey || event.ctrlKey || event.metaKey)
+      return;
+    const item = event.target.closest('[role="treeitem"]');
+    const node = item && treeNodes.get(item.dataset.treeId);
+    if (!node)
+      return;
+    if (event.key === 'F2')
+      startRename(node.path);
+    else if (event.key === 'Delete')
+      deletePath(node.path);
+    else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      const box = item.firstElementChild.getBoundingClientRect();
+      openExplorerMenu(node, box.left + 24, box.bottom);
+    } else {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  /** Replaces a row's label with a name field: Enter renames, Escape cancels. */
+  function startRename(relative) {
+    if (renaming)
+      return;
+    const item = [...$('#tree').querySelectorAll('[role="treeitem"]')].find((node) => node.dataset.treeId === relative);
+    if (!item)
+      return;
+    const row = item.firstElementChild;
+    const label = row.querySelector('.tree-label');
+    const original = names.baseName(relative);
+    const input = el('input', { className: 'tree-rename', type: 'text', value: original, spellcheck: false, autocomplete: 'off' });
+    input.setAttribute('aria-label', `New name for ${original}`);
+    const error = el('div', { className: 'error tree-rename-error', hidden: true });
+    renaming = relative;
+    row.classList.add('is-renaming');
+    label.hidden = true;
+    label.after(input);
+    row.after(error);
+    let busy = false;
+
+    // Focus returns to the row unless the user moved it elsewhere (a blur).
+    const finish = async (focusPath, keepFocus) => {
+      const tree = $('#tree');
+      renaming = null;
+      tree.dataset.focusId = focusPath;
+      await refreshTree();
+      const next = [...tree.querySelectorAll('[role="treeitem"]')].find((node) => node.dataset.treeId === focusPath);
+      if (keepFocus && next)
+        window.RFTree.focusItem(tree, next);
+    };
+    const commit = async ({ fromBlur = false } = {}) => {
+      if (busy || renaming !== relative)
+        return;
+      const name = input.value.trim();
+      if (!name || name === original) {
+        finish(relative, !fromBlur);
+        return;
+      }
+      busy = true;
+      const result = await renamePath(relative, name);
+      busy = false;
+      if (result.ok) {
+        finish(result.path, !fromBlur);
+      } else if (result.error && !fromBlur) {
+        showError(error, result.error);
+        input.focus();
+      } else {
+        if (result.error)
+          setEditorStatus(`Could not rename ${original}: ${result.error}`, true);
+        finish(relative, !fromBlur);
+      }
+    };
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commit();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(relative, true);
+      }
+    });
+    input.addEventListener('input', () => showError(error, ''));
+    input.addEventListener('click', (event) => event.stopPropagation());
+    input.addEventListener('blur', () => {
+      if (!busy && renaming === relative)
+        commit({ fromBlur: true });
+    });
+    input.focus();
+    const dot = original.lastIndexOf('.');
+    input.setSelectionRange(0, treeNodes.get(relative)?.type === 'file' && dot > 0 ? dot : original.length);
+  }
+
+  /** Renames on disk. Open tabs inside it follow the new path once their unsaved edits are resolved. */
+  async function renamePath(relative, name) {
+    const affected = tabs.filter((tab) => names.isWithin(tab.path, relative));
+    if (!await resolveUnsaved(affected.map((tab) => tab.path)))
+      return { ok: false };
+    if (affected.some((tab) => editor.recordingPath() === tab.path))
+      await api.stopRecording();
+    const result = await api.renameProjectPath(relative, name);
+    if (!result.ok)
+      return result;
+    for (const path of [...expanded]) {
+      if (names.isWithin(path, relative)) {
+        expanded.delete(path);
+        expanded.add(names.moved(path, relative, result.path));
+      }
+    }
+    for (const tab of affected) {
+      const next = names.moved(tab.path, relative, result.path);
+      editor.close(tab.path);
+      const file = await workspace.read(next);
+      Object.assign(tab, { path: next, content: file.content, reason: file.reason, revision: file.revision, line: null });
+    }
+    if (names.isWithin(activeTab, relative))
+      activeTab = names.moved(activeTab, relative, result.path);
+    if (affected.length) {
+      shownInEditor = null;
+      renderTabs();
+      scheduleRecovery();
+    }
+    setEditorStatus(`Renamed ${relative} to ${result.path}`);
+    return result;
+  }
+
+  /** Moves a file or folder to the Recycle Bin after confirmation and closes its tabs. */
+  async function deletePath(relative) {
+    if (renaming)
+      return;
+    const affected = tabs.filter((tab) => names.isWithin(tab.path, relative));
+    const unsaved = affected.filter((tab) => editor.isDirty(tab.path)).length;
+    const result = await api.deleteProjectPath(relative, unsaved);
+    if (!result.ok) {
+      if (result.error)
+        setEditorStatus(result.error, true);
+      return;
+    }
+    if (affected.some((tab) => editor.recordingPath() === tab.path))
+      await api.stopRecording();
+    const index = tabs.findIndex((tab) => tab.path === activeTab);
+    for (const tab of affected) {
+      editor.close(tab.path);
+      if (shownInEditor === tab.path)
+        shownInEditor = null;
+    }
+    tabs = tabs.filter((tab) => !affected.includes(tab));
+    if (names.isWithin(activeTab, relative)) {
+      const previous = Math.min(Math.max(0, index - 1), tabs.length - 1);
+      activeTab = tabs.length ? tabs[previous].path : RESULTS_TAB;
+    }
+    for (const path of [...expanded]) {
+      if (names.isWithin(path, relative))
+        expanded.delete(path);
+    }
+    renderTabs();
+    refreshTree();
+    scheduleRecovery();
+    setEditorStatus(`Moved ${relative} to the Recycle Bin`);
+  }
 
   $('#tree-refresh').addEventListener('click', refreshTree);
   $('#tree-reveal').addEventListener('click', () => api.revealInExplorer(null));

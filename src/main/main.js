@@ -285,6 +285,52 @@ ipcMain.handle('project:create-file', (_event, relative) => {
   }
 });
 
+ipcMain.handle('project:rename-path', (_event, relative, name) => {
+  if (!currentProject)
+    return { ok: false, error: 'No project is open.' };
+  try {
+    return { ok: true, path: projects.renameProjectPath(currentProject.root, relative, name) };
+  } catch (error) {
+    return { ok: false, error: error.code === 'EPERM' || error.code === 'EBUSY'
+      ? `${relative} is in use by another program. Close it there and try again.`
+      : error.message };
+  }
+});
+
+// Deleting moves the file or folder to the Recycle Bin, after a native confirmation.
+ipcMain.handle('project:delete-path', async (_event, relative, unsaved = 0) => {
+  if (!currentProject)
+    return { ok: false, error: 'No project is open.' };
+  let entry;
+  try {
+    ({ entry } = projects.projectEntry(currentProject.root, relative));
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+  const folder = (await fs.lstat(entry)).isDirectory();
+  const name = path.basename(entry);
+  const details = [folder ? 'The folder and everything in it will be moved to the Recycle Bin.' : 'The file will be moved to the Recycle Bin.'];
+  if (unsaved)
+    details.push(`Unsaved changes in ${unsaved === 1 ? 'its open file' : `${unsaved} open files`} will be lost.`);
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Move to Recycle Bin', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+    message: `Delete ${folder ? 'folder' : 'file'} "${name}"?`,
+    detail: details.join(' '),
+  });
+  if (response !== 0)
+    return { ok: false, canceled: true };
+  try {
+    await shell.trashItem(entry);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: `Could not move ${relative} to the Recycle Bin: ${error.message}` };
+  }
+});
+
 ipcMain.handle('project:keywords', async () => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.', keywords: [], errors: [] };

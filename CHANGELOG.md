@@ -3,6 +3,19 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
+## Unreleased
+
+### Added
+
+- Explorer context menu for files and folders: open, create a file in that folder,
+  rename, delete, copy the absolute or relative path and reveal in the file manager.
+  Shift+F10 or the Menu key opens it from the keyboard.
+- Rename in place with F2. Open tabs follow the renamed file or folder.
+- Delete with the Delete key, after confirmation. Files and folders go to the
+  Recycle Bin.
+- **New file** has a type selector. It adds `.robot` or `.resource` when the name
+  has no extension and suggests `.resource` inside the resources folder.
+
 ## 0.2.1 - 2026-11-04
 
 ### Changed

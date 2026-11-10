@@ -475,3 +475,118 @@ test('the title bar replaces the native one and follows the open project', async
   await expect(page.locator('#project-root')).toBeHidden();
   await expect(page.locator('#project-close')).toBeHidden();
 });
+
+test('the explorer creates, renames and deletes files from its context menu and keyboard', async ({ desktop }, testInfo) => {
+  const { app, page, project } = desktop;
+  // Native confirmation and the Recycle Bin are OS UI: record the dialog, answer
+  // it, and delete the entry directly. The clipboard is kept out of the system.
+  await app.evaluate(({ dialog, shell, ipcMain }) => {
+    const fs = process.getBuiltinModule('node:fs');
+    global.__deleteDialogs = [];
+    global.__copied = [];
+    dialog.showMessageBox = async (_window, options) => {
+      global.__deleteDialogs.push(options);
+      return { response: global.__deleteDialogs.length === 1 ? 1 : 0 };
+    };
+    shell.trashItem = async (target) => fs.rmSync(target, { recursive: true });
+    ipcMain.removeHandler('clipboard:write');
+    ipcMain.handle('clipboard:write', (_event, text) => global.__copied.push(text));
+  });
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  const tree = page.locator('#tree');
+  const row = (relative) => tree.locator(`[data-tree-id="${relative}"] > .tree-row`);
+  const menu = page.getByRole('menu');
+
+  // New File on the resources folder suggests .resource; a typed extension wins.
+  await row('resources').click({ button: 'right' });
+  await expect(menu.getByRole('menuitem')).toHaveText(['New File…', 'Rename…F2', 'Delete', 'Copy Path', 'Copy Relative Path', 'Reveal in File Manager'].map((label) => label.replace('Delete', 'DeleteDel')));
+  await menu.getByRole('menuitem', { name: 'New File…' }).click();
+  await expect(page.locator('#new-file-name')).toHaveValue('resources/');
+  await expect(page.locator('#new-file-type')).toHaveValue('resource');
+  await page.locator('#new-file-name').pressSequentially('pages');
+  await expect(page.locator('#new-file-hint')).toHaveText('Creates resources/pages.resource');
+  await page.locator('#new-file-name').fill('tests/checkout');
+  await expect(page.locator('#new-file-type')).toHaveValue('robot');
+  await expect(page.locator('#new-file-hint')).toHaveText('Creates tests/checkout.robot');
+  await page.locator('#new-file-name').fill('tests/data.json');
+  await expect(page.locator('#new-file-type')).toHaveValue('other');
+  await page.locator('#new-file-name').fill('tests/checkout');
+  await page.locator('#new-file-type').selectOption('resource');
+  await expect(page.locator('#new-file-hint')).toHaveText('Creates tests/checkout.resource');
+  await page.locator('#new-file-type').selectOption('robot');
+  await page.keyboard.press('Enter');
+  await expect(row('tests/checkout.robot')).toBeVisible();
+  expect(fs.existsSync(path.join(project, 'tests/checkout.robot'))).toBe(true);
+  await expect(page.getByRole('tab', { name: /checkout\.robot/ })).toHaveAttribute('aria-selected', 'true');
+
+  // Rename from the menu: the name is selected without its extension, the open tab follows.
+  await row('tests/checkout.robot').click({ button: 'right' });
+  await menu.getByRole('menuitem', { name: 'Rename…' }).click();
+  const field = tree.getByRole('textbox', { name: 'New name for checkout.robot' });
+  await expect(field).toBeFocused();
+  expect(await field.evaluate((input) => input.value.slice(input.selectionStart, input.selectionEnd))).toBe('checkout');
+  await page.keyboard.type('access');
+  await page.keyboard.press('Enter');
+  await expect(tree.locator('.tree-rename-error')).toHaveText('tests/access.robot already exists.');
+  await field.fill('purchase.robot');
+  await page.screenshot({ path: testInfo.outputPath('explorer-rename.png') });
+  await page.keyboard.press('Enter');
+  await expect(row('tests/purchase.robot')).toBeVisible();
+  await expect(row('tests/checkout.robot')).toHaveCount(0);
+  await expect(tree.locator('[data-tree-id="tests/purchase.robot"]')).toBeFocused();
+  await expect(page.getByRole('tab', { name: /purchase\.robot/ })).toHaveAttribute('aria-selected', 'true');
+  expect(fs.existsSync(path.join(project, 'tests/purchase.robot'))).toBe(true);
+
+  // F2 and Escape leave the name unchanged.
+  await page.keyboard.press('F2');
+  await page.keyboard.type('ignored');
+  await page.keyboard.press('Escape');
+  await expect(row('tests/purchase.robot')).toBeVisible();
+
+  // The keyboard opens the menu too; copying gives project-relative and absolute paths.
+  await page.keyboard.press('Shift+F10');
+  await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(tree.locator('[data-tree-id="tests/purchase.robot"]')).toBeFocused();
+  await row('tests/purchase.robot').click({ button: 'right' });
+  await menu.getByRole('menuitem', { name: 'Copy Relative Path' }).click();
+  await row('tests/purchase.robot').click({ button: 'right' });
+  await menu.getByRole('menuitem', { name: 'Copy Path' }).click();
+  await expect.poll(() => app.evaluate(() => global.__copied)).toEqual(['tests/purchase.robot', path.join(project, 'tests', 'purchase.robot')]);
+
+  // Delete asks first: Cancel keeps the file, confirming closes its tab.
+  await tree.locator('[data-tree-id="tests/purchase.robot"]').focus();
+  await page.keyboard.press('Delete');
+  await expect.poll(() => app.evaluate(() => global.__deleteDialogs.length)).toBe(1);
+  expect(fs.existsSync(path.join(project, 'tests/purchase.robot'))).toBe(true);
+  await row('tests/purchase.robot').click({ button: 'right' });
+  await menu.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(row('tests/purchase.robot')).toHaveCount(0);
+  const dialogs = await app.evaluate(() => global.__deleteDialogs);
+  expect(dialogs[1].message).toBe('Delete file "purchase.robot"?');
+  expect(dialogs[1].buttons).toEqual(['Move to Recycle Bin', 'Cancel']);
+  expect(fs.existsSync(path.join(project, 'tests/purchase.robot'))).toBe(false);
+  await expect(page.getByRole('tab', { name: /purchase\.robot/ })).toHaveCount(0);
+
+  // Renaming a folder moves the open tabs inside it.
+  await page.locator('#tree-new-file').click();
+  await page.locator('#new-file-name').fill('tests/pages/home');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('tab', { name: /home\.robot/ })).toHaveAttribute('aria-selected', 'true');
+  await row('tests/pages').click({ button: 'right' });
+  await menu.getByRole('menuitem', { name: 'Rename…' }).click();
+  await tree.getByRole('textbox', { name: 'New name for pages' }).fill('views');
+  await page.keyboard.press('Enter');
+  await expect(row('tests/views/home.robot')).toBeVisible();
+  await expect(page.getByRole('tab', { name: /home\.robot/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /home\.robot/ })).toHaveAttribute('title', /tests\/views\/home\.robot/);
+  expect(fs.existsSync(path.join(project, 'tests/views/home.robot'))).toBe(true);
+
+  // Right-clicking below the files offers project-level actions.
+  const box = await tree.boundingBox();
+  await page.mouse.click(box.x + 40, box.y + box.height - 10, { button: 'right' });
+  await expect(menu.getByRole('menuitem')).toHaveText(['New File…', 'Open Project Folder in File Manager', 'Refresh Explorer']);
+  await page.keyboard.press('Escape');
+});

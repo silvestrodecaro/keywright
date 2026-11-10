@@ -344,6 +344,38 @@ input:disabled, select:disabled { opacity: .55; }
 .tree-icon { width: 12px; flex: none; color: var(--muted); text-align: center; font-size: 11px; }
 .tree-row.is-file .tree-icon { color: var(--tok-keyword); }
 .tree-label { overflow: hidden; text-overflow: ellipsis; }
+.tree input.tree-rename { flex: 1; min-width: 0; height: 22px; padding: 0 4px; font: 12px var(--mono); }
+.tree-rename-error { margin: 2px 8px 4px; border-radius: 4px; }
+.tree-row.is-renaming, .tree-row.is-renaming:hover { background: var(--surface); cursor: default; }
+
+.context-menu {
+  position: fixed;
+  z-index: 120;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 4px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 45%);
+  -webkit-app-region: no-drag;
+}
+.context-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+}
+.context-menu-item:hover:not(:disabled), .context-menu-item:focus { outline: none; background: var(--surface-2); box-shadow: inset 2px 0 var(--accent); }
+.context-menu-item:disabled { color: var(--muted); opacity: .6; }
+.context-menu-keys { margin-left: auto; color: var(--muted); font: 11px/1.4 var(--mono); }
+.context-menu-separator { height: 1px; margin: 4px 0; background: var(--border); }
 
 .editor-area { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
@@ -711,6 +743,11 @@ input:disabled, select:disabled { opacity: .55; }
 .new-file { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .new-file input { width: 100%; height: 28px; font-family: var(--mono); font-size: 12px; }
 .new-file .error { margin: 0; border-radius: 4px; }
+.new-file-row { display: flex; gap: 6px; }
+.new-file-row select { flex: 1; min-width: 0; height: 28px; font-size: 12px; }
+.new-file-row .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.new-file-hint { min-height: 1.4em; color: var(--muted); font: 11px/1.4 var(--mono); overflow-wrap: anywhere; }
+.new-file-hint:empty { display: none; }
 
 .statusbar-right { display: flex; gap: 16px; min-width: 0; }
 #editor-status { white-space: nowrap; }

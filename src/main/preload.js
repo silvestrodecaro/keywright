@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('keywright', {
   onFilesChanged: (callback) => subscribe('project:files-changed', callback),
   writeProjectFile: (relative, content, revision) => ipcRenderer.invoke('project:write-file', relative, content, revision),
   createProjectFile: (relative) => ipcRenderer.invoke('project:create-file', relative),
+  renameProjectPath: (relative, name) => ipcRenderer.invoke('project:rename-path', relative, name),
+  deleteProjectPath: (relative, unsaved) => ipcRenderer.invoke('project:delete-path', relative, unsaved),
   projectKeywords: () => ipcRenderer.invoke('project:keywords'),
   reloadLibraries: () => ipcRenderer.invoke('project:reload-libraries'),
   projectSettings: () => ipcRenderer.invoke('project:settings'),

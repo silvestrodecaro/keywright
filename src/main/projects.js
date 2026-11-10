@@ -303,8 +303,65 @@ function createProjectFile(root, relative) {
   return clean;
 }
 
+const INVALID_NAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
+const RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+
+/** Returns an error message, or null when `name` can be a single file or folder name. */
+function validateEntryName(name) {
+  if (!name)
+    return 'Enter a name.';
+  if (name === '.' || name === '..' || INVALID_NAME_CHARS.test(name))
+    return 'A name cannot contain / \\ : * ? " < > | or be "." or "..".';
+  if (name.endsWith('.') || name.endsWith(' '))
+    return 'A name cannot end with a dot or a space.';
+  if (RESERVED_NAMES.test(name))
+    return `${name} is a name reserved by Windows.`;
+  return null;
+}
+
+const cleanRelative = (relative) => String(relative || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+
+/**
+ * The entry itself, inside its canonical parent folder: a link is renamed or
+ * deleted as a link, and only after its destination is checked against the project.
+ */
+function projectEntry(root, relative) {
+  const clean = cleanRelative(relative);
+  if (!clean)
+    throw new Error('The project folder itself cannot be renamed or deleted here.');
+  resolveInProject(root, clean);
+  const slash = clean.lastIndexOf('/');
+  const parent = slash < 0 ? '' : clean.slice(0, slash);
+  const entry = path.join(resolveInProject(root, parent || '.'), clean.slice(slash + 1));
+  if (!fs.lstatSync(entry, { throwIfNoEntry: false }))
+    throw new Error(`${clean} no longer exists.`);
+  return { clean, parent, entry };
+}
+
+/** Renames a project file or folder in place; returns its new project-relative path. */
+function renameProjectPath(root, relative, name) {
+  const { clean, parent, entry } = projectEntry(root, relative);
+  const newName = String(name ?? '').trim();
+  const invalid = validateEntryName(newName);
+  if (invalid)
+    throw new Error(invalid);
+  const next = parent ? `${parent}/${newName}` : newName;
+  if (next === clean)
+    return clean;
+  const target = path.join(path.dirname(entry), newName);
+  // Windows and macOS folders are usually case-insensitive: a case-only rename finds itself.
+  const caseOnly = next.toLowerCase() === clean.toLowerCase();
+  if (!caseOnly && fs.lstatSync(target, { throwIfNoEntry: false }))
+    throw new Error(`${next} already exists.`);
+  fs.renameSync(entry, target);
+  return next;
+}
+
 module.exports = {
   validateProjectName,
+  validateEntryName,
+  projectEntry,
+  renameProjectPath,
   detectTools,
   findPython,
   createProject,

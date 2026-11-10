@@ -116,8 +116,27 @@ one known test before running the full project. If discovery fails, see
 [tests missing from Testing](troubleshooting.md#tests-are-missing-from-the-testing-panel).
 
 Use **Explorer** to open files and create a file with **New file**. Paths such as
-`tests/login.robot` create missing parent folders. Drag the sidebar divider to
-resize it; double-click the divider to restore its default width.
+`tests/login.robot` create missing parent folders. Below the path, choose the type:
+**Test suite** adds `.robot` and **Resource** adds `.resource` when the name has no
+extension. The type starts as **Resource** inside the resources folder and as
+**Test suite** elsewhere. A typed extension, such as `helpers.py`, is kept as it is
+and selects **Other**. The line under the field shows the path that will be created.
+
+Right-click a file or folder for **Open**, **New File…** (in that folder),
+**Rename…**, **Delete**, **Copy Path**, **Copy Relative Path** and **Reveal in File
+Manager**. Right-clicking below the files offers **New File…**, the project folder
+and **Refresh Explorer**. Shift+F10 or the Menu key opens the same menu for the
+focused row.
+
+**Rename…** (F2) edits the name in place: Enter renames, Escape cancels, and
+clicking elsewhere renames. Files open in tabs follow the new name, including
+those inside a renamed folder. Unsaved changes in them are saved or discarded
+first. Renaming the tests or resources folder does not update `keywright.json`;
+change it in **Project settings**. **Delete** (Delete key) asks for confirmation
+and moves the file or folder to the Recycle Bin, closing its tabs.
+
+Drag the sidebar divider to resize it; double-click the divider to restore its
+default width.
 
 Editor file operations and disk replacements check where symbolic links and
 Windows junctions lead. Destinations outside the opened project are refused.
@@ -493,6 +512,9 @@ an already-running Robot process.
 | Up / Down, Home / End in Explorer or Testing | Move focus through visible tree items |
 | Left / Right in Explorer or Testing | Collapse/expand a folder or move to its parent/child |
 | Enter / Space in Explorer or Testing | Activate the focused row |
+| F2 in Explorer | Rename the focused file or folder |
+| Delete in Explorer | Move the focused file or folder to the Recycle Bin, after confirmation |
+| Shift+F10 / Menu key in Explorer | Open the context menu of the focused row |
 | Left / Right, Home / End on a tab | Switch between tabs in that tab group |
 | Delete on a file tab | Close that tab, resolving unsaved changes first |
 | Ctrl+Space | Keyword completion |
