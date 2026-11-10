@@ -519,7 +519,11 @@ browser to explore the application under test and write tests from what it finds
    dialog says. Claude Code takes a terminal command; Codex takes a table in
    `~/.codex/config.toml` (or `codex mcp add`); Antigravity, Claude Desktop and
    Cursor take an entry under `mcpServers` in their JSON file. For Antigravity that
-   file is `~/.gemini/config/mcp_config.json`.
+   file is `~/.gemini/config/mcp_config.json`, shared by its app, IDE and CLI; if the
+   file is empty, paste the whole configuration. In the Antigravity app,
+   **Customizations > Installed > MCP Servers** shows the servers, and **Copy Config
+   File Path** in a server's menu gives the file. **Settings > MCP Tools** sets tool
+   permissions and does not add servers.
 4. Click **Test connection**. Keywright reads the Keywright entry from the client's
    own file, starts it exactly as the client will, performs the same MCP handshake
    and reports the tools it received, or the reason it failed. A check mark means
@@ -533,8 +537,10 @@ Keywright entry is configured, missing, needs updating or cannot be read. *Needs
 updating* means the entry starts another Keywright folder or Electron, points to
 another connection file, or lacks `ELECTRON_RUN_AS_NODE=1`; for example after moving
 the Keywright folder. When a client actually connects, its name shows the time.
-Antigravity entries in the older `~/.gemini/antigravity/mcp_config.json` are
-recognized too.
+An empty file counts as not configured, and an entry with `"disabled": true` as
+needing an update. For Antigravity, Keywright also reads the open project's own
+workspace file, `.agents/mcp_config.json`, and the older
+`~/.gemini/antigravity/mcp_config.json`.
 
 The configuration starts a small bridge script with Keywright's own Electron runtime.
 The bridge finds the running Keywright through a connection file in the user-data

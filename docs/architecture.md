@@ -283,7 +283,8 @@ the watcher reports file changes.
 server status: a `claude mcp add` command, a Codex `config.toml` table, or a JSON
 `mcpServers` entry for Antigravity, Claude Desktop and Cursor. It reads, never
 writes, the clients' own files (`~/.claude.json`, `~/.codex/config.toml` or
-`CODEX_HOME`, `~/.gemini/config/mcp_config.json` and the older Antigravity path,
+`CODEX_HOME`, `~/.gemini/config/mcp_config.json`, the open project's
+`.agents/mcp_config.json` and the older Antigravity path,
 `claude_desktop_config.json`, `~/.cursor/mcp.json`) and compares the Keywright entry
 with the expected command, arguments and environment, or with the server URL and
 token for HTTP entries. Codex TOML is read with a small parser limited to server

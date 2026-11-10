@@ -3,6 +3,21 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
+## Unreleased
+
+### Fixed
+
+- The MCP dialog reported an empty Antigravity `mcp_config.json` as unreadable; it
+  now counts as not configured. Files saved with a byte order mark are read too.
+- The Antigravity instructions match the current app, where
+  **Customizations > Installed > MCP Servers** lists servers and **Settings > MCP
+  Tools** only sets permissions.
+
+### Added
+
+- Keywright also checks the open project's Antigravity workspace file,
+  `.agents/mcp_config.json`, and reports entries turned off with `"disabled": true`.
+
 ## 0.4.0 - 2026-11-10
 
 ### Added

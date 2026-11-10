@@ -11,8 +11,12 @@ const path = require('path');
 
 const SERVER_NAME = 'keywright';
 
-/** Where each client keeps its MCP configuration, from the environment of this computer. */
-function clientLocations({ env = process.env, home = env.KEYWRIGHT_CLIENT_HOME || os.homedir() } = {}) {
+/**
+ * Where each client keeps its MCP configuration, from the environment of this computer.
+ * @param {{ env?: object, home?: string, project?: string|null }} [options]
+ *   project: the open project, whose own Antigravity workspace file is checked too
+ */
+function clientLocations({ env = process.env, home = env.KEYWRIGHT_CLIENT_HOME || os.homedir(), project = null } = {}) {
   // KEYWRIGHT_CLIENT_HOME: UI tests point every client at a temporary home.
   const isolated = !!env.KEYWRIGHT_CLIENT_HOME;
   const appData = (!isolated && env.APPDATA) || path.join(home, 'AppData', 'Roaming');
@@ -23,8 +27,12 @@ function clientLocations({ env = process.env, home = env.KEYWRIGHT_CLIENT_HOME |
       ? path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
       : path.join(appData, 'Claude', 'claude_desktop_config.json')],
     codex: [path.join(codexHome, 'config.toml')],
-    // The current location first; earlier Antigravity releases read the second.
-    antigravity: [path.join(home, '.gemini', 'config', 'mcp_config.json'), path.join(home, '.gemini', 'antigravity', 'mcp_config.json')],
+    // The global file first, then the project's workspace file, then the location of earlier releases.
+    antigravity: [
+      path.join(home, '.gemini', 'config', 'mcp_config.json'),
+      ...(project ? [path.join(project, '.agents', 'mcp_config.json')] : []),
+      path.join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+    ],
     cursor: [path.join(home, '.cursor', 'mcp.json')],
   };
 }
@@ -67,7 +75,7 @@ function clientConfigs(status, locations = clientLocations()) {
       id: 'antigravity',
       label: 'Antigravity',
       config: jsonConfig(stdio),
-      help: `Add the "${SERVER_NAME}" entry under "mcpServers" in ${shown(locations.antigravity[0])} (agent panel: … > MCP Servers > Manage MCP Servers > View raw config), then refresh the MCP servers.`,
+      help: `Add the "${SERVER_NAME}" entry under "mcpServers" in ${shown(locations.antigravity[0])}, which the Antigravity app, IDE and CLI share; if the file is empty, paste all of it. To find the file in the app: Customizations > Installed > MCP Servers > ⋮ > Copy Config File Path; in the IDE: agent panel … > MCP Servers > Manage MCP Servers > View raw config. Then restart the server there. Settings > MCP Tools only sets permissions.`,
     },
     {
       id: 'claude-desktop',
@@ -185,9 +193,12 @@ function readTomlServer(text, name = SERVER_NAME) {
 
 /** The "keywright" server entry of a client's file, or null; throws when the file cannot be parsed. */
 function readEntry(id, text) {
+  const content = text.replace(/^\uFEFF/, ''); // Notepad may save a byte order mark
+  if (!content.trim())
+    return null; // created but still empty
   if (id === 'codex')
-    return readTomlServer(text);
-  const json = JSON.parse(text);
+    return readTomlServer(content);
+  const json = JSON.parse(content);
   if (id === 'claude-code') {
     if (json.mcpServers?.[SERVER_NAME])
       return { ...json.mcpServers[SERVER_NAME], scope: 'user' };
@@ -207,6 +218,8 @@ const samePath = (a, b) => {
 
 /** Whether an entry starts this Keywright's bridge, or reaches this server over HTTP. */
 function compareEntry(entry, status) {
+  if (entry.disabled === true)
+    return { state: 'outdated', detail: 'The entry is disabled ("disabled": true); turn it on in the client.' };
   const remote = entry.url || entry.serverUrl || entry.httpUrl;
   if (remote) {
     const header = entry.headers?.Authorization || entry.headers?.authorization || '';
@@ -256,8 +269,10 @@ function clientStates(status, locations = clientLocations()) {
       result = { ...compareEntry(entry, status), file, entry };
       if (id === 'claude-code' && entry.scope !== 'user' && result.state === 'configured')
         result.detail = `Configured for one project only (${entry.scope.slice('project '.length)}).`;
-      if (id === 'antigravity' && file !== files[0] && result.state === 'configured')
+      if (id === 'antigravity' && file === files.at(-1) && files.length > 1 && result.state === 'configured')
         result.detail = 'Found in the older Antigravity location; current releases read ~/.gemini/config/mcp_config.json.';
+      else if (id === 'antigravity' && file !== files[0] && result.state === 'configured')
+        result.detail = 'Configured for this project only, in its .agents/mcp_config.json.';
       break;
     }
     states[id] = result;

@@ -132,6 +132,41 @@ test('client files are read without changes: configured, missing, outdated and u
   assert.match(clientStates(sampleStatus, locations).cursor.detail, /old token/);
 });
 
+test('Antigravity: an empty file, a byte order mark, the project workspace file and a disabled entry', () => {
+  const home = tempDir('mcp-home');
+  const project = tempDir('mcp-project');
+  const locations = clientLocations({ home, env: {}, project });
+  assert.deepEqual(locations.antigravity.map((file) => path.relative(home, file).split(path.sep).join('/')).filter((file) => !file.startsWith('..')),
+    ['.gemini/config/mcp_config.json', '.gemini/antigravity/mcp_config.json']);
+  assert.equal(locations.antigravity[1], path.join(project, '.agents', 'mcp_config.json'));
+  const configs = Object.fromEntries(clientConfigs(sampleStatus, locations).map((c) => [c.id, c]));
+  const write = (file, text) => {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+  };
+
+  // Created by Antigravity but still empty: not configured, not unreadable.
+  write(locations.antigravity[0], '');
+  assert.equal(clientStates(sampleStatus, locations).antigravity.state, 'missing');
+  assert.equal(connectionPlan('antigravity', sampleStatus, locations).kind, 'generated');
+
+  write(locations.antigravity[1], configs.antigravity.config);
+  let state = clientStates(sampleStatus, locations).antigravity;
+  assert.equal(state.state, 'configured');
+  assert.match(state.detail, /this project only/);
+
+  write(locations.antigravity[0], `\uFEFF${configs.antigravity.config}`);
+  state = clientStates(sampleStatus, locations).antigravity;
+  assert.deepEqual([state.state, state.detail, state.file], ['configured', null, locations.antigravity[0]]);
+
+  const entry = JSON.parse(configs.antigravity.config);
+  entry.mcpServers.keywright.disabled = true;
+  write(locations.antigravity[0], JSON.stringify(entry));
+  state = clientStates(sampleStatus, locations).antigravity;
+  assert.equal(state.state, 'outdated');
+  assert.match(state.detail, /disabled/);
+});
+
 test('connecting clients are recognized by the name they report', () => {
   assert.equal(clientIdFor('claude-code'), 'claude-code');
   assert.equal(clientIdFor('codex-mcp-client'), 'codex');

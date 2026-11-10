@@ -59,7 +59,7 @@ const { AgentBrowser } = require('./mcp/agentBrowser');
 const { McpService } = require('./mcp/service');
 const { createTools } = require('./mcp/tools');
 const { ChangeLog } = require('./mcp/changes');
-const { clientConfigs, clientStates, connectionPlan } = require('./mcp/clients');
+const { clientConfigs, clientLocations, clientStates, connectionPlan } = require('./mcp/clients');
 const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
 
 /** @type {BrowserWindow | null} */
@@ -752,8 +752,9 @@ function mcpStatus() {
   if (!mcp)
     return null;
   const status = mcp.status();
-  const states = clientStates(status);
-  const setups = clientConfigs(status).map((client) => {
+  const locations = clientLocations({ project: currentProject?.root });
+  const states = clientStates(status, locations);
+  const setups = clientConfigs(status, locations).map((client) => {
     const { entry: _entry, ...state } = states[client.id]; // the page needs the verdict, not the entry
     return { ...client, ...state, seen: status.seen[client.id] || null };
   });
@@ -784,7 +785,7 @@ ipcMain.handle('mcp:test-connection', async (_event, clientId) => {
   if (!status.running)
     return { ok: false, scope: 'server', error: 'Turn the server on first.' };
   try {
-    const plan = connectionPlan(clientId, status);
+    const plan = connectionPlan(clientId, status, clientLocations({ project: currentProject?.root }));
     if (plan.kind === 'unreadable')
       return { ok: false, scope: 'client', file: plan.file, error: plan.error };
     const result = plan.config ? await testConnection(plan.config) : await testHttpConnection(plan.url, plan.token);
