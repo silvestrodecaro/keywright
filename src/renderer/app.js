@@ -695,7 +695,19 @@
       .map(({ path, tab }) => ({ path, content: editor.getContent(path), revision: tab.revision ?? null }));
   }
 
+  /** The main process refuses AI changes to files with unsaved editor changes. */
+  let reportedDirty = '';
+  function reportDirtyFiles() {
+    const paths = editor.dirtyPaths().filter((path) => tabs.some((tab) => tab.path === path));
+    const key = JSON.stringify(paths);
+    if (key !== reportedDirty) {
+      reportedDirty = key;
+      api.reportDirtyFiles(paths);
+    }
+  }
+
   function storeRecovery() {
+    reportDirtyFiles();
     clearTimeout(recoveryTimer);
     recoveryTimer = null;
     return recoveryReady ? api.storeRecovery(recoveryEntries()) : Promise.resolve();
@@ -703,6 +715,7 @@
 
   /** Stores at most once per second while typing. */
   function scheduleRecovery() {
+    reportDirtyFiles();
     if (recoveryReady && !recoveryTimer)
       recoveryTimer = setTimeout(storeRecovery, 1000);
   }
@@ -1127,6 +1140,7 @@
   }
 
   const projectSettings = window.RFProjectSettings.create({ api, root: () => currentRoot, reopen: reopenProject });
+  const mcpDialog = window.RFMcpDialog.create({ api, openFile: (relative) => openFile(relative) });
   $('#project-settings').addEventListener('click', () => projectSettings.open());
 
   $('#project-close').addEventListener('click', async () => {
@@ -1370,6 +1384,7 @@
     buttonCommand('project.close', 'Project', 'Close Project', '#project-close'),
     buttonCommand('project.new', 'Project', 'New Project…', '#welcome-new', { when: () => !$('#view-welcome').hidden }),
     buttonCommand('project.open', 'Project', 'Open Folder…', '#welcome-open', { when: () => !$('#view-welcome').hidden }),
+    { id: 'ai.connection', category: 'AI', label: 'Open MCP Server', available: () => true, run: () => mcpDialog.open() },
     { id: 'help.crashReports', category: 'Help', label: 'Open Crash Reports Folder', available: () => true, run: () => api.openCrashReports() },
   ];
 

@@ -14,6 +14,7 @@ connects recording, resource reuse, execution and failure diagnosis.
 - [Running tests](#running-tests)
 - [Results and traces](#results-and-traces)
 - [Debugging](#debugging)
+- [MCP server](#mcp-server)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Updates and local settings](#updates-and-local-settings)
 - [Current limitations](#current-limitations)
@@ -502,6 +503,114 @@ an already-running Robot process.
 
 ![A paused test with source, stack and variables](images/debugger.png)
 
+## MCP server
+
+Keywright can act as an MCP server, so that an AI client such as Claude Code,
+Codex, Antigravity, Claude Desktop or Cursor works on the open project. The client can read and
+change project files, look up keywords, check and run tests, and drive its own
+browser to explore the application under test and write tests from what it finds.
+
+### Connect a client
+
+1. Click **MCP** at the right of the title bar, or run **Open MCP Server**
+   from the command palette.
+2. Turn on **Allow AI clients to connect**. The setting is kept for the next start.
+3. Choose the client in the list, copy its configuration and add it where the
+   dialog says. Claude Code takes a terminal command; Codex takes a table in
+   `~/.codex/config.toml` (or `codex mcp add`); Antigravity, Claude Desktop and
+   Cursor take an entry under `mcpServers` in their JSON file. For Antigravity that
+   file is `~/.gemini/config/mcp_config.json`.
+4. Click **Test connection**. Keywright reads the Keywright entry from the client's
+   own file, starts it exactly as the client will, performs the same MCP handshake
+   and reports the tools it received, or the reason it failed. A check mark means
+   that client's entry works. For a client without an entry, the test only says
+   that the configuration shown works on this computer and where to add it. For
+   **Other client (HTTP)** it checks the address and token.
+
+Keywright does not write to the clients' files. Each time the dialog opens, or the
+window regains focus, it reads them and shows under each client's name whether the
+Keywright entry is configured, missing, needs updating or cannot be read. *Needs
+updating* means the entry starts another Keywright folder or Electron, points to
+another connection file, or lacks `ELECTRON_RUN_AS_NODE=1`; for example after moving
+the Keywright folder. When a client actually connects, its name shows the time.
+Antigravity entries in the older `~/.gemini/antigravity/mcp_config.json` are
+recognized too.
+
+The configuration starts a small bridge script with Keywright's own Electron runtime.
+The bridge finds the running Keywright through a connection file in the user-data
+directory, so the configuration contains no token and keeps working when the port
+changes. Keywright must be running with the connection on; otherwise the client
+receives a message saying so.
+
+**Other client (HTTP)** shows the server address and bearer token for clients that
+connect to a Streamable HTTP URL. Keywright listens on `127.0.0.1`, port 47811 by
+default, or a free port when that one is taken. **New token** replaces the token;
+clients configured over HTTP then need the new one.
+
+The dialog shows the connected clients, the last tool called and whether the AI's
+browser is open. Turning the connection off stops the server and closes that browser.
+
+### What the client can do
+
+| Area | Tools |
+| --- | --- |
+| Project | `project_info`, `list_files`, `read_file`, `search_project` |
+| Changes | `write_file`, `edit_file`, `rename_path`, `delete_path` |
+| Robot | `find_keywords`, `check_file`, `discover_tests`, `run_tests`, `wait_for_run`, `test_failure_details`, `stop_tests` |
+| Browser | `browser_open`, `browser_navigate`, `browser_back`, `browser_forward`, `browser_reload`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_press`, `browser_select`, `browser_check`, `browser_hover`, `browser_assert`, `browser_wait_for`, `browser_screenshot`, `browser_tabs`, `browser_steps`, `browser_close` |
+
+The client works on the project that is open in Keywright. Changes appear in the
+explorer and in open tabs without unsaved changes, as edits from another program
+would. A file with unsaved changes in the editor, or a folder containing one, is not
+changed, renamed or deleted; the client is told to ask you to save or discard first.
+`delete_path` moves entries to the Recycle Bin. There is no confirmation dialog for
+the client's changes.
+
+**File changes by AI clients**, at the bottom of the MCP server dialog, lists what
+the client created, edited, renamed or deleted since Keywright started, newest first.
+Click a path to open the file. **Undo** puts the file back as it was before the
+change, but only while the file is still as the client left it: if you or the client
+changed it since, undo the later change first. Undoing a created file moves it to the
+Recycle Bin. Keywright keeps a copy of deleted entries up to 20 MB to restore them;
+larger ones stay in the Recycle Bin. The list holds the last 100 changes and is
+cleared when Keywright closes. The title bar button's tooltip counts the changes not
+undone.
+
+`run_tests` uses the files on disk, like the Testing panel. The run appears in the
+Testing panel, and the client receives each test's status, the failing keyword and
+message, and the end of the console output.
+
+AI clients stop waiting for a tool after a time limit: 60 seconds by default in
+Codex and 180 seconds in Antigravity. `run_tests` therefore returns within about
+45 seconds. If tests are still running, it returns the results so far, and the
+client calls `wait_for_run` to wait for the rest in further steps. A run of any
+length works without changing the client's timeout.
+
+When a test fails, `test_failure_details` gives the client the failing keyword with
+its file and line, the surrounding source lines, the test's log messages, and the
+last screenshots Browser took, as images. The client can then see what the page
+showed at the failure instead of guessing from the message.
+
+### How the AI writes a test from the browser
+
+The AI's browser is a separate, visible Chromium window, independent of the Test
+Generator. The client reads each page as an accessibility snapshot in which elements
+carry references such as `[ref=e5]`, and acts on those references.
+
+Before each action, Keywright turns the reference into the locator Playwright's
+code generator would choose, acts through that locator, and records the action in the
+Test Generator's format. Every result includes the Browser step for the action, for
+example `Click    role=button[name="Sign in"i]`, and a new snapshot. Dialogs are
+dismissed and recorded as `Handle Future Dialogs`; frames become `>>>` selectors;
+new pages become `Switch Page`.
+
+`browser_assert` checks text, visibility, a field's value or a checkbox state on the
+page, waiting up to five seconds, and adds the matching `Get Text`, `Wait For Elements
+State`, `Get Property` or `Get Checkbox State` step only when the check passes.
+`browser_steps` returns the recorded steps, or a complete test with `complete: true`.
+The client then writes the file, preferably with the project's own keywords, and runs
+it. Review generated selectors and assertions as you would a recording.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -550,9 +659,10 @@ continuing. For a ZIP download, extract the latest archive into a new folder and
 run `setup.bat` there. Keep Robot test projects in their existing folders.
 The app does not download updates or change its source files.
 
-Recent projects, sidebar width, breakpoints, watches, run options and copies of
-unsaved files are stored in Electron's user-data directory, separately from your
-test source. Some settings are per project; pinned
+Recent projects, sidebar width, breakpoints, watches, run options, copies of
+unsaved files, the MCP server's setting and token, and copies of entries an AI
+client deleted are stored in Electron's
+user-data directory, separately from your test source. Some settings are per project; pinned
 watches and sidebar width are shared application settings.
 
 ## Current limitations
@@ -566,6 +676,9 @@ watches and sidebar width are shared application settings.
 - Traces depend on explicit Browser contexts and their successful closure.
 - The Test Generator depends on private Playwright recorder APIs; upgrades require
   replay verification.
+- The MCP server works on the open project only and cannot open or create
+  projects. Its browser has no tools for file uploads or going back, and a click
+  that starts a download is recorded without waiting for the download.
 
 For recovery steps, see [Troubleshooting](troubleshooting.md). For a reproducible
 defect, open an [issue](https://github.com/silvestrodecaro/keywright/issues) with the

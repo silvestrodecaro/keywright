@@ -21,6 +21,7 @@ or Playwright trace from the same project.
 | Run a test or suite | Test selection, tag filters, Robot arguments, dry run, streamed keyword results and re-runs when watched files change. |
 | Investigate a failure | Source navigation, Browser screenshots, Robot logs and reports, context traces, breakpoints, stepping and variable inspection. |
 | Compare results | A local history of the last 30 run summaries, including newly failing, fixed and slower tests. |
+| Work with an AI client | An optional MCP server for Claude Code, Claude Desktop, Codex or Cursor. The client edits project files, runs tests, and explores the application in its own browser, where each action yields the matching Browser step. |
 
 Tests remain ordinary `.robot` and `.resource` files. They can be edited in another
 editor and run with the project's Python outside Keywright. Recorded code is a
@@ -149,6 +150,11 @@ Project files and Robot output are stored in the project directories. Run summar
 are kept in the configured results folder; recent projects, interface settings and
 copies of unsaved files are stored in Electron's user-data directory. Keywright has
 no analytics or telemetry integration in the application source.
+
+The MCP server is off by default. When you turn it on, Keywright accepts
+connections on `127.0.0.1` only, with a token. A connected AI client sends what it
+reads, including project files, page snapshots and test results, to its own service
+under that client's terms.
 
 Source runs do not check for application updates. Project setup downloads Python
 packages and Browser dependencies; browser installation downloads browser binaries.

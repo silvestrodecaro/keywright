@@ -17,6 +17,9 @@ flowchart LR
     Runner --> Events[Local TCP listener and debugger commands]
     Events --> Main
     Main --> Output[Local HTTP: trace viewer and Robot output]
+    Client[AI client] --> Bridge2[stdio bridge] --> MCP[Local HTTP: MCP server]
+    MCP --> Main
+    Main --> AIBrowser[Playwright: the AI's browser]
 ```
 
 The main window enables `contextIsolation` and sandboxing and disables Node
@@ -62,6 +65,9 @@ executables out of `.venv` makes their paths independent of the project director
 | Editor services | [keywordIndex.js](../src/main/keywordIndex.js), [languageWorker.js](../src/main/languageWorker.js), [formatter.js](../src/main/formatter.js), [projectVariables.js](../src/main/projectVariables.js) | Completion data, persistent diagnostics worker, formatting and static variable index |
 | Search | [projectSearch.js](../src/main/projectSearch.js), [searchCore.js](../src/renderer/searchCore.js), [search.js](../src/renderer/search.js) | Disk traversal, matching/replacement and open-buffer coordination |
 | Artifacts | [traceServer.js](../src/main/traceServer.js), [runHistory.js](../src/main/runHistory.js) | Local output serving and bounded run summaries |
+| MCP server | [mcp/service.js](../src/main/mcp/service.js), [protocol.js](../src/main/mcp/protocol.js), [httpServer.js](../src/main/mcp/httpServer.js), [settings.js](../src/main/mcp/settings.js), [bridge.js](../src/main/mcp/bridge.js) | MCP lifecycle and tool calls, loopback HTTP transport, token and connection file, stdio bridge for clients |
+| MCP clients | [mcp/clients.js](../src/main/mcp/clients.js), [connectionTest.js](../src/main/mcp/connectionTest.js) | Per-client configuration, read-only checks of client files, and the connection test |
+| AI tools and browser | [mcp/tools.js](../src/main/mcp/tools.js), [changes.js](../src/main/mcp/changes.js), [agentBrowser.js](../src/main/mcp/agentBrowser.js), [mcpDialog.js](../src/renderer/mcpDialog.js) | Tool definitions over project files, keywords and the runner; the log and undo of their file changes; the AI's browser and its recorded steps; the dialog and title bar button |
 | UI shell | [app.js](../src/renderer/app.js), [index.html](../src/renderer/index.html), [styles.css](../src/renderer/styles.css) | Welcome/setup, project tabs, file saves, shared structure and visual tokens |
 | Workspace saves | [workspaceFiles.js](../src/renderer/workspaceFiles.js) | Per-file save queue, editor snapshots, disk revision conflicts and shared run preparation |
 | Keyboard navigation | [treeNavigation.js](../src/renderer/treeNavigation.js) | Visible-tree navigation, focus restoration and tab-group keyboard behavior |
@@ -218,6 +224,95 @@ Formatting runs Robocop against a temporary file outside the project, passes the
 project configuration where supported and restores the editor's line endings.
 The formatted text returns to the editor rather than silently saving the source.
 
+## MCP server
+
+`McpService` owns the MCP server. It is off until the user turns it on; the choice,
+a 256-bit token and the preferred port (47811) are kept in `mcp.json` in Electron
+`userData`. `McpProtocol` implements the JSON-RPC lifecycle (`initialize`, `ping`)
+and tools (`tools/list`, `tools/call`) without an SDK. It checks arguments against
+each tool's schema, returns tool failures as results with `isError` so the model can
+correct its call, and negotiates protocol versions from 2024-11-05 to 2025-11-25.
+
+`McpHttpServer` is the Streamable HTTP transport without server-sent events: each
+POST carries a message or a batch and receives JSON; notifications receive 202. It
+listens on `127.0.0.1`, falls back to a free port when the preferred one is taken,
+and sets no response timeout of its own; tools keep their waits under the clients'
+limits instead. Before the token
+is compared in constant time, requests whose `Host` is not a loopback name (DNS
+rebinding) or whose `Origin` is a non-local web page are refused.
+
+While the server listens, `mcp-connection.json` in `userData` holds its URL, token
+and process ID. Client configurations start `bridge.js` with Keywright's Electron
+executable and `ELECTRON_RUN_AS_NODE=1`. The bridge reads the connection file for
+each message, forwards newline-delimited JSON-RPC from stdin and writes replies to
+stdout. Requests made while Keywright or its connection is off receive a JSON-RPC
+error with the request's ID, so the client does not wait. Stopping removes the file
+only when this process wrote it.
+
+[tools.js](../src/main/mcp/tools.js) defines the tools over the main process's
+state. File tools use `resolveInProject()` and the revision-checked
+`writeProjectFile()`, so they have the same path boundary and atomic replacement as
+editor saves; the watcher then reports the change to the renderer. The renderer
+sends the paths of dirty editor models to the main process (`editor:dirty-files`)
+whenever they change; tools refuse to write, edit, rename or delete those paths or
+folders containing them. `delete_path` uses `shell.trashItem` without a dialog.
+`run_tests` starts the shared `startRun()` used by the Testing panel and sends
+`tests:started` so the panel shows the run. `RunTracker` collects listener events
+into per-test statuses, the innermost failing keyword and the console tail, and keeps
+collecting after the tool returns. `run_tests` and `wait_for_run` wait at most 55
+seconds (45 by default) and return partial results while tests run, because clients
+cancel slower tool calls (Codex after 60 seconds by default). The tracker also keeps, per test,
+up to 40 log messages (dropping ordinary ones before failures and warnings) and the
+screenshot files `main.js` attaches to log events. `step-start` events carry the
+keyword's source, made project-relative by `TestRunner`, so `test_failure_details`
+can quote the failing line in its file and return up to two screenshots as MCP
+image content.
+
+[changes.js](../src/main/mcp/changes.js) records each file change the tools make.
+An update keeps the earlier text and the SHA-256 of the written content; a deletion
+first copies the entry (up to 20 MB) to `mcp-undo/` in `userData`; a rename keeps
+both paths. Undo (`mcp:undo-change`) applies only while the disk still matches the
+change: the written content's hash, the absence of the deleted path, or the renamed
+entry at its new name. It refuses paths with unsaved editor changes and restores
+updates through `writeProjectFile()` with the written revision. The log keeps 100
+changes and 32 MB of earlier text; older changes stay listed without undo.
+`mcpStatus()` includes the open project's changes, and the dialog asks again when
+the watcher reports file changes.
+
+[clients.js](../src/main/mcp/clients.js) builds each client's configuration from the
+server status: a `claude mcp add` command, a Codex `config.toml` table, or a JSON
+`mcpServers` entry for Antigravity, Claude Desktop and Cursor. It reads, never
+writes, the clients' own files (`~/.claude.json`, `~/.codex/config.toml` or
+`CODEX_HOME`, `~/.gemini/config/mcp_config.json` and the older Antigravity path,
+`claude_desktop_config.json`, `~/.cursor/mcp.json`) and compares the Keywright entry
+with the expected command, arguments and environment, or with the server URL and
+token for HTTP entries. Codex TOML is read with a small parser limited to server
+tables. `KEYWRIGHT_CLIENT_HOME` points every location at another folder for UI tests.
+The status sent to the renderer includes these states and, per client type, the
+time of the last real `initialize`, recognized from the reported client name.
+
+[connectionTest.js](../src/main/mcp/connectionTest.js) backs **Test connection**.
+`connectionPlan()` picks what to run: the entry read from the client's file when it
+has one (its command, arguments and environment, or its URL and token), otherwise
+the stdio command read back from the configuration text shown, reported as not yet
+configured. The configuration offered is the same for every stdio client, so only a
+test of the client's own entry is reported as that client working. The test starts
+the command with its environment and sends `initialize`,
+`notifications/initialized` and `tools/list`, with a 20-second limit; HTTP entries
+get the same messages over HTTP. The test reports itself with a
+reserved client name, which the service does not list as a connected client.
+
+`AgentBrowser` is a separate headed Playwright session. `page.ariaSnapshot({ mode:
+'ai' })` describes the page with element refs. An action resolves its ref with
+`page.getByRef()`, normalizes it with `Locator.normalize()` (codegen's locator
+choice) and acts through the normalized locator when it matches one element. The
+internal selector goes through `toBrowserSelector()`; the action is stored in the
+recorder's `jsonl` action shape with page IDs and popup or dialog signals, so
+`generateSteps()` and `generateRobot()` produce its Browser steps. Failed actions are
+removed from the list. Dialogs are dismissed, as the generated `Handle Future Dialogs`
+does. `ariaSnapshot` modes, `getByRef` and `normalize` are public Playwright APIs;
+`Locator._selector` is the same private property the locator picker uses.
+
 ## Output and persistence
 
 | Data | Location / owner | Lifetime |
@@ -232,6 +327,10 @@ The formatted text returns to the editor rather than silently saving the source.
 | Recovery copies of unsaved files | `recovery/<hash>.json` in Electron `userData`, written by [recoveryStore.js](../src/main/recoveryStore.js) | Per project; written at most once a second while files are unsaved, deleted when none remain or the user discards them |
 | Crash reports | `crash-reports/*.txt` in Electron `userData`, written by [crashReports.js](../src/main/crashReports.js) | Versions, the failure reason and the last 100 startup-diagnostic events; the 20 most recent are kept |
 | Library docs and worker state | Main-process memory / helper process | Application or worker session |
+| MCP server setting, token and preferred port | `mcp.json` in Electron `userData` | Until changed in the MCP server dialog |
+| MCP server address | `mcp-connection.json` in Electron `userData` | While the server listens |
+| File changes by AI clients | Main-process memory; copies of deleted entries in `mcp-undo/` in Electron `userData` | Until Keywright closes; the folder is emptied at the next start |
+| The AI's recorded browser steps | Main-process memory | Until the AI's browser is reopened or its steps are cleared |
 
 Changing project locations changes the keys used for project-specific renderer
 settings.
@@ -250,7 +349,9 @@ suite contexts can be shared across tests. History does not version those files.
 
 Project Python and imported libraries execute with the user's process permissions.
 The renderer's IPC boundary and the local servers are separate boundaries to review
-when modifying file access, output serving or project loading.
+when modifying file access, output serving or project loading. The MCP server gives
+a token holder the same file, run and browser capabilities as the tools; review the
+tools and the HTTP checks together when changing either.
 
 ## Build and packaging
 

@@ -418,7 +418,7 @@ class Listener:
             self._frames.append({"name": result.name or "", "source": _source(data),
                                  "lineno": getattr(data, "lineno", None), "id": item_id})
         self._send({"type": "step-start", "id": item_id, "parent": parent, "test": self._test, "suite": self._suite(),
-                    "lineno": getattr(data, "lineno", None), **_describe(result)})
+                    "lineno": getattr(data, "lineno", None), "source": _source(data), **_describe(result)})
 
     def end_body_item(self, data, result):
         if self._muted:

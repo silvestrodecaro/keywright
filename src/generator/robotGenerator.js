@@ -46,6 +46,12 @@ function actionLines(action) {
   switch (action.name) {
     case 'navigate':
       return [line('Go To', arg(action.url))];
+    case 'goBack':
+      return [line('Go Back')];
+    case 'goForward':
+      return [line('Go Forward')];
+    case 'reload':
+      return [line('Reload')];
     case 'click': {
       const modifiers = modifierNames(action.modifiers || 0);
       const button = action.button || 'left';

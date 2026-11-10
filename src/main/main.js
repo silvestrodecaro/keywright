@@ -55,6 +55,12 @@ const { projectVariables } = require('./projectVariables');
 const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
 const { RunHistory } = require('./runHistory');
+const { AgentBrowser } = require('./mcp/agentBrowser');
+const { McpService } = require('./mcp/service');
+const { createTools } = require('./mcp/tools');
+const { ChangeLog } = require('./mcp/changes');
+const { clientConfigs, clientStates, connectionPlan } = require('./mcp/clients');
+const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -76,6 +82,15 @@ let runOutputDir = null;
 let generatorOptions = { ...DEFAULT_OPTIONS };
 let recentProjects = null;
 let recovery = null;
+// The browser an AI client drives through the MCP tools, separate from the Test Generator's.
+// UI tests run it without a window.
+const agentBrowser = new AgentBrowser({ headless: process.env.KEYWRIGHT_AI_BROWSER_HEADLESS === '1' });
+/** @type {McpService | null} */
+let mcp = null;
+/** @type {ChangeLog | null} file changes made by AI clients, for undo */
+let aiChanges = null;
+// Project-relative paths with unsaved changes in the editor, reported by the renderer.
+let editorDirtyPaths = [];
 
 // Browser choices offered in the UI: the Playwright browser to record with and
 // the matching `New Browser` arguments of the generated test.
@@ -473,28 +488,33 @@ ipcMain.handle('tests:discover', () => {
   return discoverTests(currentProject);
 });
 
-ipcMain.handle('tests:run', async (_event, options = {}) => {
+/** Starts a run for the Testing panel or an AI client; throws when it cannot start. */
+async function startRun(options = {}) {
   if (!currentProject)
-    return { ok: false, error: 'No project is open.' };
+    throw new Error('No project is open.');
   if (runner.running) // before touching the history of the run in progress
-    return { ok: false, error: 'Tests are already running.' };
+    throw new Error('Tests are already running.');
+  runOutputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
+  traceServer.allow([runOutputDir]);
+  runHistory.start(runOutputDir, { ...options, debug: !!options.debug });
+  await runner.run(currentProject, {
+    select: options.select || [],
+    variables: {
+      ...(options.headed ? { HEADLESS: 'False' } : {}),
+      ...(options.browser ? { BROWSER: options.browser } : {}), // used by the project template's New Browser
+    },
+    trace: !!options.trace,
+    include: options.include || [],
+    exclude: options.exclude || [],
+    dryrun: !!options.dryrun,
+    extraArgs: options.extraArgs || '',
+    debug: options.debug ? { breakpoints: options.debug.breakpoints || {}, pauseOnFailure: !!options.debug.pauseOnFailure } : undefined,
+  });
+}
+
+ipcMain.handle('tests:run', async (_event, options = {}) => {
   try {
-    runOutputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
-    traceServer.allow([runOutputDir]);
-    runHistory.start(runOutputDir, { ...options, debug: !!options.debug });
-    await runner.run(currentProject, {
-      select: options.select || [],
-      variables: {
-        ...(options.headed ? { HEADLESS: 'False' } : {}),
-        ...(options.browser ? { BROWSER: options.browser } : {}), // used by the project template's New Browser
-      },
-      trace: !!options.trace,
-      include: options.include || [],
-      exclude: options.exclude || [],
-      dryrun: !!options.dryrun,
-      extraArgs: options.extraArgs || '',
-      debug: options.debug ? { breakpoints: options.debug.breakpoints || {}, pauseOnFailure: !!options.debug.pauseOnFailure } : undefined,
-    });
+    await startRun(options);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error.message };
@@ -675,6 +695,109 @@ function explainLaunchError(error, browser) {
 }
 
 // ---------------------------------------------------------------------------
+// MCP server (MCP server)
+
+function aiLaunchError(error, browser) {
+  const explained = explainLaunchError(error, browser);
+  return explained.install
+    ? `${explained.error} Ask the user to install it: Test Generator > Start recording offers the download, or run "npm run install-browsers" in the Keywright folder.`
+    : explained.error;
+}
+
+function createMcpService() {
+  aiChanges = new ChangeLog({ folder: path.join(app.getPath('userData'), 'mcp-undo') });
+  aiChanges.on('change', () => send('mcp:state', mcpStatus()));
+  const tools = createTools({
+    changes: aiChanges,
+    project: () => currentProject,
+    dirtyPaths: () => editorDirtyPaths,
+    trash: (entry) => shell.trashItem(entry),
+    keywords: async () => {
+      currentProject = projects.loadProject(currentProject.root);
+      return keywordIndex.build(currentProject);
+    },
+    check: async (relative, text) => {
+      const worker = projectLanguageWorker();
+      if (!worker)
+        return { ok: false, problems: [], error: 'The project has no Python environment with Robot Framework.' };
+      try {
+        const { problems } = await worker.request('check', { path: relative, text });
+        return { ok: true, problems };
+      } catch (error) {
+        return { ok: false, problems: [], error: error.message };
+      }
+    },
+    discover: async () => {
+      currentProject = projects.loadProject(currentProject.root);
+      return discoverTests(currentProject);
+    },
+    runner,
+    startRun: async (options) => {
+      await startRun(options);
+      // The Testing panel shows a run it did not start.
+      send('tests:started', { select: options.select || [], include: options.include || [], exclude: options.exclude || [] });
+    },
+    browser: agentBrowser,
+    browsers: BROWSERS,
+    launchError: (error) => aiLaunchError(error, agentBrowser.options.channel || agentBrowser.options.browser),
+  });
+  const service = new McpService({ folder: app.getPath('userData'), version: app.getVersion(), tools });
+  service.on('state', () => send('mcp:state', mcpStatus()));
+  agentBrowser.on('state', () => send('mcp:state', mcpStatus()));
+  return service;
+}
+
+/** Server state, plus each client's configuration and what its own config file says (read-only). */
+function mcpStatus() {
+  if (!mcp)
+    return null;
+  const status = mcp.status();
+  const states = clientStates(status);
+  const setups = clientConfigs(status).map((client) => {
+    const { entry: _entry, ...state } = states[client.id]; // the page needs the verdict, not the entry
+    return { ...client, ...state, seen: status.seen[client.id] || null };
+  });
+  const changes = currentProject ? aiChanges.list(currentProject.root) : [];
+  return { ...status, browserOpen: agentBrowser.open, setups, changes };
+}
+
+ipcMain.handle('mcp:status', () => mcpStatus());
+ipcMain.handle('mcp:set-enabled', async (_event, enabled) => {
+  await mcp.setEnabled(!!enabled);
+  if (!enabled)
+    await agentBrowser.close();
+  return mcpStatus();
+});
+ipcMain.handle('mcp:regenerate-token', () => {
+  mcp.regenerateToken();
+  return mcpStatus();
+});
+ipcMain.handle('mcp:close-browser', () => agentBrowser.close());
+ipcMain.handle('mcp:undo-change', (_event, id) => aiChanges.undo(id, {
+  dirtyPaths: editorDirtyPaths,
+  trash: (entry) => shell.trashItem(entry),
+}));
+// Tests what the client will start: the entry in its own file when there is one,
+// otherwise the configuration offered (reported as not configured yet).
+ipcMain.handle('mcp:test-connection', async (_event, clientId) => {
+  const status = mcp.status();
+  if (!status.running)
+    return { ok: false, scope: 'server', error: 'Turn the server on first.' };
+  try {
+    const plan = connectionPlan(clientId, status);
+    if (plan.kind === 'unreadable')
+      return { ok: false, scope: 'client', file: plan.file, error: plan.error };
+    const result = plan.config ? await testConnection(plan.config) : await testHttpConnection(plan.url, plan.token);
+    return { ...result, scope: plan.kind, file: plan.file || null };
+  } catch (error) {
+    return { ok: false, scope: 'server', error: error.message };
+  }
+});
+ipcMain.on('editor:dirty-files', (_event, paths) => {
+  editorDirtyPaths = Array.isArray(paths) ? paths.filter((item) => typeof item === 'string') : [];
+});
+
+// ---------------------------------------------------------------------------
 // Window
 
 function openWebLink(url) {
@@ -736,6 +859,7 @@ function createWindow() {
   });
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.webContents.on('did-finish-load', () => {
+    editorDirtyPaths = []; // a reloaded page has no unsaved editors yet
     publishState();
     publishCode();
     publishWindowActive();
@@ -802,6 +926,8 @@ app.whenReady().then(async () => {
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   crashReports.folder = path.join(app.getPath('userData'), 'crash-reports');
+  mcp = createMcpService();
+  await mcp.restore();
   // `electron . <folder>` opens a project directly.
   // Electron may put its debugger switches before the application entry path.
   const positionalArgs = process.argv.slice(1).filter((arg) => !arg.startsWith('-'));
@@ -833,5 +959,7 @@ app.on('window-all-closed', async () => {
   stopWatchingProject();
   await session.stop();
   await pickerSession.stop();
+  await agentBrowser.close();
+  await mcp?.stop(); // the setting stays on for the next start
   app.quit();
 });

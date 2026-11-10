@@ -4,6 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test, expect } = require('./desktop');
 
+// The MCP server test drives the AI's browser without opening a window.
+process.env.KEYWRIGHT_AI_BROWSER_HEADLESS = '1';
+// The MCP dialog reads AI clients' configuration files from this home, not the user's.
+const clientHome = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'keywright-client-home-'));
+process.env.KEYWRIGHT_CLIENT_HOME = clientHome;
+
 async function openExample({ app, page, project }) {
   // Electron's folder chooser is native OS UI. Only its selected path is supplied;
   // the welcome button, IPC, project loading and renderer remain real.
@@ -589,4 +595,200 @@ test('the explorer creates, renames and deletes files from its context menu and 
   await page.mouse.click(box.x + 40, box.y + box.height - 10, { button: 'right' });
   await expect(menu.getByRole('menuitem')).toHaveText(['New File…', 'Open Project Folder in File Manager', 'Refresh Explorer']);
   await page.keyboard.press('Escape');
+});
+
+/** An AI client: the command the MCP server dialog shows, started as a client would start it. */
+function startClient(config) {
+  const { spawn } = require('node:child_process');
+  const child = spawn(config.command, config.args, { env: { ...process.env, ...config.env }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const replies = new Map();
+  const waiting = new Map();
+  let buffer = '';
+  let id = 0;
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    let newline;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const reply = JSON.parse(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+      replies.set(reply.id, reply);
+      waiting.get(reply.id)?.(reply);
+    }
+  });
+  const request = (method, params) => {
+    const current = ++id;
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: current, method, params })}\n`);
+    return replies.get(current) || new Promise((resolve) => waiting.set(current, resolve));
+  };
+  const tool = async (name, args = {}) => {
+    const reply = await request('tools/call', { name, arguments: args });
+    if (reply.error)
+      return { text: reply.error.message, isError: true };
+    return { text: reply.result.content.map((c) => c.text).join('\n'), isError: !!reply.result.isError };
+  };
+  return { child, request, tool, notify: (method) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method })}\n`) };
+}
+
+test('an AI client connects, explores the app in a browser, writes a test and runs it', async ({ desktop }, testInfo) => {
+  test.setTimeout(240_000);
+  const { app, page, project } = desktop;
+  await app.evaluate(({ shell, ipcMain }) => {
+    const fs = process.getBuiltinModule('node:fs');
+    global.__trashed = [];
+    shell.trashItem = async (target) => { global.__trashed.push(target); fs.rmSync(target, { recursive: true }); };
+    ipcMain.removeHandler('clipboard:write');
+    global.__copied = [];
+    ipcMain.handle('clipboard:write', (_event, text) => global.__copied.push(text));
+  });
+  await openExample(desktop);
+
+  // Off by default; the dialog switches it on and shows each client's configuration.
+  const button = page.locator('#mcp-open');
+  await expect(button).toHaveAttribute('title', 'MCP server: off');
+  await button.click();
+  const dialog = page.getByRole('dialog', { name: 'MCP server' });
+  const toggle = dialog.getByRole('switch', { name: 'Allow AI clients to connect' });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await expect(page.locator('#mcp-status')).toContainText(/On, listening on 127\.0\.0\.1:\d+\. No client has connected yet\./);
+  await expect(button).toHaveClass(/mcp-on/);
+  await expect(page.locator('#mcp-config')).toContainText('claude mcp add keywright --scope user --env ELECTRON_RUN_AS_NODE=1 --');
+  await dialog.getByRole('button', { name: 'Copy' }).click();
+  await expect.poll(() => app.evaluate(() => global.__copied.length)).toBe(1);
+  const clientRadio = (name) => dialog.getByRole('radio', { name: new RegExp(`^${name}`) });
+  await expect(clientRadio('Claude Code')).toHaveAttribute('aria-checked', 'true');
+  await expect(clientRadio('Codex')).toContainText('Not configured');
+
+  // The Codex configuration, pasted into its config.toml, is found when the dialog opens again.
+  await clientRadio('Codex').click();
+  await expect(page.locator('#mcp-client-state')).toContainText('No Keywright entry in');
+  const toml = await page.locator('#mcp-config').textContent();
+  fs.mkdirSync(path.join(clientHome, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(clientHome, '.codex', 'config.toml'), `model = "gpt-5"\n\n${toml}\n`);
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await button.click();
+  await expect(clientRadio('Codex')).toContainText('Configured');
+  await clientRadio('Codex').click();
+  await expect(page.locator('#mcp-client-state')).toContainText('Keywright is configured in');
+
+  // Test connection runs the shown configuration the way the client will.
+  await dialog.getByRole('button', { name: 'Test connection' }).click();
+  await expect(page.locator('#mcp-result')).toHaveText(/^✓ Codex's configuration in .+config\.toml works: Keywright [\d.]+ answered with \d+ tools\./, { timeout: 30_000 });
+  await expect(page.locator('#mcp-result')).toHaveClass(/is-ok/);
+
+  // A client without Keywright gets no check mark, only where to add it.
+  await clientRadio('Cursor').click();
+  await dialog.getByRole('button', { name: 'Test connection' }).click();
+  await expect(page.locator('#mcp-result')).toHaveText(/^Cursor is not configured yet: add the configuration above to .+mcp\.json, then test again\./, { timeout: 30_000 });
+  await expect(page.locator('#mcp-result')).not.toHaveClass(/is-ok|is-error/);
+  await expect(page.locator('#mcp-status')).toContainText('No client has connected yet.');
+
+  // Arrow keys move through the clients like a radio group.
+  await clientRadio('Codex').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(clientRadio('Antigravity')).toBeFocused();
+  await expect(page.locator('#mcp-client-help')).toContainText('mcp_config.json');
+  await page.keyboard.press('ArrowDown');
+  await expect(clientRadio('Claude Desktop')).toHaveAttribute('aria-checked', 'true');
+  await page.screenshot({ path: testInfo.outputPath('mcp-server.png') });
+  const config = JSON.parse(await page.locator('#mcp-config').textContent()).mcpServers.keywright;
+  await dialog.getByRole('button', { name: 'Done' }).click();
+
+  const client = startClient(config);
+  try {
+    const init = await client.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-code', version: '1' } });
+    expect(init.result.serverInfo.name).toBe('keywright');
+    client.notify('notifications/initialized');
+    expect(JSON.parse((await client.tool('project_info')).text).testsDir).toBe('tests');
+
+    // Explore the demo page through refs; each action returns its Browser step.
+    const site = require('node:url').pathToFileURL(path.join(project, 'site', 'index.html')).href;
+    let snapshot = (await client.tool('browser_open', { url: site })).text;
+    const refOf = (label) => /\[ref=(\w+)\]/.exec(snapshot.split('\n').find((line) => line.includes(label)))[1];
+    // A detour and back: the test then runs Go To and Go Back.
+    await client.tool('browser_navigate', { url: `${site}?visit=2` });
+    snapshot = (await client.tool('browser_back')).text;
+    expect(snapshot).toMatch(/^Robot step:\n {4}Go Back\n/);
+    snapshot = (await client.tool('browser_fill', { ref: refOf('textbox "Work email"'), text: 'grace@example.test' })).text;
+    expect(snapshot).toContain('Fill Text    ');
+    snapshot = (await client.tool('browser_click', { ref: refOf('button "Request code"') })).text;
+    expect(snapshot).toContain('Click    role=button[name="Request code"i]');
+    const check = await client.tool('browser_assert', { ref: refOf('heading "Check your inbox"'), kind: 'text', text: 'Check your inbox', exact: true });
+    expect(check.isError, check.text).toBe(false);
+    const steps = (await client.tool('browser_steps')).text.split('\n');
+    expect(steps[0]).toBe(`New Page    ${site}`);
+    expect((await client.tool('browser_close')).text).toBe('Browser closed.');
+
+    // The test uses the project's setup and the recorded steps after its New Page.
+    const source = [
+      '*** Settings ***', 'Resource         ../resources/access.resource', 'Test Setup       Open Demo Browser', 'Test Teardown    Close Browser    ALL',
+      '', '', '*** Test Cases ***', 'AI Requests A Code', ...steps.slice(1).map((line) => `    ${line}`), '',
+    ].join('\n');
+    expect((await client.tool('write_file', { path: 'tests/ai_request.robot', content: source })).text).toBe('tests/ai_request.robot created.');
+    await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+    await expect(page.locator('#tree [data-tree-id="tests/ai_request.robot"]')).toBeVisible();
+    expect((await client.tool('check_file', { path: 'tests/ai_request.robot' })).text).toBe('No problems found.');
+
+    // The run shows in the Testing panel while the client waits for its result.
+    const run = await client.tool('run_tests');
+    expect(run.text).toMatch(/^Finished: 3 passed, 0 failed, 0 skipped \(exit code 0\)\./);
+    expect(run.text).toContain('PASS  Tests.Ai Request.AI Requests A Code');
+    await page.getByRole('tab', { name: 'Testing', exact: true }).click();
+    await expect(page.locator('#tests-summary .status-pass')).toHaveText('✓ 3');
+
+    // A failure comes back with its source line, log and Browser's screenshot.
+    const failing = source.replace('Check your inbox', 'Wrong heading').replace('AI Requests A Code', 'AI Sees The Wrong Heading');
+    await client.tool('write_file', { path: 'tests/ai_failure.robot', content: failing });
+    const failedRun = await client.tool('run_tests', { tests: ['Tests.Ai Failure'] });
+    expect(failedRun.text).toMatch(/^Finished: 0 passed, 1 failed/);
+    expect(failedRun.text).toMatch(/failing keyword: Get Text .+\(tests\/ai_failure\.robot:\d+\)/);
+    const details = await client.request('tools/call', { name: 'test_failure_details', arguments: {} });
+    const [detailText, ...images] = details.result.content;
+    expect(detailText.text).toMatch(/^FAIL {2}Tests\.Ai Failure\.AI Sees The Wrong Heading\n/);
+    expect(detailText.text).toMatch(/\n> +\d+ {6}Get Text .+Wrong heading/);
+    expect(images.length).toBeGreaterThan(0);
+    expect(images[0].mimeType).toBe('image/png');
+    expect(Buffer.from(images[0].data, 'base64').subarray(0, 4).toString('hex')).toBe('89504e47');
+    expect((await client.tool('delete_path', { path: 'tests/ai_failure.robot' })).isError).toBe(false);
+
+    // Files with unsaved editor changes are left alone.
+    await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+    await page.locator('#tree [data-tree-id="tests/access.robot"] .tree-row').click();
+    await page.locator('#pane-file .monaco-editor .view-lines').click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.insertText('\n# typing');
+    await expect.poll(async () => (await client.tool('edit_file', { path: 'tests/access.robot', old_text: 'Access Form Is Ready', new_text: 'Changed' })).text)
+      .toMatch(/unsaved changes in the Keywright editor/);
+    expect(fs.readFileSync(path.join(project, 'tests/access.robot'), 'utf8')).toContain('Access Form Is Ready');
+
+    expect((await client.tool('delete_path', { path: 'tests/ai_request.robot' })).text).toBe('tests/ai_request.robot moved to the Recycle Bin.');
+    await expect(page.locator('#tree [data-tree-id="tests/ai_request.robot"]')).toHaveCount(0);
+
+    await button.click();
+    await expect(page.locator('#mcp-status')).toContainText('Connected: claude-code 1. Last action: delete_path');
+    await expect(clientRadio('Claude Code')).toContainText(/Connected at/);
+
+    // The dialog lists the AI's file changes, newest first, and undoes them.
+    const changes = page.locator('#mcp-changes .mcp-change');
+    await expect(changes).toHaveCount(4);
+    await expect(changes.nth(0)).toContainText('Deleted');
+    await expect(changes.nth(0)).toContainText('tests/ai_request.robot');
+    await expect(changes.nth(3)).toContainText('Created');
+    await expect(changes.nth(3)).toContainText('tests/ai_request.robot no longer exists.');
+    await expect(changes.nth(3).getByRole('button', { name: /^Undo/ })).toBeDisabled();
+    await changes.nth(0).getByRole('button', { name: 'Undo: deleted tests/ai_request.robot' }).click();
+    await expect(page.locator('#mcp-changes-result')).toHaveText('Undone: deleted tests/ai_request.robot.');
+    await expect(changes.nth(0)).toContainText('Undone');
+    expect(fs.readFileSync(path.join(project, 'tests/ai_request.robot'), 'utf8')).toBe(source);
+    // Back as the AI created it: creating it can be undone now.
+    await changes.nth(3).getByRole('button', { name: 'Undo: created tests/ai_request.robot' }).click();
+    await expect(changes.nth(3)).toContainText('Undone');
+    expect(fs.existsSync(path.join(project, 'tests/ai_request.robot'))).toBe(false);
+    await toggle.uncheck();
+    await expect(page.locator('#mcp-status')).toHaveText('Off. AI clients cannot connect.');
+    expect((await client.tool('project_info')).text).toMatch(/Keywright is not running or its MCP server is off/);
+  } finally {
+    client.child.kill();
+  }
 });

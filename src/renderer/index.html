@@ -17,6 +17,11 @@
       <button id="project-settings" class="btn" type="button">Project settings</button>
       <button id="project-close" class="btn" type="button">Close project</button>
     </div>
+    <div class="titlebar-actions">
+      <button id="mcp-open" class="btn mcp-button" type="button" aria-haspopup="dialog" title="MCP server: off">
+        <span class="mcp-dot" aria-hidden="true"></span>MCP
+      </button>
+    </div>
   </header>
 
   <!-- Welcome --------------------------------------------------------------->
@@ -450,6 +455,50 @@
     </form>
   </dialog>
 
+  <dialog id="mcp" class="settings-dialog mcp-dialog" aria-labelledby="mcp-title" aria-describedby="mcp-intro">
+    <form id="mcp-form" class="settings-form" method="dialog">
+      <h2 id="mcp-title">MCP server</h2>
+      <p id="mcp-intro" class="muted">Lets an AI client work on the open project through the Model Context Protocol (MCP):
+        read and change its files, run its tests, and open a browser to explore the application and write tests from what it finds.</p>
+      <label class="mcp-switch" for="mcp-enabled">
+        <input id="mcp-enabled" type="checkbox" role="switch">
+        <span>Allow AI clients to connect</span>
+      </label>
+      <p id="mcp-status" class="settings-help" role="status"></p>
+      <div id="mcp-error" class="error" role="alert" hidden></div>
+      <div id="mcp-setup" class="mcp-setup">
+        <div class="mcp-clients-column">
+          <h3 id="mcp-clients-label" class="mcp-subhead">Clients</h3>
+          <div id="mcp-clients" class="mcp-clients" role="radiogroup" aria-labelledby="mcp-clients-label"></div>
+        </div>
+        <div class="mcp-client-detail">
+          <p id="mcp-client-state" class="mcp-client-state"></p>
+          <p id="mcp-client-help" class="settings-help"></p>
+          <pre id="mcp-config" class="mcp-config" tabindex="0" aria-label="Client configuration"></pre>
+          <div class="field-row mcp-config-actions">
+            <button id="mcp-copy" class="btn" type="button">Copy</button>
+            <button id="mcp-test" class="btn" type="button" title="Runs this configuration the way the client will and lists the tools it receives">Test connection</button>
+            <span class="spacer"></span>
+            <button id="mcp-token" class="btn" type="button" title="Clients configured over HTTP need the new token">New token</button>
+          </div>
+          <p id="mcp-result" class="settings-help mcp-result" role="status"></p>
+        </div>
+      </div>
+      <section class="mcp-changes" aria-labelledby="mcp-changes-label">
+        <h3 id="mcp-changes-label" class="mcp-subhead">File changes by AI clients</h3>
+        <p id="mcp-changes-empty" class="settings-help">No file has been changed through MCP since Keywright started.</p>
+        <ul id="mcp-changes" class="mcp-changes-list" hidden></ul>
+        <p id="mcp-changes-result" class="settings-help mcp-result" role="status"></p>
+      </section>
+      <p class="settings-help">The client acts on this computer with your permissions. Keywright accepts connections from this computer only, with a token.
+        Deleted files go to the Recycle Bin; files with unsaved changes in the editor are left alone until you save them.</p>
+      <div class="form-actions">
+        <button id="mcp-close-browser" class="btn" type="button" hidden>Close the AI's browser</button>
+        <button id="mcp-done" class="btn btn-primary" type="submit">Done</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="palette" class="palette" hidden>
     <div class="palette-box" role="dialog" aria-modal="true" aria-label="Command palette">
       <input id="palette-input" class="palette-input" type="text" role="combobox" aria-expanded="true"
@@ -478,6 +527,7 @@
   <script src="paletteCore.js"></script>
   <script src="palette.js"></script>
   <script src="projectSettings.js"></script>
+  <script src="mcpDialog.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

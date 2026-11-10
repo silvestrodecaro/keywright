@@ -173,6 +173,8 @@ class TestRunner extends EventEmitter {
               continue;
             try {
               const event = JSON.parse(line);
+              if (event.type === 'step-start' && event.source)
+                event.source = this._relative(event.source);
               if (event.type === 'debug-paused') {
                 event.source = this._relative(event.source);
                 event.frames = (event.frames || []).map((frame) => ({ ...frame, source: this._relative(frame.source) }));

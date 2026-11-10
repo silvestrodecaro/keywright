@@ -3,6 +3,32 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
+## Unreleased
+
+### Added
+
+- An optional MCP server for AI clients such as Claude Code, Codex,
+  Antigravity, Claude Desktop and Cursor. The client can read, write, edit, rename and delete
+  project files, search keywords, check files and run tests, with the run shown in
+  the Testing panel. Files with unsaved editor changes are left alone, and deletions
+  go to the Recycle Bin. **MCP** in the title bar turns it on and shows each client's
+  configuration.
+- The MCP dialog lists each client with what its own configuration file says
+  (configured, missing or needing an update), read without changing it, and the time
+  it connected. **Test connection** runs the shown configuration the way the client
+  will and lists the tools it receives.
+- Test runs started by an AI client return within about 45 seconds and continue
+  with `wait_for_run`, so client tool timeouts (60 seconds in Codex by default) do
+  not cut long runs short.
+- `test_failure_details` gives an AI client the failing keyword with its file, line
+  and surrounding source, the test's log and Browser's failure screenshot.
+- The AI's own browser. The client reads pages as accessibility snapshots and acts on
+  their elements; each action returns the Browser step with the selector the Test
+  Generator would choose, and the steps can be returned as a complete test. It can
+  go back, go forward and reload, recorded as `Go Back`, `Go Forward` and `Reload`.
+- The MCP dialog lists the files an AI client created, edited, renamed or deleted,
+  with **Undo** for each change while the file is still as the client left it.
+
 ## 0.3.0 - 2026-11-10
 
 ### Added

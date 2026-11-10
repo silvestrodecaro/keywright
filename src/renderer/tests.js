@@ -584,16 +584,8 @@
     }
   }
 
-  /** background: watch re-run, keep the current tab. */
-  async function startRun(select, { background }) {
-    showError('');
-    // Tag filters apply to Run all and suites; running a single test is an explicit choice.
-    const filter = select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
-    const scope = testsInScope(select).filter((id) => window.RFTags.selected(testIndex.get(id).test.tags, filter));
-    if (!scope.length) {
-      showError('No test matches the tag filter of the Run options.');
-      return;
-    }
+  /** Marks the tests about to run as queued and clears their previous results. */
+  function resetForRun(scope) {
     for (const id of scope) {
       results.set(id, { status: 'queued' });
       runs.delete(id);
@@ -606,6 +598,19 @@
     $('#console-output').textContent = '';
     running = true;
     scheduleRender();
+  }
+
+  /** background: watch re-run, keep the current tab. */
+  async function startRun(select, { background }) {
+    showError('');
+    // Tag filters apply to Run all and suites; running a single test is an explicit choice.
+    const filter = select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
+    const scope = testsInScope(select).filter((id) => window.RFTags.selected(testIndex.get(id).test.tags, filter));
+    if (!scope.length) {
+      showError('No test matches the tag filter of the Run options.');
+      return;
+    }
+    resetForRun(scope);
     if (!background)
       window.dispatchEvent(new CustomEvent('keywright:show-results'));
     debugging = $('#tests-debug').checked;
@@ -736,6 +741,17 @@
   }
 
   api.onTestEvent(onEvent);
+
+  // A run started by an AI client: show it like one started here, without changing tab.
+  api.onTestsStarted(({ select, include, exclude }) => {
+    if (running)
+      return;
+    debugging = false;
+    paused = null;
+    showError('');
+    const filter = { include, exclude };
+    resetForRun(testsInScope(select).filter((id) => window.RFTags.selected(testIndex.get(id).test.tags, filter)));
+  });
 
   api.onTestOutput((text) => {
     output = (output + text).slice(-MAX_OUTPUT);

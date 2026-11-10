@@ -115,6 +115,57 @@ h2, .panel-header, .sidebar-tab, .results-switch-btn, .pane-results h3, .steps-s
 /* Layers that can cover the bar take their own clicks instead of moving the window. */
 .palette, .settings-dialog, .context-view, .monaco-menu-container { -webkit-app-region: no-drag; }
 
+/* MCP server: title bar button and dialog. */
+.mcp-button { display: inline-flex; align-items: center; gap: 6px; }
+.mcp-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--muted); }
+.mcp-button.mcp-on .mcp-dot { background: var(--ok); border-color: var(--ok); }
+.mcp-button.mcp-failed .mcp-dot { background: var(--record); border-color: var(--record); }
+.settings-dialog.mcp-dialog { width: min(780px, calc(100vw - 32px)); }
+.mcp-setup { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; }
+.mcp-subhead { margin: 0 0 6px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.mcp-clients { display: flex; flex-direction: column; gap: 2px; }
+.mcp-client {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; padding: 6px 8px;
+  border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.mcp-client:hover { background: var(--surface-2); }
+.mcp-client[aria-checked="true"] { border-color: var(--border-strong); background: var(--surface-2); }
+.mcp-client:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mcp-client-name { font-size: 13px; }
+.mcp-client-badge { color: var(--muted); font-size: 11px; }
+.mcp-client-badge.is-configured, .mcp-client-badge.is-seen { color: var(--ok); }
+.mcp-client-badge.is-outdated, .mcp-client-badge.is-unreadable { color: var(--record); }
+.mcp-client-detail { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.mcp-client-state, .mcp-client-detail .settings-help { margin: 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.mcp-result { min-height: 1.4em; }
+.mcp-result.is-ok { color: var(--ok); }
+.mcp-result.is-error { color: var(--error-text); }
+@media (max-width: 720px) { .mcp-setup { grid-template-columns: 1fr; } }
+.mcp-switch { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+.mcp-switch input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.mcp-config {
+  max-height: 180px; margin: 0; padding: 10px; overflow: auto;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg);
+  font-family: var(--mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; user-select: text;
+}
+.mcp-config:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mcp-config-actions { align-items: center; gap: 8px; }
+.mcp-setup-off { opacity: .55; }
+.mcp-changes { border-top: 1px solid var(--border); padding-top: 12px; }
+.mcp-changes .settings-help { margin: 0; font-size: 12px; }
+.mcp-changes-list { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto; }
+.mcp-change { display: grid; grid-template-columns: 44px 64px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 28px; font-size: 12px; }
+.mcp-change + .mcp-change { border-top: 1px solid var(--border); }
+.mcp-change-time, .mcp-change-kind { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mcp-change-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+button.mcp-change-path { padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+button.mcp-change-path:hover { text-decoration: underline; }
+button.mcp-change-path:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mcp-change.is-undone .mcp-change-path { color: var(--muted); text-decoration: line-through; }
+.mcp-change-note { color: var(--muted); font-size: 11px; }
+.mcp-change-reason { grid-column: 3 / -1; margin-top: -6px; padding-bottom: 4px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.mcp-change .btn { padding-block: 2px; }
+
 /* Shared controls -------------------------------------------------------- */
 .brand-mark { display: block; flex: none; width: 30px; height: 30px; }
 .brand-mark-lg { width: 64px; height: 64px; }

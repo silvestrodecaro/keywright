@@ -101,3 +101,11 @@ test('visibility assertions wait for the visible state', () => {
     'Wait For Elements State    text=Please enter a valid e-mail    visible',
   ]);
 });
+
+test('history steps become Go Back, Go Forward and Reload', () => {
+  assert.deepStrictEqual(generateSteps([
+    at({ name: 'goBack' }),
+    at({ name: 'goForward' }),
+    at({ name: 'reload' }),
+  ]), ['Go Back', 'Go Forward', 'Reload']);
+});

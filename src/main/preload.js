@@ -83,4 +83,15 @@ contextBridge.exposeInMainWorld('keywright', {
   pickLocator: (options) => ipcRenderer.invoke('locator:pick', options),
   cancelPickLocator: () => ipcRenderer.invoke('locator:cancel'),
   onPickState: (callback) => subscribe('locator:state', callback),
+
+  // AI connection (MCP server)
+  mcpStatus: () => ipcRenderer.invoke('mcp:status'),
+  setMcpEnabled: (enabled) => ipcRenderer.invoke('mcp:set-enabled', enabled),
+  regenerateMcpToken: () => ipcRenderer.invoke('mcp:regenerate-token'),
+  testMcpConnection: (clientId) => ipcRenderer.invoke('mcp:test-connection', clientId),
+  closeAiBrowser: () => ipcRenderer.invoke('mcp:close-browser'),
+  undoMcpChange: (id) => ipcRenderer.invoke('mcp:undo-change', id),
+  onMcpState: (callback) => subscribe('mcp:state', callback),
+  reportDirtyFiles: (paths) => ipcRenderer.send('editor:dirty-files', paths),
+  onTestsStarted: (callback) => subscribe('tests:started', callback),
 });
