@@ -1,4 +1,4 @@
 # Python integration-test baseline. Install into the repository's .venv.
 robotframework==7.5.1
-robotframework-browser==20.6.0
+robotframework-browser==21.0.0
 robotframework-robocop==9.3.0
