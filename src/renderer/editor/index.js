@@ -1682,7 +1682,7 @@ const RFEditor = (() => {
    * Side-by-side comparison of the disk version (left, read-only) with the editor
    * version (right, editable) of a file whose save conflicted.
    */
-  function createComparison(container, { path, disk, mine }) {
+  function createComparison(container, { path, disk, mine, readOnly = false, focus = true }) {
     const language = languageForPath(path);
     const stamp = Date.now();
     const original = monaco.editor.createModel(disk, language, monaco.Uri.from({ scheme: 'keywright-compare', path: `/${stamp}/disk/${path}` }));
@@ -1697,7 +1697,7 @@ const RFEditor = (() => {
       // The labels above name the two sides, so narrow windows must not switch to the inline view.
       useInlineViewWhenSpaceIsLimited: false,
       originalEditable: false,
-      readOnly: false,
+      readOnly,
       ignoreTrimWhitespace: false,
       renderOverviewRuler: true,
       scrollBeyondLastLine: false,
@@ -1705,7 +1705,8 @@ const RFEditor = (() => {
       useShadowDOM: false,
     });
     diff.setModel({ original, modified });
-    diff.getModifiedEditor().focus();
+    if (focus)
+      diff.getModifiedEditor().focus();
     return {
       content: () => modified.getValue(),
       dispose() {
@@ -1762,10 +1763,12 @@ const RFEditor = (() => {
       const model = files.get(path)?.model;
       if (!model || !matches.length)
         return 0;
+      model.pushStackElement();
       model.pushEditOperations([], matches.map((m) => ({
         range: new monaco.Range(m.line, m.column, m.line, m.column + m.length),
         text: m.replacement,
       })), () => null);
+      model.pushStackElement();
       return matches.length;
     },
     selectedText: () => {

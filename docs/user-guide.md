@@ -10,6 +10,7 @@ connects recording, resource reuse, execution and failure diagnosis.
 - [Projects](#projects)
 - [Project configuration](#project-configuration)
 - [Editor](#editor)
+- [Source Control](#source-control)
 - [Test Generator](#test-generator)
 - [Running tests](#running-tests)
 - [Results and traces](#results-and-traces)
@@ -291,6 +292,56 @@ editor navigation, panels, test runs, debugger steps, recording and project
 actions. Only commands that apply at that moment are listed; the debugger steps,
 for example, appear during a debug run. Up and Down select, Enter runs, Escape
 closes.
+
+## Source Control
+
+Select the **Source Control** branch icon in the activity bar, press **Ctrl+Shift+G**, or choose **Show
+Source Control** from the command palette. Keywright uses Git on your PATH. You
+can open the repository root or a project folder inside it. If the folder is
+outside a Git repository, **Initialize Repository** creates one there.
+
+The activity bar shows a count of changed files, and the status bar shows the
+current branch. The panel lists **Changes** and **Staged Changes** in collapsible
+groups. Select a text file to open a read-only, side-by-side Monaco comparison
+in **Git Diff**. Select **Show Patch** to switch to the patch. **Changes**
+compares saved files with the index. **Staged Changes** compares the index with
+the last commit. Before the first commit, the staged patch shows new files against
+an empty repository.
+
+1. Save your edits in the editor.
+2. Use **Stage** and **Unstage** beside a file, or **Stage All** and **Unstage All**
+   for the open project. For modified text files, use **Stage Hunk** or **Unstage
+   Hunk** in the patch to select one block. **Discard Changes** restores a tracked
+   file from the index after confirmation.
+3. Enter a commit message and select **Commit** or press **Ctrl+Enter**. Git uses your configured
+   `user.name` and `user.email`. A file can appear in both lists if you edit it
+   again after staging. Only the staged version goes into the commit.
+   At the repository root, **Amend Last Commit** in the commit menu replaces the most recent commit
+   with the entered message and any staged changes.
+
+For projects inside a larger repository, the panel lists files in the open
+project. If files elsewhere in the repository are staged, open the repository
+root to review and commit them, or unstage them in your Git client.
+
+Select the current branch to create, switch, rename, merge, or delete local
+branches. **Graph** shows the current branch's recent commits and their parent
+links. Select a commit to inspect its patch. Open **Repository Actions** (the
+ellipsis) to save, apply, or drop stashes. A stash saves
+tracked and untracked changes in the entire repository. **Git File History** in
+Explorer and **File History** in a diff follow that file's commits. **Blame** in
+a diff shows line authorship at HEAD.
+
+**Fetch**, **Pull**, **Push**, and **Sync** use your configured Git remotes and
+credentials. Add a remote under **Remotes**. **Publish Branch** sets the
+upstream on a configured remote.
+Pull and the pull step of Sync use fast-forward only. Git reports divergent
+history for you to reconcile before synchronizing.
+
+For a merge conflict, use **Compare Conflict** to inspect the base, current,
+and incoming versions. Use **Open File** to edit the result, save it, stage it,
+and commit to finish the merge. **Abort Merge** is available in **Branches**
+while a merge is in progress. Use **Refresh Source Control** to pick up index
+or branch changes made in another Git client.
 
 ## Test Generator
 
@@ -641,6 +692,7 @@ it. Review generated selectors and assertions as you would a recording.
 | Shift+Alt+F | Format document with Robocop |
 | F8 | Next editor problem |
 | Ctrl+Shift+F | Project search |
+| Ctrl+Shift+G | Source Control |
 | F9 | Toggle breakpoint |
 | F5 | Continue a paused debug run |
 | F10 | Step over |

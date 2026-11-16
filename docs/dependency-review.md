@@ -1,4 +1,4 @@
-# Dependency review — 2026-11-02
+# Dependency review — 2026-11-16
 
 ## Audit scope
 
@@ -18,10 +18,10 @@ the [minimatch pattern amplification advisory](https://github.com/isaacs/minimat
 through Electron Builder. These were affected packages in one dependency chain,
 not 15 separate advisories.
 
-Electron Builder 26.18.0 remains the current npm release checked for this review.
-Its dependency tree still contains affected minimatch versions. The fix proposed
-by npm downgrades Electron Builder to 20.23.1; forcing minimatch 11 across older
-consumers also changes their API contract.
+The 2026-11-02 review checked Electron Builder 26.18.0. Its dependency tree
+contained affected minimatch versions. npm proposed downgrading Electron Builder
+to 20.23.1. Forcing minimatch 11 across older consumers would change their API
+contract.
 
 Installer distribution is deferred until the installer and its updates can be
 code-signed; meanwhile Keywright is developed and tested from source. Electron Builder and its transitive dependencies have therefore been
@@ -39,10 +39,9 @@ a new dependency review and checks of the packaged app, signing and update path.
 
 ## Editor dependencies
 
-Electron remains on 45.2.1, which includes upstream Chromium fixes; see the
-[release notes](https://releases.electronjs.org/release/v45.2.1). The recorder uses
-Playwright 1.64.1 because its private recorder API integration requires separate
-compatibility testing before an upgrade.
+The lockfile uses Electron 45.2.1 and Playwright 1.65.0. The recorder uses
+private Playwright APIs. The regression suite exercises real recording,
+locator picking and replay with the Browser library after an upgrade.
 
 DOMPurify remains pinned to 3.4.17, the patched version listed in
 [GHSA-cg2g-xh64-v4q7](https://github.com/cure53/DOMPurify/security/advisories/GHSA-cg2g-xh64-v4q7).
@@ -53,15 +52,12 @@ the replacement. See [Architecture](architecture.md#build-and-packaging).
 
 ## Verification
 
-The Windows checks on 2026-11-02 passed:
+The Windows checks for Keywright 0.5.0 passed on Node.js 24.16.0 and Python 3.13.14.
 
-- A clean `npm ci` installed 24 packages; the complete audit and
+- A clean `npm ci` installed 27 packages. The complete audit and
   `npm audit --omit=dev` both reported zero findings.
-- `setup.bat --non-interactive --no-pause` prepared the example, built the editor
-  and ran its two browser tests successfully.
-- `npm test` passed all 145 tests with no skips, including the recorder integration
-  and the editor sanitizer check.
-- `npm run test:ui` passed all three desktop tests using the example environment
-  prepared by setup.
-
-The remaining locked package versions are unchanged from the preceding revision.
+- `setup.bat --check --no-pause` passed the prerequisite checks. Robot Framework
+  ran both Browser tests in the example successfully.
+- `npm.cmd run test:regression` passed 236 Node tests and 32 desktop UI tests
+  with zero skips. It includes the recorder integration, the editor sanitizer
+  check and Source Control workflows using temporary Git repositories.

@@ -6,7 +6,7 @@ module.exports = defineConfig({
   testDir: './test/ui',
   workers: 1,
   retries: 0,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: !!process.env.CI || !!process.env.PLAYWRIGHT_JSON_OUTPUT_FILE,
   timeout: 120_000,
   globalTimeout: 600_000,
   expect: { timeout: 15_000 },
@@ -16,5 +16,6 @@ module.exports = defineConfig({
     ...(process.env.GITHUB_ACTIONS ? [['github']] : []),
     ['list'],
     ['html', { outputFolder: 'out/ui-report', open: 'never' }],
+    ...(process.env.PLAYWRIGHT_JSON_OUTPUT_FILE ? [['json']] : []),
   ],
 });

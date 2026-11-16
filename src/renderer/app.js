@@ -207,6 +207,7 @@
 
   const GENERATOR_TAB = '__generator__';
   const RESULTS_TAB = '__results__';
+  const GIT_DIFF_TAB = '__git_diff__';
   const FIXED_TABS = [
     { id: GENERATOR_TAB, label: '● Test Generator', pane: '#pane-generator' },
     { id: RESULTS_TAB, label: '▶ Test Results', pane: '#pane-results' },
@@ -216,6 +217,22 @@
   let activeTab = GENERATOR_TAB;
   let currentConfig = null;
   let currentRoot = null;
+  let previousDiffTab = GENERATOR_TAB;
+  let hasGitDiff = false;
+
+  const sourceControl = window.RFSourceControl.create({
+    api, el, openFile, closeDiff: closeGitDiff,
+    compare: (container, relative, { original, modified }, focus) => {
+      ensureEditor();
+      return editor.createComparison(container, { path: relative, disk: original, mine: modified, readOnly: true, focus });
+    },
+    activateDiff: () => {
+      if (activeTab !== GIT_DIFF_TAB)
+        previousDiffTab = activeTab;
+      hasGitDiff = true;
+      activate(GIT_DIFF_TAB);
+    },
+  });
 
   function showProject(project) {
     showView('project');
@@ -232,6 +249,8 @@
     currentConfig = project.config;
     currentRoot = project.root;
     activeTab = GENERATOR_TAB;
+    hasGitDiff = false;
+    sourceControl.setProject(project.root);
     $('#new-file').hidden = true;
     showSidebar('explorer');
     renderTabs();
@@ -251,6 +270,8 @@
     }
     for (const section of document.querySelectorAll('.sidebar-section'))
       section.hidden = section.id !== `sidebar-${name}`;
+    if (name === 'source-control')
+      sourceControl.refresh();
   }
 
   for (const button of document.querySelectorAll('.sidebar-tab'))
@@ -423,6 +444,21 @@
     refreshTree();
   }
 
+  function closeGitDiff() {
+    hasGitDiff = false;
+    sourceControl.clearDiff();
+    if (activeTab === GIT_DIFF_TAB) {
+      const previousExists = FIXED_TABS.some((tab) => tab.id === previousDiffTab)
+        || tabs.some((tab) => tab.path === previousDiffTab);
+      activate(previousExists ? previousDiffTab : RESULTS_TAB);
+      $('#tabs [aria-selected="true"]')?.focus();
+    } else {
+      renderTabs();
+    }
+  }
+
+  $('#source-diff-close').addEventListener('click', closeGitDiff);
+
   function renderTabs() {
     const focus = $('#tabs').contains(document.activeElement) ? document.activeElement.id : null;
     function semantics(button, id, pane) {
@@ -434,7 +470,9 @@
       if (button.tabIndex === 0) $(pane).setAttribute('aria-labelledby', id);
       return button;
     }
-    const fixedTabs = FIXED_TABS.map((fixed) => {
+    const fixedTabs = [...FIXED_TABS, ...(hasGitDiff ? [
+      { id: GIT_DIFF_TAB, label: 'Git Diff', pane: '#pane-git-diff' },
+    ] : [])].map((fixed) => {
       const button = el('button', {
         type: 'button',
         className: 'tab' + (activeTab === fixed.id ? ' is-active' : ''),
@@ -476,6 +514,7 @@
     const file = tabs.find((t) => t.path === activeTab);
     for (const fixed of FIXED_TABS)
       $(fixed.pane).hidden = activeTab !== fixed.id;
+    $('#pane-git-diff').hidden = activeTab !== GIT_DIFF_TAB;
     $('#pane-file').hidden = !file;
     if (!file)
       return;
@@ -659,10 +698,15 @@
   editor.onOpenRequest((path, line) => openFile(path, line));
   window.RFTree.bindTabs($('#tabs'));
   $('#tabs').addEventListener('keydown', (event) => {
-    if (event.key === 'Delete' && event.target.getAttribute('role') === 'tab' && tabs.some((tab) => tab.path === activeTab)) {
-      event.preventDefault();
+    if (event.key !== 'Delete' || event.target.getAttribute('role') !== 'tab')
+      return;
+    if (activeTab === GIT_DIFF_TAB)
+      closeGitDiff();
+    else if (tabs.some((tab) => tab.path === activeTab))
       closeTab(activeTab);
-    }
+    else
+      return;
+    event.preventDefault();
   });
 
   document.addEventListener('keydown', (event) => {
@@ -931,7 +975,10 @@
     }
     const folder = node.type === 'dir' ? node.path : names.parentOf(node.path);
     return [
-      ...(node.type === 'file' ? [{ label: 'Open', run: () => openFile(node.path) }] : []),
+      ...(node.type === 'file' ? [
+        { label: 'Open', run: () => openFile(node.path) },
+        { label: 'Git File History', run: () => { showSidebar('source-control'); sourceControl.showHistory(node.path); } },
+      ] : []),
       { label: 'New File…', run: () => { expandTo(folder); refreshTree(); showNewFileInput(folder); } },
       { separator: true },
       { label: 'Rename…', keys: 'F2', run: () => startRename(node.path) },
@@ -1351,6 +1398,11 @@
     { id: 'view.search', category: 'View', label: 'Find in Files', keys: 'Ctrl+Shift+F', available: inProject, run: findInFiles },
     { id: 'view.testing', category: 'View', label: 'Show Testing', available: inProject, run: () => showSidebar('testing') },
     { id: 'view.problems', category: 'View', label: 'Show Problems', available: inProject, run: () => showSidebar('problems') },
+    { id: 'view.sourceControl', category: 'View', label: 'Show Source Control', keys: 'Ctrl+Shift+G', available: inProject, run: () => showSidebar('source-control') },
+    { id: 'git.history', category: 'Git', label: 'Show Git History', available: inProject,
+      run: () => { showSidebar('source-control'); sourceControl.showHistory(); } },
+    { id: 'git.fileHistory', category: 'Git', label: 'Show File History', available: fileTab,
+      run: () => { showSidebar('source-control'); sourceControl.showHistory(fileTab()); } },
     { id: 'view.generator', category: 'View', label: 'Show Test Generator', available: inProject, run: () => activate(GENERATOR_TAB) },
     { id: 'view.results', category: 'View', label: 'Show Test Results', available: inProject, run: () => activate(RESULTS_TAB) },
 
@@ -1423,6 +1475,17 @@
     event.preventDefault();
     event.stopPropagation();
     palette.open(event.shiftKey ? 'commands' : 'files');
+  }, true);
+
+  window.addEventListener('keydown', (event) => {
+    if (!event.ctrlKey || !event.shiftKey || event.altKey || event.key.toLowerCase() !== 'g')
+      return;
+    if (!inProject() || !$('#palette').hidden || !$('#compare-view').hidden || document.querySelector('dialog[open]'))
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    showSidebar('source-control');
+    $('#sidebar-tab-source-control').focus();
   }, true);
 
   // -------------------------------------------------------------------------

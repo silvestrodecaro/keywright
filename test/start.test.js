@@ -69,17 +69,18 @@ test('the Windows launcher creates a visible native Electron window', { skip: pr
     const fs = require('node:fs');
     const path = require('node:path');
     setTimeout(() => app.exit(99), 15_000).unref();
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
       const window = new BrowserWindow({ width: 400, height: 240, webPreferences: {
         sandbox: true, contextIsolation: true, nodeIntegration: false,
       } });
-      window.once('ready-to-show', () => {
-        fs.writeFileSync(path.join(__dirname, 'window-state.json'), JSON.stringify({
-          visible: window.isVisible(), minimized: window.isMinimized(),
-        }));
-        app.quit();
-      });
-      window.loadURL('data:text/html,<title>Keywright launch probe</title><h1>Launch probe</h1>');
+      await window.loadURL('data:text/html,<title>Keywright launch probe</title><h1>Launch probe</h1>');
+      fs.writeFileSync(path.join(__dirname, 'window-state.json'), JSON.stringify({
+        visible: window.isVisible(), minimized: window.isMinimized(),
+      }));
+      app.quit();
+    }).catch((error) => {
+      console.error(error);
+      app.exit(1);
     });
   `);
   const output = new PassThrough();

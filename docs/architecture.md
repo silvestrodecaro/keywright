@@ -64,6 +64,7 @@ executables out of `.venv` makes their paths independent of the project director
 | Python implementation | [keywright_runner.py](../src/python/keywright_runner.py) | Discovery, selection modifier, listener, debugger, library docs, syntax and lint |
 | Editor services | [keywordIndex.js](../src/main/keywordIndex.js), [languageWorker.js](../src/main/languageWorker.js), [formatter.js](../src/main/formatter.js), [projectVariables.js](../src/main/projectVariables.js) | Completion data, persistent diagnostics worker, formatting and static variable index |
 | Search | [projectSearch.js](../src/main/projectSearch.js), [searchCore.js](../src/renderer/searchCore.js), [search.js](../src/renderer/search.js) | Disk traversal, matching/replacement and open-buffer coordination |
+| Source Control | [sourceControl.js](../src/main/sourceControl.js) (main), [sourceControl.js](../src/renderer/sourceControl.js) (panel) | Git status, read-only patches, repository initialization, staging and local commits |
 | Artifacts | [traceServer.js](../src/main/traceServer.js), [runHistory.js](../src/main/runHistory.js) | Local output serving and bounded run summaries |
 | MCP server | [mcp/service.js](../src/main/mcp/service.js), [protocol.js](../src/main/mcp/protocol.js), [httpServer.js](../src/main/mcp/httpServer.js), [settings.js](../src/main/mcp/settings.js), [bridge.js](../src/main/mcp/bridge.js) | MCP lifecycle and tool calls, loopback HTTP transport, token and connection file, stdio bridge for clients |
 | MCP clients | [mcp/clients.js](../src/main/mcp/clients.js), [connectionTest.js](../src/main/mcp/connectionTest.js) | Per-client configuration, read-only checks of client files, and the connection test |
@@ -130,6 +131,29 @@ outside the project is refused. A rename keeps the entry in its folder and refus
 names with path separators, Windows-reserved characters or names, and existing
 destinations other than a case-only change. Delete asks for confirmation in the
 main process and uses `shell.trashItem`; it never falls back to a permanent delete.
+
+## Source Control
+
+The main process creates a Git service for the active project and locates its
+enclosing working tree. It filters status to the open project and uses
+project-relative paths for per-file operations. A rename across the project
+boundary appears as an addition or deletion on the project side. Git commits
+the repository index, so the service checks for staged changes outside the
+project before allowing a commit.
+The preload bridge exposes individual actions. Git runs as an executable with
+argument arrays, NUL-delimited status records, and literal pathspecs. Per-file
+operations resolve their targets against a fresh Git status and serialize index
+mutations within the project. Diffs use Git's internal diff without text converters.
+
+The renderer refreshes status when the panel opens, when the app regains focus,
+after project file notifications, and after each mutation. Git index changes made
+externally can also be picked up with the panel's refresh button. The workspace's
+Git Diff tab holds a patch or a read-only Monaco comparison. Hunk operations
+recompute the patch and check its hash before applying one hunk to the index.
+Discard checks the current patch before restoring a tracked file from the index.
+Stage and commit use saved files and the Git index. Main-process IPC checks for
+dirty editor models before actions that modify the working tree. Branches,
+stashes, merges, and remote operations apply to the enclosing repository.
 
 ## Recording and generation
 
