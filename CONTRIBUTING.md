@@ -152,11 +152,11 @@ writes `out/ui-tests/results.json`.
 The [Verify workflow](.github/workflows/verify.yml) prepares both browser toolchains,
 runs the component and integration tests, executes the example's Robot Framework
 tests from the command line, and runs `setup.bat` from a long directory containing
-spaces. The UI tests then use that setup's Python environment, so Browser runs
-from the nested location while finding executables in the shared cache. Both
-Node.js versions run these checks on pushes and pull requests. Failed runs upload
-their evidence as `keywright-failure-node-24` or `keywright-failure-node-26` for
-seven days. GitHub branch protection must
+spaces. CI installs Robocop in that setup's Python environment before the UI
+tests. Browser runs from the nested location and finds its executables in the
+shared cache. Both Node.js versions run these checks on pushes and pull requests.
+Failed runs retain their evidence for seven days as `keywright-failure-node-24`
+or `keywright-failure-node-26`. GitHub branch protection must
 separately require the check if merges should depend on it. A newer push to the
 same branch cancels the run it supersedes.
 
