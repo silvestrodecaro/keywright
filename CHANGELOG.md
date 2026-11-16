@@ -3,6 +3,32 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
+## 0.5.0 - 2026-11-16
+
+### Added
+
+- **Source Control** in the activity bar. View changed and staged files in a
+  Git repository, including when the open project is a subfolder. The status
+  bar shows the current branch.
+- Review text changes side by side or as a patch. Stage or unstage files and
+  individual hunks, discard working changes, and commit or amend from the IDE.
+- Browse the commit graph, file history and blame. Create and switch branches,
+  manage stashes, inspect merge conflicts, and fetch, pull, push or sync with
+  configured Git remotes.
+- Run the full Windows regression suite with `npm.cmd run test:regression`.
+  It covers desktop flows including Git operations against a local remote,
+  Robot runs, debugging, recording and replay.
+
+### Fixed
+
+- Undoing a project search replacement in an open editor preserves the text
+  you typed before the replacement.
+
+### Changed
+
+- The recorder uses Playwright 1.65.0. The Python test baseline now uses
+  Robot Framework 7.5.1, Browser 21.0.0 and Robocop 9.3.0.
+
 ## 0.4.1 - 2026-11-10
 
 ### Fixed

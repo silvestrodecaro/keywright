@@ -12,7 +12,8 @@ const root = path.resolve(__dirname, '../..');
 
 const test = base.extend({
   projectOnLaunch: [false, { option: true }],
-  desktop: async ({ projectOnLaunch }, use, testInfo) => {
+  recorderAccess: [false, { option: true }],
+  desktop: async ({ projectOnLaunch, recorderAccess }, use, testInfo) => {
     const python = process.env.KEYWRIGHT_PYTHON || [
       path.join(root, '.venv/Scripts/python.exe'),
       path.join(root, '.venv/bin/python'),
@@ -39,6 +40,7 @@ const test = base.extend({
       fs.writeFileSync(configPath, JSON.stringify({ ...config, python: path.resolve(python) }));
       const env = { ...process.env };
       delete env.ELECTRON_RUN_AS_NODE;
+      if (recorderAccess) env.KEYWRIGHT_TEST = '1';
       const launch = async (openProject) => {
         app = await electron.launch({
           executablePath: require('electron'),

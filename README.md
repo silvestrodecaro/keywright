@@ -18,6 +18,7 @@ or Playwright trace from the same project.
 | --- | --- |
 | Write a browser test | Test Generator records actions and assertions as Browser keywords. Pick a locator or record steps directly into an open file. |
 | Maintain a suite | Monaco editor with keyword completion and documentation, navigation, references, rename, quick fixes, argument checks and Robocop integration. |
+| Review and commit changes | [Source Control](docs/user-guide.md#source-control) shows Git diffs and lets you stage files and commit. |
 | Run a test or suite | Test selection, tag filters, Robot arguments, dry run, streamed keyword results and re-runs when watched files change. |
 | Investigate a failure | Source navigation, Browser screenshots, Robot logs and reports, context traces, breakpoints, stepping and variable inspection. |
 | Compare results | A local history of the last 30 run summaries, including newly failing, fixed and slower tests. |
@@ -30,7 +31,7 @@ user keywords as the suite grows.
 
 ## Scope and status
 
-Keywright is in early development, currently version **0.4.1**. Run it from source
+Keywright is in early development, currently version **0.5.0**. Run it from source
 while the project is being tested and refined. Installer releases are on hold until
 they can be code-signed.
 Settings and behavior may change before 1.0.
@@ -67,7 +68,7 @@ Use Windows 10/11. The setup checks these tools before installing app dependenci
 | --- | --- | --- |
 | [Node.js](https://nodejs.org/en/download) with npm | 24.x or 26.x LTS | `node --version` and `npm.cmd --version` |
 | [Python](https://www.python.org/downloads/windows/) | 3.13.x, available through the Windows `py` launcher | `py -3.13 --version` |
-| [Git](https://git-scm.com/install/windows) | Optional for the app; used to clone and update the repository | `git --version` |
+| [Git](https://git-scm.com/install/windows) | Required for Source Control and for cloning or updating a checkout | `git --version` |
 
 If Node.js or Python is missing or unsupported, setup offers to install a supported
 version through WinGet and asks for confirmation with `y/n`. If WinGet is

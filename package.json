@@ -1,6 +1,6 @@
 {
   "name": "keywright",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "description": "IDE for Robot Framework (Browser library) with a Playwright-style test generator",
   "author": "Silvestro De Caro",
@@ -16,6 +16,7 @@
     "start": "node scripts/start.js",
     "test": "node --test \"test/*.test.js\"",
     "test:ui": "npm run build && playwright test",
+    "test:regression": "node scripts/test-regression.js",
     "lint": "biome lint .",
     "install-browsers": "playwright-core install chromium"
   },

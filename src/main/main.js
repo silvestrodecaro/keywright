@@ -40,6 +40,7 @@ function writeCrashReport(event, facts) {
 const { RecorderSession } = require('./recorder');
 const { RecentProjects } = require('./recentProjects');
 const projects = require('./projects');
+const { SourceControl } = require('./sourceControl');
 const projectSettings = require('./projectSettings');
 const { discoverTests, TestRunner, screenshotsFromHtml } = require('./testRunner');
 const { KeywordIndex } = require('./keywordIndex');
@@ -66,6 +67,7 @@ const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
 let mainWindow = null;
 /** @type {ReturnType<typeof projects.loadProject> | null} */
 let currentProject = null;
+let sourceControl = null;
 let creatingProject = false;
 const session = new RecorderSession();
 // UI tests drive the recorded browser through the main process.
@@ -170,6 +172,7 @@ async function openProject(root) {
   session.clear();
   await pickerSession.stop();
   currentProject = project;
+  sourceControl = new SourceControl(project.root);
   keywordIndex.clear();
   watchProject(project);
   recentProjects.add(project.root);
@@ -249,11 +252,52 @@ ipcMain.handle('projects:close', async () => {
   session.clear();
   await pickerSession.stop();
   currentProject = null;
+  sourceControl = null;
   keywordIndex.clear();
   setWindowTitle();
 });
 
 ipcMain.handle('project:tree', () => (currentProject ? projects.listTree(currentProject.root) : []));
+
+async function sourceControlRequest(root, operation) {
+  if (currentProject?.root !== root || !sourceControl)
+    return { ok: false, error: 'The project is no longer open.' };
+  try {
+    return { ok: true, value: await operation(sourceControl) };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+ipcMain.handle('source-control:status', (_event, root) => sourceControlRequest(root, (source) => source.status()));
+ipcMain.handle('source-control:diff', (_event, root, group, file) => sourceControlRequest(root, async (source) => {
+  const { patch, token, revision } = await source.review(group, file);
+  return { patch, token, revision };
+}));
+ipcMain.handle('source-control:init', (_event, root) => sourceControlRequest(root, (source) => source.initialize()));
+ipcMain.handle('source-control:stage', (_event, root, file) => sourceControlRequest(root, (source) => source.stage(file)));
+ipcMain.handle('source-control:unstage', (_event, root, file) => sourceControlRequest(root, (source) => source.unstage(file)));
+ipcMain.handle('source-control:commit', (_event, root, message) => sourceControlRequest(root, (source) => source.commit(message)));
+
+const gitActions = new Map([
+  ['stageAll', {}], ['unstageAll', {}], ['applyHunk', {}], ['history', {}], ['commitDiff', {}],
+  ['comparison', {}], ['conflictVersions', {}], ['blame', {}], ['discard', { writesFiles: true }],
+  ['branches', {}], ['createBranch', { writesFiles: true }], ['switchBranch', { writesFiles: true }],
+  ['renameBranch', {}], ['deleteBranch', {}],
+  ['mergeBranch', { writesFiles: true }], ['abortMerge', { writesFiles: true }],
+  ['stashes', {}], ['saveStash', { writesFiles: true }], ['applyStash', { writesFiles: true }],
+  ['dropStash', {}], ['remotes', {}], ['addRemote', {}], ['fetch', {}], ['pull', { writesFiles: true }], ['push', {}],
+  ['sync', { writesFiles: true }], ['publish', {}],
+]);
+ipcMain.handle('source-control:action', (_event, root, action, args) => sourceControlRequest(root, async (source) => {
+  const options = gitActions.get(action);
+  if (!options || !Array.isArray(args) || args.length > 4)
+    throw new Error('Unknown Git action.');
+  if (options.writesFiles && editorDirtyPaths.length)
+    throw new Error('Save or close unsaved editor files before running this Git action.');
+  return source[action](...args);
+}));
+ipcMain.handle('source-control:amend', (_event, root, message) => sourceControlRequest(root, (source) => source.commit(message, true)));
 
 // Search panel: files on disk (open files are searched by the renderer and excluded).
 ipcMain.handle('project:search', (_event, options, exclude) => {

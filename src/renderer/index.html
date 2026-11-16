@@ -114,14 +114,43 @@
   <!-- Project --------------------------------------------------------------->
   <section id="view-project" class="view view-project" hidden>
     <div class="project-body">
-      <aside class="sidebar">
-        <div class="sidebar-switch" role="tablist" aria-label="Project tools">
-          <button id="sidebar-tab-explorer" role="tab" aria-selected="true" aria-controls="sidebar-explorer" type="button" class="sidebar-tab is-active" data-sidebar="explorer">Explorer</button>
-          <button id="sidebar-tab-search" role="tab" aria-selected="false" aria-controls="sidebar-search" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="search" title="Search in files (Ctrl+Shift+F)">Search</button>
-          <button id="sidebar-tab-testing" role="tab" aria-selected="false" aria-controls="sidebar-testing" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="testing">Testing</button>
-          <button id="sidebar-tab-problems" role="tab" aria-selected="false" aria-controls="sidebar-problems" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="problems">Problems <span id="problems-badge" class="sidebar-badge" hidden></span></button>
+        <div class="sidebar-switch" role="tablist" aria-label="Project tools" aria-orientation="vertical">
+          <button id="sidebar-tab-explorer" role="tab" aria-label="Explorer" title="Explorer" aria-selected="true" aria-controls="sidebar-explorer" type="button" class="sidebar-tab is-active" data-sidebar="explorer">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3.5 9V6.5l2-2h5l2 2h6l2 2V18l-2 2h-13l-2-2V9h10m-6 6h3m2.5 0h3"/>
+            </svg>
+          </button>
+          <button id="sidebar-tab-search" role="tab" aria-label="Search" aria-selected="false" aria-controls="sidebar-search" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="search" title="Search in files (Ctrl+Shift+F)">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3.5 8V5.5l2-2H8m8.5 0h2l2 2V8M3.5 16.5v2l2 2H8M10.5 7l3.5 2v4l-3.5 2L7 13V9zM14 13l6 5.5"/>
+            </svg>
+          </button>
+          <button id="sidebar-tab-source-control" role="tab" aria-label="Source Control" aria-selected="false" aria-controls="sidebar-source-control" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="source-control" title="Source Control (Ctrl+Shift+G)">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <symbol id="keywright-git-icon" viewBox="0 0 24 24">
+                <path d="M6.5 6.5v11m0-5h6l5-5" fill="none" stroke="currentColor"/>
+                <path d="M4 3h5v5H4zm0 13h5v5H4zM16 4h5v5h-5z" fill="currentColor" stroke="none"/>
+              </symbol>
+              <use href="#keywright-git-icon"/>
+            </svg>
+            <span id="source-activity-count" class="sidebar-badge" aria-hidden="true" hidden></span>
+          </button>
+          <button id="sidebar-tab-testing" role="tab" aria-label="Testing" title="Testing" aria-selected="false" aria-controls="sidebar-testing" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="testing">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5h8l3 3v8l-3 3H8l-3-3V8zM2.5 9h2m-2 6h2m15-6h2m-2 6h2"/>
+              <path d="m10 8.5 5.5 3.5-5.5 3.5z" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+          <button id="sidebar-tab-problems" role="tab" aria-label="Problems" title="Problems" aria-selected="false" aria-controls="sidebar-problems" tabindex="-1" type="button" class="sidebar-tab" data-sidebar="problems">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 3.5h6l5.5 5.5v6L15 20.5H9L3.5 15V9zM12 7.5V13"/>
+              <path d="M11 15.5h2v2h-2z" fill="currentColor" stroke="none"/>
+            </svg>
+            <span id="problems-badge" class="sidebar-badge" hidden></span>
+          </button>
         </div>
 
+      <aside class="sidebar">
         <div id="sidebar-explorer" class="sidebar-section" role="tabpanel" aria-labelledby="sidebar-tab-explorer">
           <div class="panel-header">
             <span>Files</span>
@@ -251,12 +280,107 @@
           </div>
           <ul id="test-tree" class="tree test-tree" role="tree"></ul>
         </div>
+        <div id="sidebar-source-control" class="sidebar-section" role="tabpanel" aria-labelledby="sidebar-tab-source-control" hidden>
+          <div class="panel-header source-header">
+            <h2>Source Control</h2>
+            <span class="header-actions">
+            <button id="source-refresh" class="icon-btn" type="button" aria-label="Refresh Source Control" title="Refresh Source Control">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M13 6a5.4 5.4 0 1 0 .1 4M13 2.5V6H9.5"/></svg>
+            </button>
+            <button id="source-more" class="icon-btn" type="button" aria-label="Repository Actions" title="Repository Actions" popovertarget="source-repository" hidden>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></svg>
+            </button>
+            </span>
+          </div>
+          <div class="source-body">
+            <div id="source-repo-bar" class="source-repo-bar" hidden>
+              <button id="source-branch" class="source-branch" type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" stroke-width="1.6" aria-hidden="true"><use href="#keywright-git-icon"/></svg>
+                <span></span>
+              </button>
+              <span id="source-upstream" class="muted" hidden></span>
+            </div>
+            <p id="source-status" class="empty source-status" role="status"></p>
+            <div id="source-error" class="error source-error" role="alert" hidden></div>
+            <button id="source-init" class="btn btn-sm" type="button" hidden>Initialize Repository</button>
+            <form id="source-commit" hidden>
+              <textarea id="source-message" rows="2" aria-label="Commit message" placeholder="Commit message (Ctrl+Enter)" spellcheck="true"></textarea>
+              <div class="source-commit-actions">
+                <button id="source-commit-button" class="btn btn-sm btn-primary" type="submit" disabled>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg>Commit
+                </button>
+                <button id="source-commit-more" class="btn btn-sm btn-primary" type="button" aria-label="Commit Actions" title="Commit Actions" popovertarget="source-commit-menu" hidden>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+                </button>
+              </div>
+              <div id="source-commit-menu" class="source-menu" popover>
+                <button id="source-amend" type="button">Amend Last Commit</button>
+              </div>
+            </form>
+            <section id="source-staged" class="source-group" aria-labelledby="source-staged-label" hidden>
+              <div class="source-group-heading"><h2 id="source-staged-label"><button type="button" class="source-group-toggle" aria-expanded="true" aria-controls="source-staged-files">Staged Changes</button></h2>
+                <span class="source-count" aria-hidden="true"></span>
+                <button id="source-unstage-all" class="icon-btn" type="button" aria-label="Unstage All" title="Unstage All">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 8h10"/></svg>
+                </button>
+              </div><ul id="source-staged-files"></ul>
+            </section>
+            <section id="source-changes" class="source-group" aria-labelledby="source-changes-label" hidden>
+              <div class="source-group-heading"><h2 id="source-changes-label"><button type="button" class="source-group-toggle" aria-expanded="true" aria-controls="source-changed-files">Changes</button></h2>
+                <span class="source-count" aria-hidden="true"></span>
+                <button id="source-stage-all" class="icon-btn" type="button" aria-label="Stage All" title="Stage All">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 8h10M8 3v10"/></svg>
+                </button>
+              </div><ul id="source-changed-files"></ul>
+            </section>
+          </div>
+          <section id="source-graph" class="source-group source-graph" aria-labelledby="source-graph-label" hidden>
+            <div class="source-group-heading"><h2 id="source-graph-label"><button type="button" class="source-group-toggle" aria-expanded="true" aria-controls="source-graph-content">Graph</button></h2>
+              <button id="source-history" class="icon-btn" type="button" data-git="history" aria-label="Open Git History" title="Open Git History">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M2 7a6 6 0 1 1 .5 4M2 3v4h4m2-3v4l3 1"/></svg>
+              </button>
+            </div>
+            <div id="source-graph-content" class="source-graph-content"><p id="source-graph-status" class="muted"></p><ul id="source-graph-list"></ul></div>
+          </section>
+          <div id="source-repository" class="source-menu" popover>
+            <button type="button" data-git="branches">Branches</button>
+            <button type="button" data-git="stashes">Stashes</button>
+            <button type="button" data-git="remotes">Remotes</button>
+            <hr>
+            <button type="button" data-git="fetch">Fetch</button>
+            <button type="button" data-git="pull">Pull</button>
+            <button type="button" data-git="push">Push</button>
+            <button type="button" data-git="sync">Sync</button>
+            <button type="button" data-git="publish">Publish Branch</button>
+          </div>
+        </div>
         <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-orientation="vertical"
           title="Drag to resize, double-click to reset"></div>
       </aside>
 
       <div class="editor-area">
         <nav id="tabs" class="tabs" role="tablist" aria-label="Workspace"></nav>
+        <section id="pane-git-diff" class="pane source-diff" role="tabpanel" aria-label="Git Diff" hidden>
+          <div class="file-header source-diff-header">
+            <div>
+              <div id="source-diff-path"></div>
+              <p id="source-diff-label" class="muted"></p>
+            </div>
+            <div class="source-diff-actions">
+              <button id="source-diff-edit" class="btn btn-sm" type="button" hidden>Open File</button>
+              <button id="source-diff-conflict" class="btn btn-sm" type="button" hidden>Compare Conflict</button>
+              <button id="source-diff-history" class="btn btn-sm" type="button" hidden>File History</button>
+              <button id="source-diff-blame" class="btn btn-sm" type="button" hidden>Blame</button>
+              <button id="source-diff-compare" class="btn btn-sm" type="button" hidden>Side by Side</button>
+              <button id="source-diff-discard" class="btn btn-sm" type="button" hidden>Discard Changes</button>
+              <button id="source-diff-close" class="btn btn-sm" type="button">Close Diff</button>
+            </div>
+          </div>
+          <p id="source-diff-status" class="empty" role="status"></p>
+          <div id="source-comparison-labels" class="source-comparison-labels" hidden><span></span><span></span></div>
+          <pre id="source-diff-text" tabindex="0" aria-label="Git patch" hidden></pre>
+          <div id="source-comparison" class="editor-host" hidden></div>
+        </section>
         <div id="compare-view" class="compare-view" role="dialog" aria-modal="true" aria-labelledby="compare-title" hidden>
           <div class="compare-header">
             <div class="compare-heading">
@@ -395,7 +519,13 @@
     </div>
 
     <footer class="statusbar">
-      <span id="status"><span class="status-dot"></span><span class="status-text">Idle</span></span>
+      <span class="source-statusbar">
+        <button id="source-status-branch" class="statusbar-button" type="button" title="Show Source Control" hidden>
+          <svg width="13" height="13" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><use href="#keywright-git-icon"/></svg>
+          <span></span>
+        </button>
+        <span id="status"><span class="status-dot"></span><span class="status-text">Idle</span></span>
+      </span>
       <span class="statusbar-right">
         <span id="editor-status" class="muted"></span>
         <button id="reload-libraries" class="statusbar-button" type="button" title="Read library documentation again, after installing packages or changing libraries outside the project" hidden>Reload libraries</button>
@@ -509,6 +639,14 @@
     </div>
   </div>
 
+  <dialog id="source-picker" class="source-picker" aria-labelledby="source-picker-title">
+    <div class="source-picker-header">
+      <h2 id="source-picker-title"></h2>
+      <form method="dialog"><button class="btn btn-sm" type="submit">Close</button></form>
+    </div>
+    <div id="source-picker-body"></div>
+  </dialog>
+
   <script src="dist/editor.js"></script>
   <script src="highlight.js"></script>
   <script src="generator.js"></script>
@@ -526,6 +664,7 @@
   <script src="search.js"></script>
   <script src="paletteCore.js"></script>
   <script src="palette.js"></script>
+  <script src="sourceControl.js"></script>
   <script src="projectSettings.js"></script>
   <script src="mcpDialog.js"></script>
   <script src="app.js"></script>

@@ -61,6 +61,19 @@ because its dependency tree fails the CI audit. CI runs the lint before the test
 
 ## Tests
 
+Run the full Windows regression suite after preparing the environment below.
+
+```powershell
+npm.cmd run test:regression
+```
+
+This runs the Node component and integration tests, builds the editor, and
+runs the desktop UI tests in Electron. It fails if tests fail, are skipped, or
+are marked TODO by Node. The [regression coverage map](docs/regression-suite.md)
+lists the checks by feature and the scenarios to verify manually.
+
+For a quicker run of the Node suite alone, use the following command.
+
 ```powershell
 npm.cmd test
 ```
@@ -119,24 +132,22 @@ as described in the development setup, run:
 npm.cmd run test:ui
 ```
 
-This builds the renderer and runs [Playwright tests](test/ui/keywright.spec.js)
+This builds the renderer and runs the [Playwright tests](test/ui/)
 against the source app in Electron. Each test starts with a new profile and a
 temporary copy of the example project, using `KEYWRIGHT_PYTHON` or the repository
 `.venv`. Missing prerequisites fail the check rather than skipping it.
 
-The checks open the example through the welcome screen and run both tests using
-**Testing → Run all**. A second scenario changes an assertion in the temporary
-copy, checks the failure message and rendered screenshot, then uses **Go to source**
-to open the test in Monaco. Only the native folder dialog's selected path is
-supplied by the fixture; project loading, IPC, execution and result rendering run
-through the application. A startup check also verifies that a supplied project
-path is loaded when Electron debugger switches precede the app path. Profiles and
-project copies are removed after each test.
+The tests exercise the application's controls, IPC, editor, file operations,
+Python and Git. Selected native dialogs receive preset answers. The recorder
+tests drive a real browser against the local example page, and the Git network
+tests use a temporary local remote. The fixture removes profiles and project
+copies after each test.
 
 Tests run one at a time without automatic retries. On failure, `out/ui-tests/`
 contains the window screenshot, Playwright trace, Electron log and available Robot
 results. The HTML report is in `out/ui-report/`. Inspect it with
-`npx.cmd playwright show-report out/ui-report`.
+`npx.cmd playwright show-report out/ui-report`. The full regression command also
+writes `out/ui-tests/results.json`.
 
 The [Verify workflow](.github/workflows/verify.yml) prepares both browser toolchains,
 runs the component and integration tests, executes the example's Robot Framework
@@ -156,7 +167,7 @@ requests; review its release notes and run the desktop UI tests before merging.
 
 ## Verified environment
 
-The local verification on 2026-11-01 used this combination. The Python baseline is
+Local verification for Keywright 0.5.0 on 2026-11-16 used this combination. The Python baseline is
 pinned in [requirements-dev.txt](requirements-dev.txt); the JavaScript dependency
 tree is recorded in `package-lock.json`. This is a tested combination, not a claim
 that every version accepted by the project creator is compatible.
@@ -166,11 +177,11 @@ that every version accepted by the project creator is compatible.
 | Platform | Windows |
 | Development Node.js | 24.16.0 |
 | Python | 3.13.14 |
-| Robot Framework | 7.5 |
-| Browser library | 20.6.0 |
-| Robocop | 9.1.2 |
+| Robot Framework | 7.5.1 |
+| Browser library | 21.0.0 |
+| Robocop | 9.3.0 |
 | Electron | 45.2.1 |
-| Recorder Playwright | 1.64.1 |
+| Recorder Playwright | 1.65.0 |
 
 The [Keywright example project](examples/browser-walkthrough/) has two local browser tests.
 From the repository root, use the prepared integration-test Python to verify it:
