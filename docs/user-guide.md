@@ -128,7 +128,9 @@ Right-click a file or folder for **Open**, **New File…** (in that folder),
 **Rename…**, **Delete**, **Copy Path**, **Copy Relative Path** and **Reveal in File
 Manager**. Right-clicking below the files offers **New File…**, the project folder
 and **Refresh Explorer**. Shift+F10 or the Menu key opens the same menu for the
-focused row.
+focused row. Escape closes the menu and returns keyboard focus to that row even
+if the tree refreshed while the menu was open. If the row was removed, focus moves
+to another Explorer row or to **New file** when the tree is empty.
 
 **Rename…** (F2) edits the name in place: Enter renames, Escape cancels, and
 clicking elsewhere renames. Files open in tabs follow the new name, including

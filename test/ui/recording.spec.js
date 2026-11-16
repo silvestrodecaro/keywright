@@ -40,9 +40,11 @@ test('records through Test Generator, saves Robot code and replays it from Testi
   await expect(code).toContainText('Desktop Recording');
   await expect(code).toContainText('ada@example.test');
   await expect(code).toContainText('Request code');
+  const expectedSource = (await code.locator('.line').allTextContents()).join('\n') + '\n';
   await generator.getByRole('button', { name: 'Save…', exact: true }).click();
-  await expect.poll(() => fs.existsSync(file)).toBe(true);
-  expect(fs.readFileSync(file, 'utf8')).toContain('Desktop Recording');
+  await expect.poll(() => fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '', {
+    message: 'Saved Robot file matches the complete generated code',
+  }).toBe(expectedSource);
 
   await generator.getByRole('button', { name: 'Clear', exact: true }).click();
   await expect(generator.locator('#step-count')).toHaveText('0');

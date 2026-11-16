@@ -993,7 +993,20 @@
   function openExplorerMenu(node, x, y) {
     if (renaming)
       return;
-    window.RFContextMenu.open({ x, y, items: explorerMenu(node), label: node ? node.name : 'Explorer' });
+    const tree = $('#tree');
+    const focusPath = document.activeElement?.closest('#tree [role="treeitem"]')?.dataset.treeId;
+    window.RFContextMenu.open({
+      x, y, items: explorerMenu(node), label: node ? node.name : 'Explorer',
+      // The file watcher can replace the opener while the menu has focus.
+      fallbackFocus: focusPath ? () => {
+        const item = tree.querySelector(`[data-tree-id="${CSS.escape(focusPath)}"]`)
+          || tree.querySelector('[role="treeitem"][tabindex="0"]');
+        if (item)
+          window.RFTree.focusItem(tree, item);
+        else
+          $('#tree-new-file').focus({ preventScroll: true });
+      } : undefined,
+    });
   }
 
   // Right-click below the files: project-level actions.

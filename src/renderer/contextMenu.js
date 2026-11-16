@@ -1,25 +1,28 @@
 'use strict';
 
-// A page-drawn context menu: arrow keys move, Enter runs, Escape or a click
-// elsewhere closes and returns focus to where the menu was opened.
+// A page-drawn context menu. Arrows move, Enter runs, and Escape restores focus.
 (function () {
   let current = null;
 
   function close({ restoreFocus = true } = {}) {
     if (!current)
       return;
-    const { menu, returnFocus, cleanup } = current;
+    const { menu, returnFocus, fallbackFocus, cleanup } = current;
     current = null;
     cleanup();
     menu.remove();
-    if (restoreFocus && returnFocus?.isConnected)
+    if (!restoreFocus)
+      return;
+    if (returnFocus?.isConnected)
       returnFocus.focus({ preventScroll: true });
+    else
+      fallbackFocus?.();
   }
 
   /**
-   * @param {{ x: number, y: number, items: ({ label: string, keys?: string, run: Function, disabled?: boolean } | { separator: true })[], label?: string }} options
+   * @param {{ x: number, y: number, items: ({ label: string, keys?: string, run: Function, disabled?: boolean } | { separator: true })[], label?: string, fallbackFocus?: () => void }} options
    */
-  function open({ x, y, items, label = 'Context menu' }) {
+  function open({ x, y, items, label = 'Context menu', fallbackFocus }) {
     const returnFocus = document.activeElement;
     close({ restoreFocus: false });
     const menu = document.createElement('div');
@@ -99,6 +102,7 @@
     current = {
       menu,
       returnFocus,
+      fallbackFocus,
       cleanup() {
         document.removeEventListener('mousedown', outside, true);
         window.removeEventListener('blur', dismiss);
