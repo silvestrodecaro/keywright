@@ -3,6 +3,13 @@
 Notable changes to Keywright. Each version is a Git tag such as `v0.1.0` that you
 run from source; there are no installers yet.
 
+## Unreleased
+
+### Fixed
+
+- Escape restores keyboard focus to the Explorer after a file change refreshes
+  the tree while its context menu is open.
+
 ## 0.5.0 - 2026-11-16
 
 ### Added
