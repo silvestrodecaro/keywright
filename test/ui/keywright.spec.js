@@ -482,6 +482,36 @@ test('the title bar replaces the native one and follows the open project', async
   await expect(page.locator('#project-close')).toBeHidden();
 });
 
+test('restores Explorer focus after a file watcher update while the context menu is open', async ({ desktop }) => {
+  const { page, project } = desktop;
+  await openExample(desktop);
+  await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+  const tree = page.locator('#tree');
+  const item = tree.locator('[data-tree-id="tests/access.robot"]');
+  const menu = page.getByRole('menu');
+  const file = 'focus [refresh].txt';
+  const added = tree.locator(`[data-tree-id="${file}"]`);
+
+  await item.focus();
+  await page.keyboard.press('Shift+F10');
+  await expect(menu.getByRole('menuitem', { name: 'Open', exact: true })).toBeFocused();
+  fs.writeFileSync(path.join(project, file), 'Added while the menu is open\n');
+  await expect(added).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(item).toBeFocused();
+  await expect(item).toHaveAttribute('tabindex', '0');
+
+  await added.focus();
+  await page.keyboard.press('Shift+F10');
+  await expect(menu.getByRole('menuitem', { name: 'Open', exact: true })).toBeFocused();
+  fs.unlinkSync(path.join(project, file));
+  await expect(added).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(tree.locator('[role="treeitem"][tabindex="0"]')).toBeFocused();
+});
+
 test('the explorer creates, renames and deletes files from its context menu and keyboard', async ({ desktop }, testInfo) => {
   const { app, page, project } = desktop;
   // Native confirmation and the Recycle Bin are OS UI: record the dialog, answer
