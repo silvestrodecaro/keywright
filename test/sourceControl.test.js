@@ -14,6 +14,11 @@ function git(root, ...args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true }).trim();
 }
 
+function readCheckedOutText(file) {
+  // Git can write CRLF when applying a stash, pulling or restoring from the index.
+  return fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
+}
+
 function fixture({ committed = true } = {}) {
   const root = tempDir('git');
   git(root, 'init', '-b', 'robot-tests');
@@ -163,8 +168,8 @@ gitTest('creates and switches branches and saves and reapplies a stash', async (
   assert.match(stash.subject, /Draft suite/);
   await source.switchBranch('robot-tests');
   await source.applyStash(stash.oid);
-  assert.equal(fs.readFileSync(path.join(root, 'suite.robot'), 'utf8'), 'in progress\n');
-  assert.equal(fs.readFileSync(path.join(root, 'draft.robot'), 'utf8'), 'draft\n');
+  assert.equal(readCheckedOutText(path.join(root, 'suite.robot')), 'in progress\n');
+  assert.equal(readCheckedOutText(path.join(root, 'draft.robot')), 'draft\n');
   assert.equal((await source.stashes()).length, 1);
   await source.dropStash(stash.oid);
   assert.equal((await source.stashes()).length, 0);
@@ -192,7 +197,7 @@ gitTest('publishes, fetches, pulls and pushes through a local bare remote', asyn
   await source.fetch();
   assert.equal((await source.status()).behind, 1);
   await source.pull();
-  assert.equal(fs.readFileSync(path.join(root, 'incoming.robot'), 'utf8'), 'incoming\n');
+  assert.equal(readCheckedOutText(path.join(root, 'incoming.robot')), 'incoming\n');
   fs.writeFileSync(path.join(root, 'outgoing.robot'), 'outgoing\n');
   await source.stageAll();
   await source.commit('Outgoing');
@@ -231,7 +236,7 @@ gitTest('discards working changes back to the index while preserving staged chan
   fs.writeFileSync(file, 'newer edit\n');
   await assert.rejects(source.discard('suite.robot', token), /changed/i);
   await source.discard('suite.robot', (await source.review('changes', 'suite.robot')).revision);
-  assert.equal(fs.readFileSync(file, 'utf8'), 'staged\n');
+  assert.equal(readCheckedOutText(file), 'staged\n');
   assert.match(await source.diff('staged', 'suite.robot'), /\+staged/);
 });
 
