@@ -54,3 +54,13 @@ test('records runs in the results folder', () => {
   assert.strictEqual(runs.length, MAX_RUNS);
   assert.strictEqual(runs[0].tests['S.A'].elapsed, MAX_RUNS + 4);
 });
+
+test('a cancelled run is not saved', () => {
+  const dir = tempDir('history-cancel');
+  const history = new RunHistory();
+  history.start(dir, {});
+  history.cancel();
+  history.record({ type: 'test-end', id: 'Suite.Test', status: 'PASS' });
+  assert.strictEqual(history.finish({ exitCode: 0, stopped: false }), null);
+  assert.deepStrictEqual(history.list(dir), []);
+});

@@ -154,3 +154,32 @@ test('tag filters, dry run and extra arguments', { skip, timeout: 60_000 }, asyn
   const dry = await runAndCollect(fixtureProject(), { select: ['Tests.Basic.Failing Test'], dryrun: true });
   assert.deepStrictEqual(testEnds(dry.events), { 'Tests.Basic.Failing Test': 'PASS' });
 });
+
+test('a second run while the first is starting is refused', { skip, timeout: 60_000 }, async () => {
+  const runner = new TestRunner();
+  const finished = new Promise((resolve) => runner.once('finished', resolve));
+  const project = fixtureProject();
+  const first = runner.run(project, { select: ['Tests.Basic.Passing Test'] });
+  await assert.rejects(runner.run(project, { select: ['Tests.Basic.Passing Test'] }), /already running/);
+  await first;
+  await finished;
+  assert.strictEqual(runner.running, false);
+});
+
+test('stop resolves once Robot has exited', { skip, timeout: 60_000 }, async () => {
+  const runner = new TestRunner();
+  const started = new Promise((resolve) => runner.once('event', resolve));
+  await runner.run(fixtureProject(), { select: ['Tests.Basic.Passing Test'] });
+  await started;
+  await runner.stop();
+  assert.strictEqual(runner.running, false);
+});
+
+test('a run that fails to start closes its listener and can be retried', { skip }, async () => {
+  const runner = new TestRunner();
+  const project = { ...fixtureProject(), root: path.join(tempDir('missing'), 'gone') };
+  await assert.rejects(runner.run(project, {}));
+  assert.strictEqual(runner.running, false);
+  assert.strictEqual(runner._server, null, 'the listener socket stays open');
+  await assert.rejects(runner.run(project, {}), (error) => !/already running/.test(error.message));
+});

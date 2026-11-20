@@ -9,6 +9,21 @@ run from source; there are no installers yet.
 
 - Escape restores keyboard focus to the Explorer after a file change refreshes
   the tree while its context menu is open.
+- Starting Keywright a second time with the same profile brings the open window
+  to the front. A second instance used to empty the first one's undo copies of
+  AI deletions and could overwrite its recovery copies.
+- Quitting from the crash dialog, or by any other route, stops running tests,
+  browsers, the language worker and project setup processes. Some of them used
+  to keep running after Keywright closed.
+- Starting a run, the recorder, the AI browser or the MCP server twice at the
+  same moment no longer starts two of them. Stop and project changes made while
+  one is starting now take effect.
+- A Python helper or language worker stuck at a library import is stopped after
+  a time limit, and the next request starts a new one. Its error output is shown
+  when it stops.
+- The window opens even when the MCP server cannot start.
+- An AI deletion whose copy could not be made shows why, and deletions made at
+  the same time keep separate copies for undo.
 
 ## 0.5.0 - 2026-11-16
 

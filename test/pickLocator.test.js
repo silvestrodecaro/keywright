@@ -72,3 +72,20 @@ test('picking during a recording keeps recording', { timeout: 60_000 }, async ()
     await session.stop();
   }
 });
+
+test('a second start while the browser is launching is refused', async () => {
+  const session = new RecorderSession();
+  const first = session.start({ headless: true, record: false });
+  await assert.rejects(session.start({ headless: true, record: false }), /already in progress/);
+  await first;
+  await session.stop();
+  assert.strictEqual(session.recording, false);
+});
+
+test('stop during the launch closes the browser it was starting', async () => {
+  const session = new RecorderSession();
+  const starting = session.start({ headless: true, record: false });
+  await session.stop();
+  await assert.rejects(starting, /stopped while the browser was starting/);
+  assert.strictEqual(session.recording, false);
+});

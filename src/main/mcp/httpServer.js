@@ -31,6 +31,7 @@ class McpHttpServer {
     this.protocol = protocol;
     this.token = token;
     this._server = null;
+    this._starting = null;
     this.port = null;
   }
 
@@ -42,9 +43,16 @@ class McpHttpServer {
    * Listens on `port`, or on a free port when it is taken (or 0).
    * @returns {Promise<number>} the port in use
    */
-  async start(port = 0) {
+  start(port = 0) {
     if (this._server)
-      return this.port;
+      return Promise.resolve(this.port);
+    // A start already under way is shared, so two callers never create two servers.
+    if (!this._starting)
+      this._starting = this._listen(port).finally(() => { this._starting = null; });
+    return this._starting;
+  }
+
+  async _listen(port) {
     const server = http.createServer((request, response) => {
       this._handle(request, response).catch((error) => {
         if (!response.headersSent)
@@ -74,13 +82,15 @@ class McpHttpServer {
     return this.port;
   }
 
-  stop() {
+  async stop() {
+    if (this._starting)
+      await this._starting.catch(() => {});
     if (!this._server)
-      return Promise.resolve();
+      return;
     const server = this._server;
     this._server = null;
     this.port = null;
-    return new Promise((resolve) => {
+    await new Promise((resolve) => {
       server.close(() => resolve());
       server.closeAllConnections?.();
     });

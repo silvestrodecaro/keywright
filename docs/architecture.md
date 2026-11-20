@@ -30,6 +30,16 @@ The window denies every new window and page navigation. HTTP and HTTPS links, fr
 keyword documentation, Robot logs or traces, open in the system browser; other
 schemes are ignored.
 
+One Keywright runs per profile (`userData`): a second start focuses the first
+window and exits, because both would share the recovery copies, the MCP undo folder
+and the MCP connection file. Every way of quitting goes through `before-quit`, which
+stops the runner, the language worker, the recorder, picker and AI browsers, the
+local servers and the processes in the shared registry of
+[processes.js](../src/main/processes.js) (project setup, installs, formatting,
+Python helpers), each with a time limit, before the application exits. A failure
+to start the MCP server is logged and written as a crash report; the window opens
+regardless.
+
 The page draws the title bar in `index.html`, outside the views. The window uses
 `titleBarStyle: 'hidden'` with `titleBarOverlay`, so the system still draws the
 window buttons over the page and provides Snap Layouts, the system menu and top-edge
@@ -88,7 +98,8 @@ the executable exists. Package availability is determined by subsequent operatio
 not by that existence check.
 
 Opening a project stops the current runner, language worker and recorder/picker
-sessions, loads project state and recreates its file watcher. File changes are
+sessions, waits for the test process to exit, loads project state and recreates its
+file watcher. Opening and closing projects run one after another. File changes are
 published as project-relative paths. The renderer reloads unmodified open files and
 refreshes indices, diagnostics, search and watch-mode selection as applicable.
 
@@ -218,8 +229,12 @@ There are two helper modes:
   Its result is the last JSON line on stdout, allowing imported libraries to print
   earlier diagnostic text.
 - `LanguageWorker` keeps a `serve` process for syntax and Robocop lint requests.
-  Requests have IDs, newline framing and timeouts; a later request can restart a
-  worker that exited.
+  Requests have IDs, newline framing and a 15-second timeout. A request left
+  unanswered stops the worker, so the next one starts a new process; so does a
+  worker that exited. Errors include the end of the worker's error output.
+
+One-shot helpers stop after three minutes and report that a library may be waiting
+at import.
 
 `KeywordIndex` combines parsed project keywords with cached library documentation.
 The cache key includes project root, Python executable and library import. Libdoc
@@ -294,11 +309,13 @@ image content.
 
 [changes.js](../src/main/mcp/changes.js) records each file change the tools make.
 An update keeps the earlier text and the SHA-256 of the written content; a deletion
-first copies the entry (up to 20 MB) to `mcp-undo/` in `userData`; a rename keeps
-both paths. Undo (`mcp:undo-change`) applies only while the disk still matches the
+first copies the entry (up to 20 MB) to its own folder in `mcp-undo/` in `userData`,
+and a copy that could not be made is listed with its reason; a rename keeps both
+paths. Undo (`mcp:undo-change`) applies only while the disk still matches the
 change: the written content's hash, the absence of the deleted path, or the renamed
 entry at its new name. It refuses paths with unsaved editor changes and restores
-updates through `writeProjectFile()` with the written revision. The log keeps 100
+updates through `writeProjectFile()` with the written revision. A deleted entry is
+copied beside its path and then moved in place, so a failed copy restores nothing. The log keeps 100
 changes and 32 MB of earlier text; older changes stay listed without undo.
 `mcpStatus()` includes the open project's changes, and the dialog asks again when
 the watcher reports file changes.
@@ -354,7 +371,7 @@ does. `ariaSnapshot` modes, `getByRef` and `normalize` are public Playwright API
 | Library docs and worker state | Main-process memory / helper process | Application or worker session |
 | MCP server setting, token and preferred port | `mcp.json` in Electron `userData` | Until changed in the MCP server dialog |
 | MCP server address | `mcp-connection.json` in Electron `userData` | While the server listens |
-| File changes by AI clients | Main-process memory; copies of deleted entries in `mcp-undo/` in Electron `userData` | Until Keywright closes; the folder is emptied at the next start |
+| File changes by AI clients | Main-process memory; copies of deleted entries in `mcp-undo/` in Electron `userData` | Until Keywright closes; the folder is emptied at the next start, which only one Keywright per profile can make |
 | The AI's recorded browser steps | Main-process memory | Until the AI's browser is reopened or its steps are cleared |
 
 Changing project locations changes the keys used for project-specific renderer

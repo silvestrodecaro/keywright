@@ -24,6 +24,8 @@ class RecorderSession extends EventEmitter {
     this._browser = null;
     this._context = null;
     this._stopping = null;
+    this._launching = null; // while the browser is launching
+    this._launchCancelled = false;
     this._recordingActions = false;
     this._recordingGeneration = 0;
     this._activePage = null;
@@ -46,7 +48,7 @@ class RecorderSession extends EventEmitter {
    *   headless is only meant for tests; record: false opens the browser without recording (to pick locators)
    */
   async start(options = {}) {
-    if (this._browser)
+    if (this._browser || this._launching)
       throw new Error('A recording is already in progress.');
     const browserType = playwright[options.browser || 'chromium'];
     if (!browserType)
@@ -55,10 +57,28 @@ class RecorderSession extends EventEmitter {
     this.actions = [];
     this.emit('actions', this.actions);
 
-    const browser = await browserType.launch({
-      headless: !!options.headless,
-      ...(options.channel ? { channel: options.channel } : {}),
-    });
+    // Set before the first await, so a second start() or a stop() sees the launch.
+    this._launchCancelled = false;
+    const launching = (async () => {
+      const launched = await browserType.launch({
+        headless: !!options.headless,
+        ...(options.channel ? { channel: options.channel } : {}),
+      });
+      if (this._launchCancelled) {
+        await launched.close().catch(() => {});
+        return null;
+      }
+      return launched;
+    })();
+    this._launching = launching;
+    let browser;
+    try {
+      browser = await launching;
+    } finally {
+      this._launching = null;
+    }
+    if (!browser)
+      throw new Error('The recorder was stopped while the browser was starting.');
     this._browser = browser;
     browser.on('disconnected', () => this._onClosed(browser));
     try {
@@ -88,6 +108,10 @@ class RecorderSession extends EventEmitter {
   }
 
   async stop() {
+    if (this._launching) {
+      this._launchCancelled = true; // start() closes the browser as soon as it is up
+      await this._launching.catch(() => {});
+    }
     if (!this._browser)
       return;
     if (!this._stopping) {

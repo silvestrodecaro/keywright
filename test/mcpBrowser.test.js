@@ -115,3 +115,17 @@ test('back reaches a page of another origin', { timeout: 60_000 }, async (t) => 
   assert.equal(stepOf(forward), 'Robot step:\n    Go Forward');
   assert.match(forward, /about:blank/);
 });
+
+test('a second start while the browser is launching is refused, and close waits for the launch', { timeout: 60_000 }, async () => {
+  const browser = new AgentBrowser();
+  const first = browser.start({ headless: true });
+  await assert.rejects(browser.start({ headless: true }), /already open/);
+  await first;
+  await browser.close();
+  assert.equal(browser.open, false);
+
+  const starting = browser.start({ headless: true });
+  await browser.close();
+  await assert.rejects(starting, /closed while it was starting/);
+  assert.equal(browser.open, false);
+});

@@ -82,20 +82,24 @@ class TraceServer {
       this._server.close();
     this._server = null;
     this._port = null;
+    this._starting = null;
   }
 
   _start() {
     if (this._server)
       return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const server = http.createServer((request, response) => this._handle(request, response));
-      server.on('error', reject);
-      server.listen(0, '127.0.0.1', () => {
-        this._server = server;
-        this._port = server.address().port;
-        resolve();
-      });
-    });
+    // A start already under way is shared, so two first requests never create two servers.
+    if (!this._starting)
+      this._starting = new Promise((resolve, reject) => {
+        const server = http.createServer((request, response) => this._handle(request, response));
+        server.on('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          this._server = server;
+          this._port = server.address().port;
+          resolve();
+        });
+      }).finally(() => { this._starting = null; });
+    return this._starting;
   }
 
   _handle(request, response) {

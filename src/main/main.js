@@ -62,6 +62,7 @@ const { createTools } = require('./mcp/tools');
 const { ChangeLog } = require('./mcp/changes');
 const { clientConfigs, clientLocations, clientStates, connectionPlan } = require('./mcp/clients');
 const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
+const { childProcesses } = require('./processes');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -164,20 +165,41 @@ function stopLanguageWorker() {
   languageWorker = null;
 }
 
-async function openProject(root) {
-  const project = projects.loadProject(root);
-  runner.stop();
+// Opening and closing a project run one after another, so a second request cannot
+// interleave with the services of the first.
+let projectTransition = Promise.resolve();
+function projectTransitionTask(task) {
+  const next = projectTransition.then(task, task);
+  projectTransition = next.catch(() => {});
+  return next;
+}
+
+/** Stops what belongs to the open project; waits for the processes to exit. */
+async function stopProjectServices() {
+  await runner.stop();
   stopLanguageWorker();
+  stopWatchingProject();
   await session.stop();
   session.clear();
   await pickerSession.stop();
-  currentProject = project;
-  sourceControl = new SourceControl(project.root);
-  keywordIndex.clear();
-  watchProject(project);
-  recentProjects.add(project.root);
-  setWindowTitle();
-  return projectInfo();
+}
+
+function openProject(root) {
+  return projectTransitionTask(async () => {
+    const project = projects.loadProject(root);
+    await stopProjectServices();
+    currentProject = project;
+    sourceControl = new SourceControl(project.root);
+    keywordIndex.clear();
+    watchProject(project);
+    try {
+      recentProjects.add(project.root);
+    } catch (error) {
+      console.error(`Could not update the recent projects: ${error.message}`); // the project is open regardless
+    }
+    setWindowTitle();
+    return projectInfo();
+  });
 }
 
 ipcMain.handle('projects:recent', () => recentProjects.list());
@@ -244,18 +266,13 @@ ipcMain.handle('projects:create', async (_event, request) => {
   }
 });
 
-ipcMain.handle('projects:close', async () => {
-  runner.stop();
-  stopLanguageWorker();
-  stopWatchingProject();
-  await session.stop();
-  session.clear();
-  await pickerSession.stop();
+ipcMain.handle('projects:close', () => projectTransitionTask(async () => {
+  await stopProjectServices();
   currentProject = null;
   sourceControl = null;
   keywordIndex.clear();
   setWindowTitle();
-});
+}));
 
 ipcMain.handle('project:tree', () => (currentProject ? projects.listTree(currentProject.root) : []));
 
@@ -541,7 +558,14 @@ async function startRun(options = {}) {
   runOutputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
   traceServer.allow([runOutputDir]);
   runHistory.start(runOutputDir, { ...options, debug: !!options.debug });
-  await runner.run(currentProject, {
+  await runner.run(currentProject, runOptions(options)).catch((error) => {
+    runHistory.cancel();
+    throw error;
+  });
+}
+
+function runOptions(options) {
+  return {
     select: options.select || [],
     variables: {
       ...(options.headed ? { HEADLESS: 'False' } : {}),
@@ -553,7 +577,7 @@ async function startRun(options = {}) {
     dryrun: !!options.dryrun,
     extraArgs: options.extraArgs || '',
     debug: options.debug ? { breakpoints: options.debug.breakpoints || {}, pauseOnFailure: !!options.debug.pauseOnFailure } : undefined,
-  });
+  };
 }
 
 ipcMain.handle('tests:run', async (_event, options = {}) => {
@@ -807,25 +831,32 @@ function mcpStatus() {
 }
 
 ipcMain.handle('mcp:status', () => mcpStatus());
+/** The MCP service; throws when it could not be created at startup. */
+function mcpService() {
+  if (!mcp)
+    throw new Error('The MCP server is unavailable in this session. Its crash report says why.');
+  return mcp;
+}
+
 ipcMain.handle('mcp:set-enabled', async (_event, enabled) => {
-  await mcp.setEnabled(!!enabled);
+  await mcpService().setEnabled(!!enabled);
   if (!enabled)
     await agentBrowser.close();
   return mcpStatus();
 });
 ipcMain.handle('mcp:regenerate-token', () => {
-  mcp.regenerateToken();
+  mcpService().regenerateToken();
   return mcpStatus();
 });
 ipcMain.handle('mcp:close-browser', () => agentBrowser.close());
-ipcMain.handle('mcp:undo-change', (_event, id) => aiChanges.undo(id, {
+ipcMain.handle('mcp:undo-change', (_event, id) => mcpService() && aiChanges.undo(id, {
   dirtyPaths: editorDirtyPaths,
   trash: (entry) => shell.trashItem(entry),
 }));
 // Tests what the client will start: the entry in its own file when there is one,
 // otherwise the configuration offered (reported as not configured yet).
 ipcMain.handle('mcp:test-connection', async (_event, clientId) => {
-  const status = mcp.status();
+  const status = mcpService().status();
   if (!status.running)
     return { ok: false, scope: 'server', error: 'Turn the server on first.' };
   try {
@@ -964,15 +995,42 @@ async function windowStopped({ reason, exitCode }) {
 }
 
 
+// One Keywright per profile: a second one would share and clear the same recovery
+// copies, undo backups and MCP connection file. It hands over to the first instead.
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance)
+  app.quit();
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed())
+    return;
+  if (mainWindow.isMinimized())
+    mainWindow.restore();
+  mainWindow.focus();
+});
+
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.stack || reason.message : String(reason);
+  console.error(`Unhandled rejection: ${message}`);
+  crashReports.note('unhandled-rejection', { message: message.split('\n')[0] });
+});
+
 app.whenReady().then(async () => {
+  if (!primaryInstance)
+    return;
   // The IDE has a dark UI: dark native dialogs and scrollbars, and the embedded
   // Playwright trace viewer follows prefers-color-scheme.
   nativeTheme.themeSource = 'dark';
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   crashReports.folder = path.join(app.getPath('userData'), 'crash-reports');
-  mcp = createMcpService();
-  await mcp.restore();
+  // The window opens even when the MCP server cannot start.
+  try {
+    mcp = createMcpService();
+    await mcp.restore();
+  } catch (error) {
+    console.error(`The MCP server could not start: ${error.message}`);
+    writeCrashReport('MCP server could not start', { reason: error.message });
+  }
   // `electron . <folder>` opens a project directly.
   // Electron may put its debugger switches before the application entry path.
   const positionalArgs = process.argv.slice(1).filter((arg) => !arg.startsWith('-'));
@@ -997,14 +1055,47 @@ ipcMain.handle('app:open-crash-reports', async () => {
     throw new Error(error);
 });
 
-app.on('window-all-closed', async () => {
-  runner.stop();
-  traceServer.stop();
-  stopLanguageWorker();
-  stopWatchingProject();
-  await session.stop();
-  await pickerSession.stop();
-  await agentBrowser.close();
-  await mcp?.stop(); // the setting stays on for the next start
-  app.quit();
+// Every way of quitting (closing the window, Quit after a crash, the system) goes
+// through before-quit, which stops the services and processes first.
+const SHUTDOWN_STEP_MS = 5000;
+let shutdown = null;
+let shutdownDone = false;
+
+function stopServices() {
+  const step = async (name, stop) => {
+    let timer;
+    const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve('timeout'), SHUTDOWN_STEP_MS); });
+    try {
+      if (await Promise.race([Promise.resolve().then(stop), timeout]) === 'timeout')
+        console.error(`Shutdown: ${name} did not stop within ${SHUTDOWN_STEP_MS / 1000} seconds`);
+    } catch (error) {
+      console.error(`Shutdown: ${name}: ${error.message}`);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  return Promise.all([
+    step('tests', () => runner.stop()),
+    step('trace server', () => traceServer.stop()),
+    step('language worker', () => stopLanguageWorker()),
+    step('file watcher', () => stopWatchingProject()),
+    step('recorder', () => session.stop()),
+    step('locator picker', () => pickerSession.stop()),
+    step('AI browser', () => agentBrowser.close()),
+    step('MCP server', () => mcp?.stop()), // the setting stays on for the next start
+    step('child processes', () => childProcesses.killAll()),
+  ]);
+}
+
+app.on('before-quit', (event) => {
+  if (shutdownDone || !primaryInstance)
+    return;
+  event.preventDefault();
+  if (!shutdown)
+    shutdown = stopServices().finally(() => {
+      shutdownDone = true;
+      app.quit();
+    });
 });
+
+app.on('window-all-closed', () => app.quit());

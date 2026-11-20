@@ -195,3 +195,21 @@ test('the stdio bridge relays a session to the running server', { timeout: 30_00
   assert.deepEqual(service.status().clients, ['bridge-test 2']);
   assert.equal(service.status().lastCall.tool, 'echo');
 });
+
+test('turning the server on and straight off leaves it off', async (t) => {
+  const folder = tempDir('mcp-toggle');
+  const service = new McpService({ folder, version: '1.0.0', tools: [echo] });
+  service.settings.update({ port: 0 });
+  t.after(() => service.stop());
+  await Promise.all([service.setEnabled(true), service.setEnabled(false)]);
+  assert.equal(service.status().running, false);
+  assert.equal(service.server.port, null);
+  assert.equal(fs.existsSync(service.settings.connectionFile), false);
+});
+
+test('two starts of the HTTP transport share one server', async (t) => {
+  const server = new McpHttpServer({ protocol: protocol(), token: () => 't' });
+  t.after(() => server.stop());
+  const [first, second] = await Promise.all([server.start(0), server.start(0)]);
+  assert.equal(first, second);
+});

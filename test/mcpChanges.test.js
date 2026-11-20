@@ -103,3 +103,28 @@ test('only the open project\'s changes are listed', async () => {
   assert.equal(f.changes.list(f.root).length, 1);
   assert.equal(f.changes.list(tempDir('other')).length, 0);
 });
+
+test('deletions started together keep their own copies', async () => {
+  const f = setup();
+  for (const folder of ['a', 'b']) {
+    fs.mkdirSync(path.join(f.root, 'tests', folder));
+    fs.writeFileSync(path.join(f.root, 'tests', folder, 'same.robot'), folder);
+  }
+  await Promise.all([
+    f.call('delete_path', { path: 'tests/a/same.robot' }),
+    f.call('delete_path', { path: 'tests/b/same.robot' }),
+  ]);
+  for (const change of f.changes.list(f.root))
+    assert.deepEqual(await f.undo(change), { ok: true });
+  assert.equal(f.read('tests/a/same.robot'), 'a');
+  assert.equal(f.read('tests/b/same.robot'), 'b');
+});
+
+test('a copy that could not be made is reported as such, not as too large', () => {
+  const f = setup();
+  const backup = f.changes.backup(path.join(f.root, 'tests', 'missing.robot'));
+  f.changes.deleted(f.root, 'tests/missing.robot', backup, 'delete_path');
+  const [change] = f.changes.list(f.root);
+  assert.equal(change.undoable, false);
+  assert.match(change.reason, /could not be copied/i);
+});

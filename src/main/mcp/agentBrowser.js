@@ -40,6 +40,8 @@ class AgentBrowser extends EventEmitter {
     this.actions = [];
     this.options = { browser: 'chromium', channel: null, viewport: null };
     this._browser = null;
+    this._launching = null; // while the browser is launching
+    this._launchCancelled = false;
     this._context = null;
     this._page = null;
     this._pageIds = new WeakMap();
@@ -57,7 +59,7 @@ class AgentBrowser extends EventEmitter {
    *           headless?: boolean }} options headless is only meant for tests
    */
   async start(options = {}) {
-    if (this._browser)
+    if (this._browser || this._launching)
       throw new ToolError('The browser is already open. Use browser_navigate, or browser_close first.');
     const browserType = playwright[options.browser || 'chromium'];
     if (!browserType)
@@ -65,7 +67,25 @@ class AgentBrowser extends EventEmitter {
     this.options = { browser: options.browser || 'chromium', channel: options.channel || null, viewport: options.viewport || null };
     this.actions = [];
     this.emit('actions', this.actions);
-    const browser = await browserType.launch({ headless: !!(options.headless ?? this.headless), ...(options.channel ? { channel: options.channel } : {}) });
+    // Set before the first await, so a second start() or a close() sees the launch.
+    this._launchCancelled = false;
+    const launching = (async () => {
+      const launched = await browserType.launch({ headless: !!(options.headless ?? this.headless), ...(options.channel ? { channel: options.channel } : {}) });
+      if (this._launchCancelled) {
+        await launched.close().catch(() => {});
+        return null;
+      }
+      return launched;
+    })();
+    this._launching = launching;
+    let browser;
+    try {
+      browser = await launching;
+    } finally {
+      this._launching = null;
+    }
+    if (!browser)
+      throw new ToolError('The browser was closed while it was starting.');
     this._browser = browser;
     browser.on('disconnected', () => this._onClosed(browser));
     try {
@@ -85,6 +105,10 @@ class AgentBrowser extends EventEmitter {
   }
 
   async close() {
+    if (this._launching) {
+      this._launchCancelled = true; // start() closes the browser as soon as it is up
+      await this._launching.catch(() => {});
+    }
     const browser = this._browser;
     if (browser)
       await browser.close().catch(() => {});

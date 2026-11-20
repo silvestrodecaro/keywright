@@ -9,12 +9,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { childProcesses } = require('./processes');
 
 const PACKAGE = 'robotframework-robocop';
 
 function run(command, args, cwd) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+    const child = childProcesses.track(spawn(command, args, { cwd, windowsHide: true, env: { ...process.env, PYTHONIOENCODING: 'utf-8' } }));
     let output = '';
     child.stdout.on('data', (chunk) => { output += chunk; });
     child.stderr.on('data', (chunk) => { output += chunk; });

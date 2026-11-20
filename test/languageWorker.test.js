@@ -72,3 +72,33 @@ test('lints unsaved content with Robocop and the project configuration', { skip:
       await new Promise((resolve) => child.once('exit', resolve));
   }
 });
+
+test('a helper that stops reports what it printed', { timeout: 20_000 }, async () => {
+  // Node cannot run the Python helper: it stops at once with a SyntaxError on stderr.
+  const worker = new LanguageWorker(process.execPath, root);
+  try {
+    await assert.rejects(worker.request('check', { path: 'a.robot', text: '' }), /stopped unexpectedly[\s\S]*SyntaxError/);
+  } finally {
+    worker.dispose();
+  }
+});
+
+test('a request left unanswered stops the helper, so the next request starts a new one', { skip: !python && 'no Python with Robot Framework', timeout: 30_000 }, async () => {
+  const worker = new LanguageWorker(python, root, { timeoutMs: 1 });
+  try {
+    const request = worker.request('check', { path: 'tests/ok.robot', text: '*** Test Cases ***\nT\n    Log    x\n' });
+    const child = worker._child;
+    await assert.rejects(request, /No answer/);
+    if (child.exitCode === null)
+      await new Promise((resolve) => child.once('exit', resolve));
+    assert.notStrictEqual(worker._child, child);
+  } finally {
+    worker.dispose();
+  }
+});
+
+test('a line of stdout that is JSON but not a response is ignored', () => {
+  const worker = new LanguageWorker(python || 'python', root);
+  assert.doesNotThrow(() => worker._onData('null\n42\n"text"\n'));
+  worker.dispose();
+});

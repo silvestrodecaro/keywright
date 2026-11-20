@@ -2,6 +2,7 @@
 
 const path = require('path');
 const { spawn } = require('child_process');
+const { childProcesses } = require('./processes');
 
 const INSTALLABLE = new Set(['chromium', 'firefox', 'webkit']);
 
@@ -22,10 +23,10 @@ function installBrowser(name, onLog = () => {}) {
   if (!INSTALLABLE.has(name))
     return Promise.reject(new Error(`Unknown browser: ${name}`));
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [playwrightCli(), 'install', name], {
+    const child = childProcesses.track(spawn(process.execPath, [playwrightCli(), 'install', name], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       windowsHide: true,
-    });
+    }));
     child.stdout.on('data', (chunk) => onLog(chunk.toString()));
     child.stderr.on('data', (chunk) => onLog(chunk.toString()));
     child.on('error', reject);

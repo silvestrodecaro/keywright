@@ -36,6 +36,11 @@ class RunHistory {
     };
   }
 
+  /** Forgets the run being recorded, which did not start. */
+  cancel() {
+    this._current = null;
+  }
+
   /** Listener events: keeps the last status of each test (a failing suite teardown sends it again). */
   record(event) {
     if (!this._current || event.type !== 'test-end')

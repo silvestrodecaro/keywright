@@ -190,3 +190,11 @@ test('serves Robot report files from the results folder only', async () => {
     server.stop();
   }
 });
+
+test('two first requests share one server', async (t) => {
+  const server = new TraceServer();
+  t.after(() => server.stop());
+  const outputDir = tempDir('output-shared');
+  const [first, second] = await Promise.all([server.outputUrl(outputDir, 'log.html'), server.outputUrl(outputDir, 'report.html')]);
+  assert.strictEqual(new URL(first).port, new URL(second).port);
+});

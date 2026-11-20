@@ -83,14 +83,26 @@ class McpService extends EventEmitter {
 
   async setEnabled(enabled) {
     this.settings.update({ enabled: !!enabled });
-    if (enabled)
-      await this.start();
-    else
-      await this.stop();
+    await (enabled ? this.start() : this.stop());
     return this.status();
   }
 
-  async start() {
+  // Starts and stops run one after another, so the last request decides the state.
+  _serially(task) {
+    const next = (this._transition || Promise.resolve()).then(task, task);
+    this._transition = next.catch(() => {});
+    return next;
+  }
+
+  start() {
+    return this._serially(() => this._start());
+  }
+
+  stop() {
+    return this._serially(() => this._stop());
+  }
+
+  async _start() {
     this.error = null;
     try {
       const { port, token } = this.settings.read();
@@ -103,7 +115,7 @@ class McpService extends EventEmitter {
     this._publish();
   }
 
-  async stop() {
+  async _stop() {
     await this.server.stop();
     this.settings.removeConnection();
     this.clients = [];

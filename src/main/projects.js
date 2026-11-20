@@ -7,6 +7,7 @@ const { createHash, randomUUID } = require('crypto');
 const { spawn } = require('child_process');
 const { projectFiles, CONFIG_FILE, DEFAULT_CONFIG } = require('./projectTemplate');
 const { pythonEnv } = require('./pythonHelper');
+const { childProcesses } = require('./processes');
 
 const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]*$/;
 const IS_WINDOWS = process.platform === 'win32';
@@ -30,11 +31,11 @@ function validateProjectName(name) {
 function run(command, args, { cwd, onLog = () => {} } = {}) {
   return new Promise((resolve, reject) => {
     onLog(`> ${[command, ...args].join(' ')}\n`);
-    const child = spawn(command, args, {
+    const child = childProcesses.track(spawn(command, args, {
       cwd,
       env: pythonEnv(),
       windowsHide: true,
-    });
+    }));
     child.stdout.on('data', (chunk) => onLog(chunk.toString()));
     child.stderr.on('data', (chunk) => onLog(chunk.toString()));
     child.on('error', reject);
