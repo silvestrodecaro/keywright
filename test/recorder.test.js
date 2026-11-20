@@ -67,3 +67,15 @@ test('closing a page while recording remains a real recorded action', async () =
   assert.deepEqual(f.session.actions.map((action) => action.name), ['closePage']);
   await f.session.stop();
 });
+
+test('an address without a scheme gets one, local servers http', () => {
+  const { normalizeUrl } = require('../src/main/recorder');
+  assert.equal(normalizeUrl('example.com/login'), 'https://example.com/login');
+  assert.equal(normalizeUrl('localhost:3000'), 'http://localhost:3000');
+  assert.equal(normalizeUrl('localhost'), 'http://localhost');
+  assert.equal(normalizeUrl('127.0.0.1:8000/app'), 'http://127.0.0.1:8000/app');
+  assert.equal(normalizeUrl('example.com:8080/x'), 'https://example.com:8080/x');
+  assert.equal(normalizeUrl('http://localhost:3000'), 'http://localhost:3000');
+  assert.equal(normalizeUrl('about:blank'), 'about:blank');
+  assert.equal(normalizeUrl('file:///C:/site/index.html'), 'file:///C:/site/index.html');
+});

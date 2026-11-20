@@ -6,6 +6,7 @@ const { fileURLToPath } = require('url');
 const projects = require('../projects');
 const { searchProject } = require('../projectSearch');
 const { ToolError } = require('./protocol');
+const { normalizeUrl } = require('../recorder');
 
 const MAX_LIST_ENTRIES = 2000;
 const MAX_KEYWORDS = 60;
@@ -302,6 +303,32 @@ function createTools(app) {
       throw new ToolError(`${relative} changed on disk while it was being written. Read it again and retry.`);
     app.changes?.wrote(root, relative, before, content, tool);
     return revision === null ? 'created' : 'updated';
+  }
+
+  /**
+   * The AI's browser opens web pages and files of the open project only: a page it reads
+   * must not lead it to local files elsewhere or to the browser's own pages.
+   */
+  function allowedBrowserUrl(url) {
+    const target = normalizeUrl(String(url));
+    let parsed;
+    try {
+      parsed = new URL(target);
+    } catch {
+      throw new ToolError(`Not a valid address: ${url}`);
+    }
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || target === 'about:blank')
+      return target;
+    if (parsed.protocol === 'file:') {
+      const { root } = project();
+      try {
+        projects.resolveInProject(root, path.relative(root, fileURLToPath(parsed)));
+        return target;
+      } catch {
+        throw new ToolError('The browser only opens files of the open project.');
+      }
+    }
+    throw new ToolError('The browser only opens web pages (http, https) and files of the open project.');
   }
 
   function readText(root, relative) {
@@ -699,6 +726,8 @@ function createTools(app) {
       handler: ({ url, browser = 'chromium', width, height }) => browserCall(async () => {
         const target = app.browsers[browser] || app.browsers.chromium;
         const viewport = width && height ? { width, height } : null;
+        if (url)
+          allowedBrowserUrl(url);
         await app.browser.start({ ...target, viewport });
         return url ? app.browser.navigate(url) : app.browser.snapshot();
       }),
@@ -708,7 +737,7 @@ function createTools(app) {
       title: 'Go to a URL',
       description: 'Loads a URL in the active page (recorded as Go To, or New Page for the first address).',
       inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
-      handler: ({ url }) => browserCall(() => app.browser.navigate(url)),
+      handler: ({ url }) => browserCall(async () => app.browser.navigate(allowedBrowserUrl(url))),
     },
     {
       name: 'browser_back',

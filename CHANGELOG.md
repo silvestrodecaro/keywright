@@ -66,6 +66,10 @@ run from source; there are no installers yet.
   applies tag filters to partial watch runs as it does to full ones, and no
   longer reruns because the tests wrote data files.
 - The tab strip is no longer rebuilt on every keystroke.
+- The AI browser opens only web pages and files of the open project; other
+  local files and browser pages are refused.
+- An address such as `localhost:3000` opens as `http://localhost:3000` in the
+  recorder and the AI browser.
 
 ## 0.5.0 - 2026-11-16
 

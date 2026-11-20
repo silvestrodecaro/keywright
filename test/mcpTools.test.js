@@ -214,3 +214,23 @@ test('test_failure_details shows the failing line in its file, the log and the s
   assert.equal((await f.raw('test_failure_details', { test: 'Missing' })).result.isError, true);
   assert.equal((await f.raw('test_failure_details', { test: 'Login' })).result.content[0].text.split('\n')[0], 'FAIL  Tests.Login.Login');
 });
+
+test('the AI browser opens web pages and project files only', async () => {
+  const f = setup();
+  const visited = [];
+  f.app.browser = { open: true, navigate: async (url) => { visited.push(url); return 'snapshot'; }, start: async () => {} };
+  fs.writeFileSync(path.join(f.root, 'page.html'), '<p>hi</p>');
+  const inside = require('url').pathToFileURL(path.join(f.root, 'page.html')).href;
+  const outside = require('url').pathToFileURL(path.join(tempDir('outside'), 'secret.txt')).href;
+
+  assert.equal((await f.callTool('browser_navigate', { url: 'https://example.com/login' })).isError, false);
+  assert.equal((await f.callTool('browser_navigate', { url: inside })).isError, false);
+  for (const url of [outside, 'chrome://settings', 'javascript:alert(1)', 'view-source:https://example.com']) {
+    const result = await f.callTool('browser_navigate', { url });
+    assert.equal(result.isError, true, url);
+    assert.match(result.text, /only opens web pages|project/i);
+  }
+  const opened = await f.callTool('browser_open', { url: outside });
+  assert.equal(opened.isError, true);
+  assert.deepEqual(visited, ['https://example.com/login', inside]);
+});

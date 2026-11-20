@@ -261,8 +261,12 @@ function parseAction(data, code) {
 
 function normalizeUrl(url) {
   const trimmed = url.trim();
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed))
+  // `localhost:3000` is a host and port, not a scheme: only `x://` and the schemes without
+  // slashes that browsers use count as one.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) || /^(?:about|data|javascript|blob|view-source|chrome|edge|mailto):/i.test(trimmed))
     return trimmed;
+  if (/^(?:localhost|127(?:\.\d+){3}|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:[/?#]|$)/i.test(trimmed))
+    return 'http://' + trimmed; // local development servers rarely have certificates
   return 'https://' + trimmed;
 }
 
