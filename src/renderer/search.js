@@ -108,6 +108,7 @@
         onDisk.push({ path: file.path, at: all ? undefined : file.matches.map((m) => ({ line: m.line, column: m.column })) });
       }
     }
+    let skipped = [];
     if (onDisk.length) {
       const result = await api.replaceInProject(opts, opts.replacement, onDisk);
       if (!result.ok) {
@@ -116,10 +117,12 @@
         return;
       }
       count += result.count;
+      skipped = result.skipped || [];
     }
-    const fileCount = files.length;
+    const fileCount = files.length - skipped.length;
     status(`Replaced ${count} match${count === 1 ? '' : 'es'} in ${fileCount} file${fileCount === 1 ? '' : 's'}`
-      + (files.some((f) => open.has(f.path)) ? '; open files have unsaved changes' : ''));
+      + (files.some((f) => open.has(f.path)) ? '; open files have unsaved changes' : '')
+      + (skipped.length ? `; skipped ${skipped.join(', ')}, changed since the search` : ''));
     search();
   }
 

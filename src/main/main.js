@@ -331,7 +331,7 @@ ipcMain.handle('project:replace', (_event, options, replacement, entries) => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.' };
   try {
-    return { ok: true, ...replaceInProject(currentProject.root, options, replacement, entries) };
+    return { ok: true, ...replaceInProject(currentProject.root, options, replacement, entries, { dirtyPaths: editorDirtyPaths }) };
   } catch (error) {
     return { ok: false, error: error.message };
   }
@@ -1022,6 +1022,7 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
+  recovery.removeLeftovers();
   crashReports.folder = path.join(app.getPath('userData'), 'crash-reports');
   // The window opens even when the MCP server cannot start.
   try {

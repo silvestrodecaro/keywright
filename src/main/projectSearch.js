@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { resolveInProject } = require('./projects');
+const { resolveInProject, readProjectFile, writeProjectFile, decodeUtf8 } = require('./projects');
 const { buildRegex, findInText, applyReplacements, includeFilter } = require('../renderer/searchCore');
 
 const SKIP_DIRS = new Set(['.git', '.venv', 'venv', 'node_modules', '__pycache__', '.pytest_cache', '.idea', '.vscode']);
@@ -30,12 +30,12 @@ function projectFiles(root, outputDir, relative = '', depth = 0) {
   });
 }
 
-/** Text content, or null for binary and large files. */
+/** Text content, or null for binary, large and not UTF-8 files. */
 function readText(file) {
   const buffer = fs.readFileSync(file);
   if (buffer.length > MAX_FILE_BYTES || buffer.includes(0))
     return null;
-  return buffer.toString('utf8');
+  return decodeUtf8(buffer);
 }
 
 /**
@@ -76,15 +76,25 @@ function searchProject(root, options, { exclude = [], outputDir = 'results' } = 
 /**
  * Replaces matches in files on disk, found again with the same options.
  * @param {{ path: string, at?: { line: number, column: number }[] }[]} entries at: only these matches
- * @returns {{ count: number, files: string[] }}
+ * @param {{ dirtyPaths?: string[] }} [scope] dirtyPaths: files with unsaved editor changes, left alone
+ * @returns {{ count: number, files: string[], skipped: string[] }} skipped: unsaved or changed meanwhile
  */
-function replaceInProject(root, options, replacement, entries) {
+function replaceInProject(root, options, replacement, entries, { dirtyPaths = [] } = {}) {
   const re = buildRegex(options);
+  const dirty = new Set(dirtyPaths);
   let count = 0;
   const changed = [];
+  const skipped = [];
   for (const entry of entries) {
+    if (dirty.has(entry.path)) {
+      skipped.push(entry.path);
+      continue;
+    }
     const file = resolveInProject(root, entry.path);
-    const text = readText(file);
+    if (fs.statSync(file).size > MAX_FILE_BYTES)
+      continue;
+    // The same revision-checked, atomic replacement as an editor save.
+    const { content: text, revision } = readProjectFile(root, entry.path);
     if (text === null)
       continue;
     let matches = findInText(text, re, { replacement, regex: options.regex });
@@ -92,11 +102,14 @@ function replaceInProject(root, options, replacement, entries) {
       matches = matches.filter((m) => entry.at.some((at) => at.line === m.line && at.column === m.column));
     if (!matches.length)
       continue;
-    fs.writeFileSync(file, applyReplacements(text, matches));
+    if (!writeProjectFile(root, entry.path, applyReplacements(text, matches), revision).ok) {
+      skipped.push(entry.path);
+      continue;
+    }
     count += matches.length;
     changed.push(entry.path);
   }
-  return { count, files: changed };
+  return { count, files: changed, skipped };
 }
 
 module.exports = { searchProject, replaceInProject, projectFiles };

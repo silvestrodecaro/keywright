@@ -34,6 +34,16 @@ run from source; there are no installers yet.
   for libraries imported by module name from the project folder.
 - Text that a library prints while the editor checks a file no longer delays
   the check until it times out.
+- A file that is not UTF-8 opens read-only with an explanation. Saving it, or
+  replacing text in it from Search, used to replace its accented characters.
+- Replace in Files saves each file like the editor does: it skips files changed
+  since the search or with unsaved edits, and names them.
+- A damaged recovery file, recent projects list, MCP settings file or run
+  history is kept as `<name>.corrupt-<time>` instead of being emptied and
+  overwritten. A `keywright.json` or `mcp.json` saved with a byte order mark,
+  as Notepad does, now reads correctly.
+- Saves and settings files retry for a moment when an antivirus scanner holds
+  them, and leave no temporary file behind when they fail.
 
 ## 0.5.0 - 2026-11-16
 

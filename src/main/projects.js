@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveInside } = require('./pathBoundary');
+const { parseJson, retrying } = require('./jsonFile');
 const { createHash, randomUUID } = require('crypto');
 const { spawn } = require('child_process');
 const { projectFiles, CONFIG_FILE, DEFAULT_CONFIG } = require('./projectTemplate');
@@ -190,7 +191,7 @@ function loadProject(root) {
   const configPath = path.join(resolved, CONFIG_FILE);
   if (fs.existsSync(configPath)) {
     try {
-      config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf8')) };
+      config = { ...config, ...parseJson(fs.readFileSync(configPath, 'utf8')) };
     } catch (error) {
       throw new Error(`Invalid ${CONFIG_FILE}: ${error.message}`);
     }
@@ -253,7 +254,22 @@ function readProjectFile(root, relative) {
   const buffer = fs.readFileSync(target);
   if (buffer.includes(0))
     return { path: relative, content: null, reason: 'Binary file.' };
-  return { path: relative, content: buffer.toString('utf8'), revision: revisionOf(buffer) };
+  const content = decodeUtf8(buffer);
+  if (content === null)
+    return { path: relative, content: null, reason: NOT_UTF8 };
+  return { path: relative, content, revision: revisionOf(buffer) };
+}
+
+const NOT_UTF8 = 'The file is not UTF-8 text. Saving it would replace its accented and other non-ASCII '
+  + 'characters, so it opens read-only here. Convert it to UTF-8 in another editor to edit it.';
+
+/** The text of `buffer`, or null when it is not valid UTF-8. */
+function decodeUtf8(buffer) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buffer);
+  } catch {
+    return null;
+  }
 }
 
 /** Compare the last read revision before replacing a file; null means it was deleted. */
@@ -283,7 +299,7 @@ function writeProjectFile(root, relative, content, expectedRevision) {
     }
     if (path.relative(target, currentTarget) !== '' || latest !== expectedRevision)
       return { ok: false, conflict: true, revision: latest };
-    fs.renameSync(temporary, target);
+    retrying(() => fs.renameSync(temporary, target)); // a scanner may hold the file a moment
   } finally {
     if (fs.existsSync(temporary))
       fs.unlinkSync(temporary);
@@ -372,4 +388,5 @@ module.exports = {
   writeProjectFile,
   createProjectFile,
   resolveInProject,
+  decodeUtf8,
 };

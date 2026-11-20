@@ -247,3 +247,11 @@ test('a linked folder is renamed as a link, and a link leaving the project is re
   assert.throws(() => projects.renameProjectPath(root, 'escape', 'x'), /outside the project/);
   assert.ok(fs.existsSync(outside));
 });
+
+test('a file that is not UTF-8 opens without content and says why, so a save cannot change its characters', () => {
+  const root = tempDir('latin1');
+  fs.writeFileSync(path.join(root, 'legacy.resource'), Buffer.from('*** Keywords ***\nCaf\xe9\n', 'latin1'));
+  const file = projects.readProjectFile(root, 'legacy.resource');
+  assert.equal(file.content, null);
+  assert.match(file.reason, /not UTF-8/);
+});

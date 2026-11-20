@@ -3,6 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { CONFIG_FILE, DEFAULT_CONFIG } = require('./projectTemplate');
+const { parseJson, retrying } = require('./jsonFile');
+const { randomUUID } = require('node:crypto');
 
 /** The project's keywright.json as an object; {} when there is none. */
 function readConfigFile(root) {
@@ -11,7 +13,7 @@ function readConfigFile(root) {
     return {};
   let config;
   try {
-    config = JSON.parse(fs.readFileSync(file, 'utf8'));
+    config = parseJson(fs.readFileSync(file, 'utf8'));
   } catch (error) {
     throw new Error(`${CONFIG_FILE} is not valid JSON: ${error.message}`);
   }
@@ -110,9 +112,13 @@ function writeSettings(root, values) {
     return { ok: false, errors };
   const config = { ...DEFAULT_CONFIG, ...existing, ...settings };
   const file = path.join(root, CONFIG_FILE);
-  const temporary = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`);
-  fs.renameSync(temporary, file);
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, { flush: true });
+    retrying(() => fs.renameSync(temporary, file));
+  } finally {
+    fs.rmSync(temporary, { force: true }); // never left in the project
+  }
   return { ok: true, errors: {} };
 }
 

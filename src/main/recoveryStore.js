@@ -1,8 +1,9 @@
 'use strict';
 
-const { createHash, randomUUID } = require('crypto');
+const { createHash } = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { readJson, writeJsonAtomic, retrying } = require('./jsonFile');
 
 /**
  * Unsaved editor buffers kept in the IDE's data folder, one JSON file per project,
@@ -18,32 +19,43 @@ class RecoveryStore {
 
   /** @returns {{ path: string, content: string, revision: string|null }[]} */
   read(root) {
+    let stored;
     try {
-      const data = JSON.parse(fs.readFileSync(this._file(root), 'utf8'));
-      if (!data || normalize(data.root) !== normalize(root) || !Array.isArray(data.files))
-        return [];
-      return data.files.filter((entry) => entry && typeof entry.path === 'string' && typeof entry.content === 'string'
-        && (typeof entry.revision === 'string' || entry.revision === null))
-        .map(({ path: file, content, revision }) => ({ path: file, content, revision }));
-    } catch {
+      stored = readJson(this._file(root)); // a damaged file is kept aside, so the next save cannot delete it
+    } catch (error) {
+      console.error(`Could not read the recovery copies: ${error.message}`);
       return [];
     }
+    const data = stored.status === 'ok' ? stored.value : null;
+    if (!data || normalize(data.root) !== normalize(root) || !Array.isArray(data.files))
+      return [];
+    return data.files.filter((entry) => entry && typeof entry.path === 'string' && typeof entry.content === 'string'
+      && (typeof entry.revision === 'string' || entry.revision === null))
+      .map(({ path: file, content, revision }) => ({ path: file, content, revision }));
   }
 
   /** Replaces the stored buffers of a project; an empty list removes its file. */
   write(root, entries) {
     if (!entries.length)
       return this.clear(root);
-    fs.mkdirSync(this._folder, { recursive: true });
-    const target = this._file(root);
-    const temporary = `${target}.${randomUUID()}.tmp`;
     const files = entries.map(({ path: file, content, revision }) => ({ path: file, content, revision: revision ?? null }));
-    fs.writeFileSync(temporary, JSON.stringify({ root: path.resolve(root), savedAt: new Date().toISOString(), files }));
-    fs.renameSync(temporary, target);
+    writeJsonAtomic(this._file(root), { root: path.resolve(root), savedAt: new Date().toISOString(), files });
   }
 
   clear(root) {
-    fs.rmSync(this._file(root), { force: true });
+    retrying(() => fs.rmSync(this._file(root), { force: true }));
+  }
+
+  /** Removes temporary files left by writes that a crash interrupted. */
+  removeLeftovers() {
+    let names;
+    try {
+      names = fs.readdirSync(this._folder);
+    } catch {
+      return;
+    }
+    for (const name of names.filter((item) => item.endsWith('.tmp')))
+      fs.rmSync(path.join(this._folder, name), { force: true });
   }
 
   _file(root) {

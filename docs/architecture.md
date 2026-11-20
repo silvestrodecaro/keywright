@@ -110,7 +110,12 @@ of that file, and marks only that captured version saved. The tab retains the
 revision returned by the last read or successful write. Watcher reloads never
 advance the revision of a dirty model or apply a response made stale by a newer edit.
 
-`projects.readProjectFile()` returns a SHA-256 revision of the bytes read.
+`projects.readProjectFile()` returns a SHA-256 revision of the bytes read. A file that
+is not valid UTF-8 is returned without content and with the reason, so it opens
+read-only: saving the decoded text would replace its non-ASCII characters. Search and
+replace skip such files too. A replacement on disk reads and writes each file through
+`readProjectFile()` and `writeProjectFile()`, so it has the same revision check and
+atomic rename as an editor save, and leaves alone files with unsaved editor changes.
 `writeProjectFile()` requires that revision, writes a temporary sibling, rechecks
 the destination and renames the replacement. It returns either the new revision
 or a conflict without overwriting. A deleted destination has revision `null` and
@@ -371,6 +376,13 @@ does. `ariaSnapshot` modes, `getByRef` and `normalize` are public Playwright API
 | Robot reports and Browser artifacts | Configured `outputDir` | Written by the current run; later runs can replace artifacts |
 | Run history | `<outputDir>/.keywright-history.json` | Up to 30 summaries with test statuses, timings and shortened messages |
 | Recent projects | `recent-projects.json` in Electron `userData` | Shared application setting |
+
+The JSON files Keywright keeps for itself (recent projects, recovery copies, MCP
+settings and run history) go through [jsonFile.js](../src/main/jsonFile.js). Writes use
+a temporary sibling and one rename, retried while Windows briefly locks the file. A
+byte order mark is ignored when reading. A file that is not valid JSON is renamed to
+`<name>.corrupt-<time>` and logged, instead of being read as empty and overwritten by
+the next save; a file that cannot be read at all is not overwritten.
 | Breakpoints and run options | Renderer local storage in Electron `userData` | Keyed by project root |
 | Sidebar width, lint preference and watches | Renderer local storage | Shared application settings |
 | Unsaved editor models | Renderer memory | Current session only |
