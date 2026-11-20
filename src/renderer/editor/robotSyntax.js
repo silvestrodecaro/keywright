@@ -51,7 +51,8 @@ function splitCells(line) {
 }
 
 function sectionOf(line) {
-  const match = /^\*+\s*([^*]*?)\s*\**\s*$/.exec(line);
+  // Only the first cell names the section: data-driven tests add column headings after it.
+  const match = /^\*+\s*([^*]*?)\s*\**\s*$/.exec(splitCells(line)[0]?.text ?? '');
   if (!match)
     return null;
   const name = match[1].toLowerCase().replace(/\s+/g, ' ');

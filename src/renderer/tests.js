@@ -546,7 +546,11 @@
   }
 
   /** All entry points prepare the same disk state, including imported resources. */
-  async function run(select, { background = false, source = null } = {}) {
+  /**
+   * explicit: the user chose these tests (a row's Run, an editor glyph, Run visible), so tag
+   * filters do not apply; the tests a watch run selects still go through them.
+   */
+  async function run(select, { background = false, source = null, explicit = true } = {}) {
     if (running || preparing)
       return;
     preparing = true;
@@ -573,7 +577,7 @@
           return;
         }
       }
-      await startRun(select, { background });
+      await startRun(select, { background, explicit });
     } catch (error) {
       showError(`Could not start tests: ${error.message}`);
     } finally {
@@ -601,10 +605,10 @@
   }
 
   /** background: watch re-run, keep the current tab. */
-  async function startRun(select, { background }) {
+  async function startRun(select, { background, explicit = true }) {
     showError('');
-    // Tag filters apply to Run all and suites; running a single test is an explicit choice.
-    const filter = select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
+    // Tag filters apply to Run all, suites and watch runs; running chosen tests is explicit.
+    const filter = explicit && select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
     const scope = testsInScope(select).filter((id) => window.RFTags.selected(testIndex.get(id).test.tags, filter));
     if (!scope.length) {
       showError('No test matches the tag filter of the Run options.');
@@ -777,6 +781,11 @@
     if (!stopped && exitCode >= 252)
       showError('Robot Framework could not run the tests. See the console output below the results.');
     scheduleRender();
+    // Data files written while tests ran are most likely their own output (downloads, created
+    // files): rerunning for them would loop. Suites, resources and libraries still count.
+    for (const path of [...pendingChanges])
+      if (!/\.(robot|resource|py)$/i.test(path))
+        pendingChanges.delete(path);
     if (pendingChanges.size)
       processChanges();
   });
@@ -972,15 +981,19 @@
     }
   });
 
-  window.addEventListener('keywright:project-opened', (event) => {
-    breakpointsKey = event.detail && event.detail.root ? `keywright.breakpoints:${event.detail.root}` : null;
-    let saved = {};
+  /** An object kept in local storage; {} when missing, unreadable or of another shape. */
+  function storedObject(key) {
     try {
-      saved = JSON.parse((breakpointsKey && localStorage.getItem(breakpointsKey)) || '{}');
+      const value = key ? JSON.parse(localStorage.getItem(key) || '{}') : {};
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     } catch {
-      saved = {};
+      return {};
     }
-    window.RFEditor.setBreakpoints(saved);
+  }
+
+  window.addEventListener('keywright:project-opened', (event) => {
+    breakpointsKey =event.detail && event.detail.root ? `keywright.breakpoints:${event.detail.root}` : null;
+    window.RFEditor.setBreakpoints(storedObject(breakpointsKey));
   });
 
   // -------------------------------------------------------------------------
@@ -1029,12 +1042,7 @@
 
   window.addEventListener('keywright:project-opened', (event) => {
     runOptionsKey = event.detail && event.detail.root ? `keywright.runOptions:${event.detail.root}` : null;
-    let saved = {};
-    try {
-      saved = JSON.parse((runOptionsKey && localStorage.getItem(runOptionsKey)) || '{}');
-    } catch {
-      saved = {};
-    }
+    const saved = storedObject(runOptionsKey);
     for (const [name, selector] of Object.entries(RUN_OPTION_FIELDS))
       $(selector).value = saved[name] || '';
     $('#run-dryrun').checked = !!saved.dryrun;
@@ -1045,18 +1053,35 @@
   // -------------------------------------------------------------------------
   // Watch mode
 
-  async function processChanges() {
+  // One pass at a time: changes arriving meanwhile are taken by another pass, not lost.
+  let processing = null;
+
+  function processChanges() {
+    if (!processing)
+      processing = processPending().finally(() => {
+        processing = null;
+        if (pendingChanges.size && !running && !preparing)
+          processChanges();
+      });
+    return processing;
+  }
+
+  async function processPending() {
     const paths = [...pendingChanges];
     pendingChanges.clear();
     if (!rootSuite || !paths.some((path) => window.RFWatch.RELEVANT.test(path)))
       return;
     await discover({ quiet: true }); // test names and files may have changed
-    if (running || preparing || !rootSuite || (!watchAll && !watched.size))
+    if (!rootSuite || (!watchAll && !watched.size))
       return;
+    if (running || preparing) {
+      paths.forEach((path) => pendingChanges.add(path)); // taken again when the run ends
+      return;
+    }
     const tests = [...testIndex.values()].map(({ test, suites }) => ({ id: test.id, source: test.source, suites: suites.map((s) => s.id) }));
     const ids = window.RFWatch.affectedTests({ paths, tests, watched, watchAll });
     if (ids.length)
-      run(ids.length === tests.length ? [] : ids, { background: true });
+      run(ids.length === tests.length ? [] : ids, { background: true, explicit: false });
   }
 
   window.addEventListener('keywright:files-changed', (event) => {
@@ -1071,6 +1096,7 @@
 
   window.RFTree.bind($('#test-tree'));
 
+  // Run visible passes the visible tests as an explicit list, so tag filters do not apply (user guide).
   $('#tests-run-all').addEventListener('click', () => run(filter ? visibleTests().map((t) => t.id) : []));
   $('#tests-stop').addEventListener('click', () => api.stopTests());
   $('#tests-refresh').addEventListener('click', discover);

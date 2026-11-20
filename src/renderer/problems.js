@@ -28,6 +28,12 @@
       : ROBOT_FILE.test(node.path) ? [node.path] : []));
   }
 
+  // What the next check covers: every file, or only the test files that changed. A
+  // change to a resource or library can change the problems of the files using it.
+  let fullCheck = true;
+  const changedFiles = new Set();
+  let generation = 0; // a check started for a project that was closed meanwhile is discarded
+
   async function checkAll() {
     if (!projectOpen)
       return;
@@ -36,11 +42,24 @@
       return;
     }
     checking = true;
+    const full = fullCheck;
+    const changed = [...changedFiles];
+    fullCheck = false;
+    changedFiles.clear();
+    const started = generation;
     render();
     try {
-      const paths = robotFiles(await api.projectTree());
+      const all = robotFiles(await api.projectTree());
+      const existing = new Set(all);
+      const paths = full ? all : changed.filter((path) => existing.has(path));
       const found = await editor.projectProblems(paths);
-      results = new Map(found.filter((r) => r.problems.length).map((r) => [r.path, r.problems]));
+      if (started !== generation)
+        return;
+      const next = full ? new Map() : new Map([...results].filter(([path]) => existing.has(path) && !paths.includes(path)));
+      for (const { path, problems } of found)
+        if (problems.length)
+          next.set(path, problems);
+      results = next;
     } catch (error) {
       console.error('Problems check failed', error);
     } finally {
@@ -53,7 +72,14 @@
     }
   }
 
-  function schedule(delay = 600) {
+  /** @param {string[]} [paths] the files that changed; omitted, every file is checked again */
+  function schedule(delay = 600, paths) {
+    // Only .robot test files can change alone; a resource, library or anything else Robot
+    // reads (variable files, data) can change the problems of other files.
+    if (paths && paths.every((path) => /\.robot$/i.test(path)))
+      paths.forEach((path) => changedFiles.add(path));
+    else
+      fullCheck = true;
     clearTimeout(timer);
     timer = setTimeout(checkAll, delay);
   }
@@ -147,6 +173,9 @@
 
   window.addEventListener('keywright:project-opened', () => {
     projectOpen = true;
+    generation++;
+    fullCheck = true;
+    changedFiles.clear();
     results = new Map();
     collapsed.clear();
     render(); // the first check runs when the keywords are loaded
@@ -188,8 +217,15 @@
     editor.setLintEnabled(true);
     schedule(300);
   });
-  window.addEventListener('keywright:files-changed', () => schedule());
-  window.addEventListener('keywright:file-saved', () => schedule());
+  window.addEventListener('keywright:files-changed', (event) => schedule(600, event.detail?.paths));
+  window.addEventListener('keywright:file-saved', (event) => schedule(600, event.detail?.path ? [event.detail.path] : undefined));
+  window.addEventListener('keywright:project-closed', () => {
+    projectOpen = false;
+    generation++;
+    clearTimeout(timer);
+    results = new Map();
+    render();
+  });
   $('#problems-refresh').addEventListener('click', checkAll);
 
   render();

@@ -103,3 +103,17 @@ test('invalid names', () => {
   assert.strictEqual(rename.invalidName('Open App', 'keyword'), null);
   assert.strictEqual(rename.invalidName('BASE URL', 'variable'), null);
 });
+
+test('renaming a keyword leaves the arguments of other keywords alone', () => {
+  const lines = [
+    '*** Test Cases ***',
+    'T',
+    '    Open Keyword Dialog    Login',
+    '    Run Keyword    Login',
+    '*** Keywords ***',
+    'Login',
+    '    No Operation',
+  ];
+  const found = rename.keywordOccurrences(lines, { name: 'Login' }).map((o) => `${o.line}:${o.start}`);
+  assert.deepStrictEqual(found, ['4:19']);
+});

@@ -229,7 +229,17 @@ children do not remain running.
 The renderer maintains discovered tests, current results, suite setup/teardown
 steps, trace references and debugger state. Watch mode uses a pure selection helper:
 suite changes target their watched tests; other relevant dependencies conservatively
-target all watched tests.
+target all watched tests. Watch runs apply the Run options' tag filters, whether they
+run every watched test or some. Changes are processed one pass at a time; those that
+arrive while tests run are taken when the run ends, except data files (not `.robot`,
+`.resource` or `.py`), which are most likely written by the tests themselves.
+
+The Problems panel checks every Robot file when the project opens and when keywords
+load. A changed `.robot` file is checked again alone; a change to a resource, library
+or other file checks every file again, since it can change their problems. When the
+Python check cannot run, the file gets an information marker with the reason instead
+of looking clean. Definition previews of closed files are discarded when the file
+changes on disk or the project changes, and rename reads closed files from disk.
 
 ## Editor analysis and Python helpers
 

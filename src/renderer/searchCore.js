@@ -17,10 +17,18 @@
    * @returns {RegExp} global; throws SyntaxError for an invalid regular expression
    */
   function buildRegex({ query, regex = false, caseSensitive = false, wholeWord = false }) {
-    let source = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (wholeWord)
-      source = `(?<![\\p{L}\\p{N}_])(?:${source})(?![\\p{L}\\p{N}_])`;
-    return new RegExp(source, `gu${caseSensitive ? '' : 'i'}`);
+    const source = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const flags = caseSensitive ? 'g' : 'gi';
+    const word = (letters) => (wholeWord ? `(?<!${letters})(?:${source})(?!${letters})` : source);
+    try {
+      return new RegExp(word('[\\p{L}\\p{N}_]'), `${flags}u`);
+    } catch (error) {
+      // Unicode patterns reject escapes such as \- or \# that users type (and Robot
+      // data contains); without the flag they are literal characters.
+      if (!regex)
+        throw error;
+      return new RegExp(word('[\\w\\u00C0-\\uFFFF]'), flags);
+    }
   }
 
   /** Expands $&, $1..$99, $<name> and $$ in a regex replacement, like String.prototype.replace. */
@@ -33,7 +41,13 @@
       if (name !== undefined)
         return match.groups && match.groups[name] !== undefined ? match.groups[name] : '';
       const index = Number(what);
-      return index > 0 && index < match.length ? (match[index] ?? '') : token;
+      if (index > 0 && index < match.length)
+        return match[index] ?? '';
+      // $10 with fewer than ten groups is $1 followed by 0.
+      const first = Number(what[0]);
+      if (what.length === 2 && first > 0 && first < match.length)
+        return (match[first] ?? '') + what[1];
+      return token;
     });
   }
 

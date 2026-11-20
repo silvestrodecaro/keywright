@@ -113,3 +113,9 @@ test('testCases finds test and task definitions', () => {
     tests: [{ name: 'First test', line: 4, end: 7 }, { name: 'Second', line: 8, end: 8 }, { name: 'Task one', line: 13, end: 13 }],
   });
 });
+
+test('a section header with more cells, as in data-driven tests, still starts its section', () => {
+  assert.strictEqual(analyzeLine('*** Test Cases ***    Username    Password').section, 'tests');
+  assert.strictEqual(analyzeLine('*** Keywords ***    # helpers').section, 'keywords');
+  assert.strictEqual(analyzeLine('*** Test Cases ***    Username', 'settings').cells[0].type, 'section');
+});

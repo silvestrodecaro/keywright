@@ -46,11 +46,17 @@
       const lines = (log.textContent + '\n' + text).split(/[\r\n]+/).filter((line) => line.trim());
       log.textContent = lines.slice(-1).join('').replace(/\s{2,}/g, ' ');
     });
-    const result = await window.keywright.installBrowser(name);
-    unsubscribe();
-    el.classList.remove('is-info');
-    busy = false;
-    renderState();
+    let result;
+    try {
+      result = await window.keywright.installBrowser(name);
+    } catch (error) {
+      result = { ok: false, error: error.message };
+    } finally {
+      unsubscribe();
+      el.classList.remove('is-info');
+      busy = false;
+      renderState();
+    }
     if (!result.ok) {
       showError(result.error, name);
       return;
@@ -133,13 +139,19 @@
     }
     busy = true;
     renderState();
-    const result = await window.keywright.startRecording({
-      url: $('#url').value.trim(),
-      browser: $('#browser').value,
-      viewport: parseViewport($('#viewport').value),
-    });
-    busy = false;
-    renderState();
+    let result;
+    try {
+      result = await window.keywright.startRecording({
+        url: $('#url').value.trim(),
+        browser: $('#browser').value,
+        viewport: parseViewport($('#viewport').value),
+      });
+    } catch (error) {
+      result = { ok: false, error: error.message };
+    } finally {
+      busy = false;
+      renderState();
+    }
     if (!result.ok)
       showError(result.error, result.install);
   });

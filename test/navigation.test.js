@@ -148,3 +148,15 @@ test('dynamic and JSON variable files', () => {
   const json = nav.variableFileDefinitions('vars.json', ['{', '  "base url": "https://x",', '  "users": ["a"]', '}']);
   assert.deepStrictEqual(json.map((d) => [d.key, d.line, d.start, d.values[0]]), [['baseurl', 2, 2, '"https://x"'], ['users', 3, 2, '["a"]']]);
 });
+
+test('Set Local Variable is local to its test or keyword', () => {
+  const parsed = nav.parseFile([
+    '*** Test Cases ***',
+    'First',
+    '    Set Local Variable    ${only here}    1',
+    'Second',
+    '    Log    ${only here}',
+  ]);
+  assert.strictEqual(nav.findVariable(parsed, '${only here}', 5), null);
+  assert.ok(nav.findVariable(parsed, '${only here}', 3));
+});

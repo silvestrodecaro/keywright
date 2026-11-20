@@ -44,6 +44,28 @@ run from source; there are no installers yet.
   as Notepad does, now reads correctly.
 - Saves and settings files retry for a moment when an antivirus scanner holds
   them, and leave no temporary file behind when they fail.
+- A section header followed by column names, as in data-driven tests
+  (`*** Test Cases ***    Username    Password`), is recognized; the file used
+  to lose highlighting and checks.
+- Regular expressions in Search accept escapes such as `\-` and `\#`, and `$10`
+  in a replacement works as in JavaScript.
+- **Add END** places `END` after the `ELSE`, `EXCEPT` and `FINALLY` branches.
+- `&` works as AND in tag filters, as in Robot Framework.
+- Renaming a keyword no longer changes arguments of unrelated keywords whose name
+  contains "keyword", and a file with `[Template]` in a comment keeps its checks.
+- `Set Local Variable` counts only in its own test or keyword.
+- A rename that fails on one file changes no file, and Go to Definition and
+  Peek show a closed file's current content, also after switching projects.
+- When the Robot check cannot run, the file says why instead of showing no
+  problems.
+- Saving a `.robot` file checks that file again in Problems instead of the whole
+  project.
+- Opening the same file twice quickly opens one tab, breakpoints follow renamed
+  files, and tabs inside a renamed folder show their current content.
+- Watch mode no longer misses changes made while it looks for affected tests,
+  applies tag filters to partial watch runs as it does to full ones, and no
+  longer reruns because the tests wrote data files.
+- The tab strip is no longer rebuilt on every keystroke.
 
 ## 0.5.0 - 2026-11-16
 

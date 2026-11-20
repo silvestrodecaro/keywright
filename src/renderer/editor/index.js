@@ -177,8 +177,34 @@ function snippetFor(kw) {
   return [name, ...required.map((arg) => `\${${index++}:${escape(arg.name)}}`)].join('    ');
 }
 
+/** Text shown literally in Markdown (keyword names may contain * _ or backticks). */
+function markdownText(text) {
+  return String(text).replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
+}
+
+/** A code block whose fence is longer than any backtick run in `code`. */
+function codeBlock(code, language) {
+  const fence = '`'.repeat(Math.max(3, ...[...String(code).matchAll(/`+/g)].map((run) => run[0].length + 1)));
+  return `${fence}${language}\n${code}\n${fence}`;
+}
+
+/** Whether the file uses test templates, where a test row's first cell is data, not a keyword. */
+function usesTemplate(lines) {
+  let section = 'none';
+  return lines.some((line) => {
+    const result = analyzeLine(line, section);
+    section = result.section;
+    const first = result.cells.find((cell) => cell.text && cell.type !== 'comment');
+    if (!first)
+      return false;
+    return (section === 'settings' && /^(?:test|task) template$/i.test(first.text))
+      || (section === 'tests' && /^\[template\]$/i.test(first.text));
+  });
+}
+
 function documentation(kw) {
-  const header = `**${kw.name}** — ${kw.user ? `keyword in \`${kw.source}\`` : `${kw.library} library`}\n\n\`\`\`robotframework\n${signature(kw)}\n\`\`\``;
+  const where = kw.user ? `keyword in ${markdownText(kw.source)}` : `${markdownText(kw.library)} library`;
+  const header = `**${markdownText(kw.name)}** — ${where}\n\n${codeBlock(signature(kw), 'robotframework')}`;
   const doc = kw.doc || '';
   const body = kw.docFormat === 'HTML' ? { value: doc, supportHtml: true } : { value: doc };
   return doc ? [{ value: header }, body] : [{ value: header }];
@@ -284,23 +310,52 @@ function modelPath(model) {
   return model.uri.path.replace(/^\//, '');
 }
 
-/** Lines of a project file: its model when open (it may have unsaved edits), else the file on disk; null if missing. */
+// The version of each open model when its lines were last read, so a rename computed
+// from them is refused if the user typed meanwhile.
+const readVersions = new Map();
+
+/** Lines of a project file: its tab's model (it may have unsaved edits), else the file on disk; null if missing. */
 async function readLines(path) {
-  const model = monaco.editor.getModel(uriFor(path));
-  if (model)
+  // Only a tab's model counts: a definition preview may be older than the file on disk.
+  const model = RFEditor.has(path) ? monaco.editor.getModel(uriFor(path)) : null;
+  if (model) {
+    readVersions.set(path, model.getVersionId());
     return model.getLinesContent();
+  }
   const file = await window.keywright.readProjectFile(path).catch(() => null);
   return file && file.content !== null ? file.content.split(/\r?\n/) : null;
 }
+
+// Models created to preview a definition in a closed file (Peek, Go to Definition).
+const previews = new Set();
 
 /** Monaco needs a model for a definition's file (preview) before opening it. */
 async function ensureModel(path) {
   if (monaco.editor.getModel(uriFor(path)))
     return;
   const file = await window.keywright.readProjectFile(path).catch(() => null);
-  if (file && file.content !== null && !monaco.editor.getModel(uriFor(path)))
+  if (file && file.content !== null && !monaco.editor.getModel(uriFor(path))) {
     monaco.editor.createModel(file.content, languageForPath(path), uriFor(path));
+    previews.add(path);
+  }
 }
+
+/** Removes the preview models of `paths` (all when omitted) that no tab has taken over. */
+function disposePreviews(paths = [...previews]) {
+  for (const path of paths) {
+    if (!previews.has(path))
+      continue;
+    previews.delete(path);
+    if (RFEditor.has(path))
+      continue; // opened in a tab since: the tab owns the model now
+    monaco.editor.getModel(uriFor(path))?.dispose();
+  }
+}
+
+// A preview shows the file as it was read: changed on disk, it is read again when next needed.
+window.addEventListener('keywright:files-changed', (event) => disposePreviews(event.detail?.paths || undefined));
+window.addEventListener('keywright:project-opened', () => disposePreviews());
+window.addEventListener('keywright:project-closed', () => disposePreviews());
 
 async function firstExisting(paths) {
   for (const path of paths) {
@@ -616,34 +671,49 @@ monaco.languages.registerReferenceProvider(LANGUAGE, {
   },
 });
 
-/** Applies a rename: workspace edits for open files (returned), files written to disk for the others. */
+/**
+ * Applies a rename: workspace edits for open files (returned), files written to disk for the
+ * others. Every closed file is read before any is written, and a failed write puts back the
+ * files already written, so a rename never applies to part of the project.
+ */
 async function applyRename(edits) {
   const workspace = [];
-  let written = 0;
+  const closed = [];
   for (const [path, list] of edits) {
     const open = RFEditor.has(path) ? monaco.editor.getModel(uriFor(path)) : null;
     if (open) {
+      // The version the edits were computed from: Monaco refuses them if the user typed since.
+      const versionId = readVersions.get(path) ?? open.getVersionId();
       for (const edit of list) {
         workspace.push({
           resource: open.uri,
-          versionId: open.getVersionId(),
+          versionId,
           textEdit: { range: new monaco.Range(edit.line, edit.start + 1, edit.line, edit.end + 1), text: edit.text },
         });
       }
       continue;
     }
     const file = await window.keywright.readProjectFile(path);
+    if (file.content === null)
+      throw new Error(`${path}: ${file.reason}`);
     const eol = file.content.includes('\r\n') ? '\r\n' : '\n';
-    const content = applyEdits(file.content.split(/\r?\n/), list).join(eol);
-    const saved = await window.keywright.writeProjectFile(path, content, file.revision);
-    if (!saved.ok)
-      throw new Error(`${path} changed on disk. Reload the file and try renaming again.`);
-    const preview = monaco.editor.getModel(uriFor(path)); // definition preview of a closed file
-    if (preview)
-      preview.setValue(content);
-    written++;
+    closed.push({ path, before: file.content, revision: file.revision, content: applyEdits(file.content.split(/\r?\n/), list).join(eol) });
   }
-  return { workspace, written };
+  const written = [];
+  try {
+    for (const file of closed) {
+      const saved = await window.keywright.writeProjectFile(file.path, file.content, file.revision);
+      if (!saved.ok)
+        throw new Error(`${file.path} changed on disk. Reload the file and try renaming again.`);
+      written.push({ ...file, revision: saved.revision });
+    }
+  } catch (error) {
+    for (const file of written.reverse())
+      await window.keywright.writeProjectFile(file.path, file.before, file.revision).catch(() => {});
+    throw new Error(`${error.message} No file was changed.`);
+  }
+  disposePreviews(closed.map((file) => file.path));
+  return { workspace, written: written.length };
 }
 
 monaco.languages.registerRenameProvider(LANGUAGE, {
@@ -699,7 +769,7 @@ function keywordsCalled(name) {
 function keywordMarkers(model) {
   const text = model.getValue();
   // With templates the first cell of a test row is data, not a keyword.
-  if (!keywordsComplete || /^(test|task) template\b|\[template\]/im.test(text))
+  if (!keywordsComplete || usesTemplate(model.getLinesContent()))
     return [];
   const marker = (severity, message, cell) => ({
     severity,
@@ -846,8 +916,9 @@ async function validate(model, path) {
   monaco.editor.setModelMarkers(model, 'keywords', keywordMarkers(model));
   const version = model.getVersionId();
   const text = model.getValue();
+  const failed = (error) => ({ ok: false, problems: [], error: error?.message || String(error) });
   const [result, variables, lint] = await Promise.all([
-    window.keywright.checkFile(path, text),
+    window.keywright.checkFile(path, text).catch(failed),
     variableMarkers(model, path).catch(() => []),
     lintMarkers(path, text).catch(() => []),
   ]);
@@ -855,7 +926,22 @@ async function validate(model, path) {
     return; // edited meanwhile: a newer check is scheduled
   monaco.editor.setModelMarkers(model, 'variables', variables);
   monaco.editor.setModelMarkers(model, 'robocop', lint);
-  monaco.editor.setModelMarkers(model, 'robot', robotMarkers(result));
+  // No error: no Python to check with, which the project already reports elsewhere.
+  monaco.editor.setModelMarkers(model, 'robot', result?.ok === false && result.error ? checkUnavailable(result.error) : robotMarkers(result));
+}
+
+/** A check that could not run (no Python, a broken environment) says so instead of finding nothing. */
+function checkUnavailable(error) {
+  const reason = String(error || 'The Python helper did not answer.').split('\n').slice(0, 4).join('\n');
+  return [{
+    severity: monaco.MarkerSeverity.Info,
+    message: `Keywright could not check this file with Robot Framework: ${reason}`,
+    startLineNumber: 1,
+    startColumn: 1,
+    endLineNumber: 1,
+    endColumn: 1,
+    source: 'Keywright',
+  }];
 }
 
 /** Parser problems from the Python helper (editor:check) as markers. */
@@ -1092,9 +1178,20 @@ const RFEditor = (() => {
     }
   });
 
+  // Notified on every edit (recovery copies, search); dirtyStateListeners only when a
+  // file becomes modified or saved, which is all the tab strip shows.
+  const dirtyStateListeners = new Set();
+  const dirtyStates = new Map();
+
   function emitDirty(path) {
+    const dirty = isDirty(path);
     for (const listener of dirtyListeners)
-      listener(path, isDirty(path));
+      listener(path, dirty);
+    if (dirtyStates.get(path) !== dirty) {
+      dirtyStates.set(path, dirty);
+      for (const listener of dirtyStateListeners)
+        listener(path, dirty);
+    }
   }
 
 
@@ -1422,6 +1519,22 @@ const RFEditor = (() => {
   }
 
   /** Replaces all breakpoints (e.g. restored for a project). */
+  /** Follows a rename: `moved(path)` gives a file's new path, or null when it did not move. */
+  function moveBreakpoints(moved) {
+    let changed = false;
+    for (const path of new Set([...breakpointLines.keys(), ...breakpointDecorations.keys()])) {
+      const next = moved(path);
+      if (!next || next === path)
+        continue;
+      const entries = breakpointsOf(path);
+      setBreakpointEntries(path, []);
+      setBreakpointEntries(next, entries);
+      changed = true;
+    }
+    if (changed)
+      emitBreakpoints();
+  }
+
   function setBreakpoints(all) {
     for (const path of new Set([...breakpointLines.keys(), ...breakpointDecorations.keys(), ...Object.keys(all)]))
       setBreakpointEntries(path, all[path] || []);
@@ -1777,6 +1890,8 @@ const RFEditor = (() => {
     },
     focus: () => editor && editor.focus(),
     onDirtyChange: (listener) => dirtyListeners.add(listener),
+    onDirtyStateChange: (listener) => dirtyStateListeners.add(listener),
+    moveBreakpoints,
     onSave: (listener) => saveListeners.add(listener),
     onOpenRequest: (listener) => openListeners.add(listener),
     onProblems: (listener) => problemListeners.add(listener),

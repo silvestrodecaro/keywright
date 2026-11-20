@@ -449,9 +449,10 @@ when unsaved changes are excluded. A failed or cancelled save prevents the run.
 | Dry run | Asks Robot to validate the suite without executing its test keywords. |
 | Arguments | Additional Robot options, such as `--loglevel DEBUG` or `--variable ENV:staging`. |
 
-Tag filters apply to project and suite runs. An explicitly selected individual test
-or set of individual tests bypasses the include/exclude tag filters; this also
-applies to **Run visible**, which passes an explicit list of tests. The template's
+Tag filters apply to project and suite runs, and to watch runs. An explicitly
+selected individual test or set of individual tests bypasses the include/exclude
+tag filters; this also applies to **Run visible**, which passes an explicit list of
+tests. The template's
 setup uses `${BROWSER}` and `${HEADLESS}`; recorded source with literal values must
 be adapted if you want those controls to affect it.
 

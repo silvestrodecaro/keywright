@@ -24,8 +24,8 @@
       const [must, ...mustNot] = text.split('NOT').map(compile);
       return (tags) => must(tags) && !mustNot.some((part) => part(tags));
     }
-    if (text.includes('AND')) {
-      const parts = text.split('AND').map(compile);
+    if (text.includes('AND') || text.includes('&')) {
+      const parts = text.split(/AND|&/).map(compile);
       return (tags) => parts.every((part) => part(tags));
     }
     const normalized = normalize(text);
