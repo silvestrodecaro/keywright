@@ -183,3 +183,27 @@ test('a run that fails to start closes its listener and can be retried', { skip 
   assert.strictEqual(runner._server, null, 'the listener socket stays open');
   await assert.rejects(runner.run(project, {}), (error) => !/already running/.test(error.message));
 });
+
+test('only the run\'s own listener is heard on the event port', { skip, timeout: 60_000 }, async () => {
+  const net = require('net');
+  const runner = new TestRunner();
+  const events = [];
+  runner.on('event', (event) => events.push(event));
+  const finished = new Promise((resolve) => runner.once('finished', resolve));
+  const listening = runner._listen.bind(runner);
+  let intruder;
+  // Another local process connects to the port before Robot does and sends an event.
+  runner._listen = async () => {
+    const port = await listening();
+    intruder = net.connect(port, '127.0.0.1', () => intruder.write(`${JSON.stringify({ type: 'test-end', id: 'Forged', status: 'PASS' })}\n`));
+    intruder.on('error', () => {});
+    await new Promise((resolve) => intruder.once('connect', resolve));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return port;
+  };
+  await runner.run(fixtureProject(), { select: ['Tests.Basic.Passing Test'] });
+  await finished;
+  intruder.destroy();
+  assert.ok(!events.some((event) => event.id === 'Forged'), 'an event from another process was accepted');
+  assert.deepStrictEqual(testEnds(events), { 'Tests.Basic.Passing Test': 'PASS' });
+});

@@ -102,3 +102,14 @@ test('a line of stdout that is JSON but not a response is ignored', () => {
   assert.doesNotThrow(() => worker._onData('null\n42\n"text"\n'));
   worker.dispose();
 });
+
+test('a request that is JSON but not an object does not stop the worker', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
+  const worker = new LanguageWorker(python, root);
+  try {
+    worker._ensureStarted().stdin.write('[1, 2]\n');
+    const { problems } = await worker.request('check', { path: 'tests/ok.robot', text: '*** Test Cases ***\nT\n    Log    x\n' });
+    assert.deepStrictEqual(problems, []);
+  } finally {
+    worker.dispose();
+  }
+});

@@ -7,6 +7,7 @@ const { EventEmitter } = require('events');
 const { spawn } = require('child_process');
 const { pythonEnv, runHelper } = require('./pythonHelper');
 const { killTree } = require('./processes');
+const { randomUUID, timingSafeEqual } = require('crypto');
 
 /**
  * Builds the suite/test tree of `project` with Robot's own parser.
@@ -99,6 +100,7 @@ class TestRunner extends EventEmitter {
       cwd: project.root,
       env: pythonEnv({
         KEYWRIGHT_PORT: String(port),
+        KEYWRIGHT_TOKEN: this._token,
         KEYWRIGHT_SELECT: JSON.stringify(options.select || []),
         // Browser library: record a Playwright trace for every `New Context`.
         ...(options.trace ? { ROBOT_FRAMEWORK_BROWSER_TRACING: 'true' } : {}),
@@ -176,9 +178,11 @@ class TestRunner extends EventEmitter {
   }
 
   _listen() {
+    // The listener's first line presents this token; other local connections are closed.
+    this._token = randomUUID();
     return new Promise((resolve, reject) => {
       const server = net.createServer((socket) => {
-        this._socket = socket;
+        let accepted = false;
         let buffer = '';
         socket.setEncoding('utf8');
         socket.on('data', (chunk) => {
@@ -189,6 +193,15 @@ class TestRunner extends EventEmitter {
             buffer = buffer.slice(newline + 1);
             if (!line.trim())
               continue;
+            if (!accepted) {
+              if (this._socket || !this._isHello(line)) {
+                socket.destroy();
+                return;
+              }
+              accepted = true;
+              this._socket = socket;
+              continue;
+            }
             try {
               const event = JSON.parse(line);
               if (event.type === 'step-start' && event.source)
@@ -211,6 +224,17 @@ class TestRunner extends EventEmitter {
         resolve(server.address().port);
       });
     });
+  }
+
+  _isHello(line) {
+    try {
+      const hello = JSON.parse(line);
+      return hello?.type === 'hello' && typeof hello.token === 'string'
+        && hello.token.length === this._token.length
+        && timingSafeEqual(Buffer.from(hello.token), Buffer.from(this._token));
+    } catch {
+      return false;
+    }
   }
 
   _closeServer() {

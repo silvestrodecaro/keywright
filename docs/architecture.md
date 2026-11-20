@@ -209,6 +209,11 @@ The helper identifies tests by full names because Robot's positional IDs change
 when suites are filtered. Listener events are newline-delimited JSON sent over the
 local socket. They describe suite/test starts and ends, body items, logs, traces and
 debugger state. Debugger commands travel in the opposite direction over the socket.
+The listener's first line presents a token generated for the run and passed in the
+environment; the runner closes connections without it and accepts only one, so
+another local process cannot send events or receive debugger commands. The Python
+side skips malformed command lines. When the connection closes, the debugger
+detaches: breakpoints and pause-on-failure are dropped and the run continues.
 
 The Python debugger handles breakpoints, conditions, stepping, pause-on-failure,
 stack/variable inspection and evaluation in the running test. Paths are normalized
@@ -226,10 +231,13 @@ target all watched tests.
 There are two helper modes:
 
 - `runHelper()` starts a one-shot process for discovery, project indexing or libdoc.
-  Its result is the last JSON line on stdout, allowing imported libraries to print
-  earlier diagnostic text.
+  Its result is the last stdout line starting with `KEYWRIGHT-RESULT `, so imported
+  libraries can print before it and their exit handlers after it. The project root
+  is on `sys.path`, as for `python -m robot`, so libraries named by module in the
+  project folder are found.
 - `LanguageWorker` keeps a `serve` process for syntax and Robocop lint requests.
-  Requests have IDs, newline framing and a 15-second timeout. A request left
+  Requests have IDs, newline framing and a 15-second timeout. Responses have stdout
+  to themselves: during `serve`, what libraries print goes to stderr. A request left
   unanswered stops the worker, so the next one starts a new process; so does a
   worker that exited. Errors include the end of the worker's error output.
 

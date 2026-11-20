@@ -24,6 +24,16 @@ run from source; there are no installers yet.
 - The window opens even when the MCP server cannot start.
 - An AI deletion whose copy could not be made shows why, and deletions made at
   the same time keep separate copies for undo.
+- A debug run whose connection to Keywright closes no longer stops forever at
+  the next failure, and a malformed debugger command no longer ends debugging.
+- Pausing shows a variable whose value cannot be displayed by its type instead
+  of skipping the pause.
+- Only the run's own Robot process can send events to the Testing panel and
+  receive debugger commands.
+- Keyword documentation is read for libraries that print when Python exits, and
+  for libraries imported by module name from the project folder.
+- Text that a library prints while the editor checks a file no longer delays
+  the check until it times out.
 
 ## 0.5.0 - 2026-11-16
 

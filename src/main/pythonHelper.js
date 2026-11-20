@@ -8,6 +8,8 @@ const { childProcesses, killTree } = require('./processes');
 // Discovery, the keyword index and library documentation of large libraries take
 // seconds; a helper still running after this long is stuck, often at an import.
 const HELPER_TIMEOUT_MS = 180_000;
+// Starts the helper's result line (RESULT_PREFIX in keywright_runner.py).
+const RESULT_PREFIX = 'KEYWRIGHT-RESULT ';
 
 // Keywright runs from source. Should it be packaged in app.asar again, the helper
 // must be unpacked: it is run by the project's Python, which cannot read archives.
@@ -37,7 +39,10 @@ function runHelper(python, args, { cwd, timeoutMs = HELPER_TIMEOUT_MS } = {}) {
             + '(a library may be waiting at import). Close and reopen the project to try again.' });
           return;
         }
-        const line = String(stdout).trim().split('\n').pop();
+        // The result line has a prefix: libraries may print after it while Python exits.
+        const lines = String(stdout).trim().split('\n');
+        const marked = lines.findLast((text) => text.startsWith(RESULT_PREFIX));
+        const line = marked ? marked.slice(RESULT_PREFIX.length) : lines.pop();
         try {
           resolve(JSON.parse(line));
         } catch {
