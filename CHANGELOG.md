@@ -71,6 +71,18 @@ run from source; there are no installers yet.
 - An address such as `localhost:3000` opens as `http://localhost:3000` in the
   recorder and the AI browser.
 
+### Security
+
+- A Python interpreter that `keywright.json` sets outside the project folder is
+  used only after you confirm it, once per project. One chosen in Project
+  Settings counts as confirmed.
+- Robot reports and traces are refused to other host names and to web pages
+  (DNS rebinding), and the previous project's folders are no longer served.
+- Report and trace frames are sandboxed and get no browser permissions.
+- **Test connection** shows the command and asks first when it comes from a
+  configuration file inside the project.
+- `SECURITY.md` describes what opening a project runs and the MCP threat model.
+
 ## 0.5.0 - 2026-11-16
 
 ### Added

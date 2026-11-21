@@ -38,7 +38,8 @@ const test = base.extend({
       const configPath = path.join(project, 'keywright.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       fs.writeFileSync(configPath, JSON.stringify({ ...config, python: path.resolve(python) }));
-      const env = { ...process.env };
+      // The project's keywright.json names this interpreter, outside the project folder.
+      const env = { ...process.env, KEYWRIGHT_TRUSTED_PYTHON: path.resolve(python) };
       delete env.ELECTRON_RUN_AS_NODE;
       if (recorderAccess) env.KEYWRIGHT_TEST = '1';
       const launch = async (openProject) => {

@@ -46,7 +46,7 @@ test('files to include', () => {
 });
 
 test('a regex with escapes that only non-Unicode patterns accept still searches', () => {
-  const text = String.raw`Log    a-b` + '\n' + String.raw`Log    \#x: y`;
+  const text = 'Log    a-b\n' + String.raw`Log    \#x: y`;
   assert.deepStrictEqual(where(findInText(text, buildRegex({ query: String.raw`a\-b`, regex: true }))), ['1:8+3']);
   // Robot escapes a leading # as \#: the regex \\\# finds the backslash and the #.
   assert.deepStrictEqual(where(findInText(text, buildRegex({ query: String.raw`\\\#x\:`, regex: true }))), ['2:8+4']);

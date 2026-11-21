@@ -408,6 +408,12 @@ Changing project locations changes the keys used for project-specific renderer
 settings.
 
 `TraceServer` serves Playwright's viewer and permitted output paths on `127.0.0.1`.
+Requests whose `Host` is not a loopback name, or whose `Origin` is not local, receive
+HTTP 403, as for the MCP server. The allowed folders are forgotten when a project
+opens or closes; opening a trace allows the open project's results folder. The
+frames showing reports and traces are sandboxed (scripts, popups and downloads, no
+top navigation), and the session grants permissions only to the app's own page
+(clipboard, for Monaco's Copy and Paste).
 Malformed URL paths and paths containing NUL receive HTTP 400 before filesystem
 access. A rejected request leaves the server available for subsequent requests.
 Output and trace requests also check canonical destinations against their allowed

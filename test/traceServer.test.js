@@ -107,7 +107,7 @@ test('malformed request paths return 400 without escaping the request handler', 
   for (const url of ['/trace/%', '/trace/%E0%A4%A', '/output/%ZZ', '/output/%00', '/trace/file?path=%00', 'http://[']) {
     let status;
     const response = { writeHead: (value) => { status = value; }, end() {} };
-    assert.doesNotThrow(() => server._handle({ method: 'GET', url }, response), url);
+    assert.doesNotThrow(() => server._handle({ method: 'GET', url, headers: { host: '127.0.0.1:1' } }, response), url);
     assert.strictEqual(status, 400, url);
   }
 });
@@ -197,4 +197,24 @@ test('two first requests share one server', async (t) => {
   const outputDir = tempDir('output-shared');
   const [first, second] = await Promise.all([server.outputUrl(outputDir, 'log.html'), server.outputUrl(outputDir, 'report.html')]);
   assert.strictEqual(new URL(first).port, new URL(second).port);
+});
+
+test('reports are served to local pages only, not to other hosts or web pages', async (t) => {
+  const http = require('node:http');
+  const results = tempDir('output-hosts');
+  fs.writeFileSync(path.join(results, 'log.html'), '<html>log</html>');
+  const server = new TraceServer();
+  t.after(() => server.stop());
+  const url = new URL(await server.outputUrl(results, 'log.html'));
+  const status = (headers) => new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: url.port, path: url.pathname, headers }, (response) => {
+      response.resume();
+      resolve(response.statusCode);
+    }).on('error', reject);
+  });
+  assert.strictEqual(await status({}), 200);
+  assert.strictEqual(await status({ Origin: `http://127.0.0.1:${url.port}` }), 200);
+  // DNS rebinding: a web page's name resolving to 127.0.0.1.
+  assert.strictEqual(await status({ Host: `attacker.example:${url.port}` }), 403);
+  assert.strictEqual(await status({ Origin: 'https://attacker.example' }), 403);
 });

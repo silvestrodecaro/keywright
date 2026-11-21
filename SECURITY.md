@@ -31,6 +31,29 @@ loading keyword documentation for the editor imports the project's Python
 libraries, as the same commands would from the command line. Only open and run
 projects you trust.
 
+Opening a project is enough to run some of its code: to list keywords and check
+files, Keywright starts the project's Python (`.venv`, or the interpreter in
+`keywright.json`) and imports the project's libraries; Robocop reads the project's
+configuration. An interpreter outside the project folder is used only after you
+confirm it, once per project, or when you chose it in Project Settings. Git
+commands in the Source Control panel use the repository's own configuration,
+including hooks and filters, as Git does from the command line.
+
+### AI clients (MCP server)
+
+The MCP server is off until you turn it on. A client holding its token can do what
+the tools offer: read and change project files, run tests and drive a browser.
+Treat what the AI reads, such as web pages in its browser, as untrusted input that
+can steer it. Keywright limits that browser to web pages (`http`, `https`) and
+files inside the open project, refuses edits to files with unsaved changes, and
+lists every file change with undo; it does not ask before the AI runs tests.
+**Test connection** shows the command first when it comes from a configuration
+file inside the project.
+
+Robot reports and Playwright traces are served on `127.0.0.1` to Keywright's own
+frames only: requests from other host names (DNS rebinding) or web pages are
+refused. Those frames get no browser permissions and cannot navigate the window.
+
 Problems in Robot Framework, Browser library, Playwright or Electron belong to
 those projects. Report them upstream, and tell us if Keywright needs to change a
 dependency version as a result.

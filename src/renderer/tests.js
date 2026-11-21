@@ -369,6 +369,8 @@
     });
     const name = testIndex.get(traceView.testId)?.test.name || traceView.testId;
     const frame = el('iframe', { className: 'trace-frame', src: traceView.url, title: `Trace of ${name}` });
+    // Scripts and its service worker, but no navigation of the Keywright window.
+    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads');
     target.replaceChildren(
       el('div', { className: 'trace-bar' }, back, el('span', { className: 'muted', textContent: `Trace · ${name}` })),
       frame);

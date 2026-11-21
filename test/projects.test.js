@@ -255,3 +255,18 @@ test('a file that is not UTF-8 opens without content and says why, so a save can
   assert.equal(file.content, null);
   assert.match(file.reason, /not UTF-8/);
 });
+
+test('an interpreter configured outside the project folder is reported for confirmation', () => {
+  const root = tempDir('external-python');
+  const outside = path.join(tempDir('other-python'), 'python.exe');
+  fs.writeFileSync(outside, '');
+  fs.writeFileSync(path.join(root, 'keywright.json'), JSON.stringify({ python: outside }));
+  assert.equal(projects.externalInterpreter(projects.loadProject(root)), outside);
+
+  fs.mkdirSync(path.join(root, 'tools'));
+  fs.writeFileSync(path.join(root, 'tools', 'python.exe'), '');
+  fs.writeFileSync(path.join(root, 'keywright.json'), JSON.stringify({ python: 'tools/python.exe' }));
+  assert.equal(projects.externalInterpreter(projects.loadProject(root)), null);
+  fs.writeFileSync(path.join(root, 'keywright.json'), '{}');
+  assert.equal(projects.externalInterpreter(projects.loadProject(root)), null);
+});

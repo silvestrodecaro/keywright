@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const { existsSync } = require('fs');
 const { pathToFileURL } = require('url');
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, session: electronSession } = require('electron');
 const os = require('os');
 const { installStartupDiagnostics } = require('./startupDiagnostics');
 const { CrashReports } = require('./crashReports');
@@ -63,6 +63,7 @@ const { ChangeLog } = require('./mcp/changes');
 const { clientConfigs, clientLocations, clientStates, connectionPlan } = require('./mcp/clients');
 const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
 const { childProcesses } = require('./processes');
+const { readJson, writeJsonAtomic } = require('./jsonFile');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -179,14 +180,90 @@ async function stopProjectServices() {
   await runner.stop();
   stopLanguageWorker();
   stopWatchingProject();
+  traceServer.forget();
   await session.stop();
   session.clear();
   await pickerSession.stop();
 }
 
+// ---------------------------------------------------------------------------
+// Interpreters outside the project folder, configured in keywright.json: Keywright runs
+// them by itself (keywords, checks), so the user confirms each one once per project.
+
+function trustedInterpretersFile() {
+  return path.join(app.getPath('userData'), 'trusted-interpreters.json');
+}
+
+function projectKey(root) {
+  const resolved = path.resolve(root);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function samePath(a, b) {
+  return projectKey(a) === projectKey(b);
+}
+
+function interpreterTrusted(project, python) {
+  // Set by the user's environment, as the UI tests do for the repository's Python.
+  if (process.env.KEYWRIGHT_TRUSTED_PYTHON && samePath(process.env.KEYWRIGHT_TRUSTED_PYTHON, python))
+    return true;
+  try {
+    const stored = readJson(trustedInterpretersFile());
+    const trusted = stored.status === 'ok' && stored.value ? stored.value[projectKey(project.root)] : null;
+    return typeof trusted === 'string' && samePath(trusted, python);
+  } catch {
+    return false;
+  }
+}
+
+/** The project without its interpreter when that is outside the folder and not confirmed. */
+function withTrustedInterpreter(project) {
+  const external = projects.externalInterpreter(project);
+  return external && !interpreterTrusted(project, external) ? { ...project, python: null } : project;
+}
+
+/** Asks about an interpreter outside the project the first time; the answer "use" is kept. */
+async function confirmInterpreter(project) {
+  const external = projects.externalInterpreter(project);
+  if (!external || interpreterTrusted(project, external))
+    return project;
+  const options = {
+    type: 'warning',
+    buttons: ['Use This Interpreter', 'Open Without It'],
+    defaultId: 1,
+    cancelId: 1,
+    message: 'This project uses a Python interpreter outside its folder.',
+    detail: `keywright.json sets:\n\n${external}\n\nKeywright runs it as soon as the project opens, to read keywords `
+      + 'and check files, and when tests run. Use it only if you trust this project and the program at that path.',
+  };
+  const { response } = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showMessageBox(mainWindow, options) : await dialog.showMessageBox(options);
+  if (response !== 0)
+    return { ...project, python: null };
+  trustInterpreter(project.root, external);
+  return project;
+}
+
+/** Remembers that the user accepted, or chose, this interpreter for this project. */
+function trustInterpreter(root, python) {
+  try {
+    const file = trustedInterpretersFile();
+    const stored = readJson(file);
+    const value = stored.status === 'ok' && stored.value && typeof stored.value === 'object' ? stored.value : {};
+    writeJsonAtomic(file, { ...value, [projectKey(root)]: python }, { space: 2 });
+  } catch (error) {
+    console.error(`Could not remember the interpreter: ${error.message}`); // asked again next time
+  }
+}
+
+/** The open project read again from disk, with the interpreter choice applied. */
+function reloadProject() {
+  return withTrustedInterpreter(projects.loadProject(currentProject.root));
+}
+
 function openProject(root) {
   return projectTransitionTask(async () => {
-    const project = projects.loadProject(root);
+    const project = await confirmInterpreter(projects.loadProject(root));
     await stopProjectServices();
     currentProject = project;
     sourceControl = new SourceControl(project.root);
@@ -234,7 +311,12 @@ ipcMain.handle('project:save-settings', (_event, values) => {
   if (!currentProject)
     return { ok: false, errors: {}, error: 'No project is open.' };
   try {
-    return projectSettings.writeSettings(currentProject.root, values || {});
+    const result = projectSettings.writeSettings(currentProject.root, values || {});
+    // An interpreter chosen here is the user's choice: reopening the project does not ask about it.
+    const chosen = result.ok && projects.externalInterpreter(projects.loadProject(currentProject.root));
+    if (chosen)
+      trustInterpreter(currentProject.root, chosen);
+    return result;
   } catch (error) {
     return { ok: false, errors: {}, error: error.message };
   }
@@ -410,7 +492,7 @@ ipcMain.handle('project:delete-path', async (_event, relative, unsaved = 0) => {
 ipcMain.handle('project:keywords', async () => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.', keywords: [], errors: [] };
-  currentProject = projects.loadProject(currentProject.root);
+  currentProject = reloadProject();
   return keywordIndex.build(currentProject);
 });
 
@@ -545,7 +627,7 @@ ipcMain.handle('tests:discover', () => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.' };
   // Reload: the virtual environment may have been created since the project was opened.
-  currentProject = projects.loadProject(currentProject.root);
+  currentProject = reloadProject();
   return discoverTests(currentProject);
 });
 
@@ -598,6 +680,9 @@ ipcMain.handle('tests:trace-url', async (_event, traceFile) => {
   if (!traceFile || !existsSync(traceFile))
     return { ok: false, error: 'The trace is written when the browser context is closed: at the end of the test, or of the suite when the context was created in a suite setup.' };
   try {
+    // Traces of the open project's results, also of runs before it was reopened.
+    if (currentProject)
+      traceServer.allow([path.resolve(currentProject.root, currentProject.config.outputDir)]);
     return { ok: true, url: await traceServer.urlFor(traceFile) };
   } catch (error) {
     return { ok: false, error: error.message };
@@ -781,7 +866,7 @@ function createMcpService() {
     dirtyPaths: () => editorDirtyPaths,
     trash: (entry) => shell.trashItem(entry),
     keywords: async () => {
-      currentProject = projects.loadProject(currentProject.root);
+      currentProject = reloadProject();
       return keywordIndex.build(currentProject);
     },
     check: async (relative, text) => {
@@ -796,7 +881,7 @@ function createMcpService() {
       }
     },
     discover: async () => {
-      currentProject = projects.loadProject(currentProject.root);
+      currentProject = reloadProject();
       return discoverTests(currentProject);
     },
     runner,
@@ -855,6 +940,31 @@ ipcMain.handle('mcp:undo-change', (_event, id) => mcpService() && aiChanges.undo
 }));
 // Tests what the client will start: the entry in its own file when there is one,
 // otherwise the configuration offered (reported as not configured yet).
+/**
+ * An entry read from a file inside the open project was written by whoever made the
+ * project: its command runs (or its address is called) only after the user has seen it.
+ */
+async function confirmProjectEntry(plan) {
+  const relative = currentProject && plan.file ? path.relative(currentProject.root, plan.file) : '..';
+  if (relative.startsWith('..') || path.isAbsolute(relative))
+    return true; // the client's own file, in the user's profile
+  const what = plan.config
+    ? [plan.config.command, ...(plan.config.args || [])].join(' ')
+      + Object.keys(plan.config.env || {}).map((name) => `\n${name}=${plan.config.env[name]}`).join('')
+    : plan.url;
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Run Test', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    message: 'Test the connection with the project\'s configuration?',
+    detail: `${relative.split(path.sep).join('/')} in the open project configures the server as:\n\n${what}\n\n`
+      + (plan.config ? 'The test runs this command with your permissions.' : 'The test sends requests to this address.')
+      + ' Continue only if you trust this project.',
+  });
+  return response === 0;
+}
+
 ipcMain.handle('mcp:test-connection', async (_event, clientId) => {
   const status = mcpService().status();
   if (!status.running)
@@ -863,6 +973,8 @@ ipcMain.handle('mcp:test-connection', async (_event, clientId) => {
     const plan = connectionPlan(clientId, status, clientLocations({ project: currentProject?.root }));
     if (plan.kind === 'unreadable')
       return { ok: false, scope: 'client', file: plan.file, error: plan.error };
+    if (plan.kind === 'client' && !(await confirmProjectEntry(plan)))
+      return { ok: false, scope: 'client', file: plan.file, error: 'The test was cancelled.' };
     const result = plan.config ? await testConnection(plan.config) : await testHttpConnection(plan.url, plan.token);
     return { ...result, scope: plan.kind, file: plan.file || null };
   } catch (error) {
@@ -1020,6 +1132,15 @@ app.whenReady().then(async () => {
   // The IDE has a dark UI: dark native dialogs and scrollbars, and the embedded
   // Playwright trace viewer follows prefers-color-scheme.
   nativeTheme.themeSource = 'dark';
+  // Electron grants permissions by default. Only the app's own page may use the clipboard
+  // (Monaco's Copy and Paste); Robot reports and traces in frames, project content that can
+  // run scripts, get nothing.
+  const ownPage = (url) => String(url || '').startsWith('file:');
+  const clipboardPermission = (permission) => /^clipboard-(read|sanitized-write)$/.test(permission);
+  electronSession.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
+    callback(clipboardPermission(permission) && ownPage(details.requestingUrl)));
+  electronSession.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) =>
+    clipboardPermission(permission) && ownPage(details?.requestingUrl || requestingOrigin));
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   recovery.removeLeftovers();

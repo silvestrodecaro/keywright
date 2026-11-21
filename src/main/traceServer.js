@@ -36,6 +36,16 @@ const VIEWER_STYLE = `<style>
 ::-webkit-scrollbar-button { display: none; }
 </style>`;
 
+const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+
+function isLocalOrigin(origin) {
+  try {
+    return LOCAL_HOST.test(new URL(origin).host);
+  } catch {
+    return false;
+  }
+}
+
 function isInside(dir, file) {
   const relative = path.relative(dir, file);
   return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -63,6 +73,12 @@ class TraceServer {
   }
 
   /** Folders whose .zip traces may be served (e.g. the open project's results folder). */
+  /** Serves nothing of the previous project's folders (another project opens or it closes). */
+  forget() {
+    this._allowed = [];
+    this._outputDir = null;
+  }
+
   allow(dirs) {
     this._allowed = dirs.map((dir) => path.resolve(dir));
   }
@@ -103,6 +119,11 @@ class TraceServer {
   }
 
   _handle(request, response) {
+    // Only Keywright's own frames: a web page whose name resolves to 127.0.0.1 (DNS
+    // rebinding) or that requests across origins must not read test reports and traces.
+    const origin = request.headers?.origin;
+    if (!LOCAL_HOST.test(request.headers?.host || '') || (origin && !isLocalOrigin(origin)))
+      return this._send(response, 403);
     let url, pathname;
     try {
       url = new URL(request.url, 'http://127.0.0.1');

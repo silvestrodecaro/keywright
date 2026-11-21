@@ -183,6 +183,18 @@ async function createProject(request, callbacks = {}) {
  * Loads the project at `root`. Any folder can be opened; keywright.json is optional.
  * @returns {{ root: string, name: string, config: typeof DEFAULT_CONFIG, python: string | null }}
  */
+/**
+ * The project's interpreter when keywright.json points outside the project folder, else
+ * null. Keywright runs it on its own when the project opens (keywords, checks), so the
+ * user confirms an interpreter that the project's author chose.
+ */
+function externalInterpreter(project) {
+  if (!project.python || !project.config.python)
+    return null;
+  const relative = path.relative(project.root, project.python);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? project.python : null;
+}
+
 function loadProject(root) {
   const resolved = path.resolve(root);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
@@ -389,4 +401,5 @@ module.exports = {
   createProjectFile,
   resolveInProject,
   decodeUtf8,
+  externalInterpreter,
 };
