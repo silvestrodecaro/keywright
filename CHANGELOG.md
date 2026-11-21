@@ -77,6 +77,9 @@ run from source; there are no installers yet.
   selector Playwright recorded.
 - An AI text check is compared as the generated `Get Text` step will compare it,
   so a check that passes in the AI browser also passes in the test.
+- Runs with many tests or log messages no longer keep the window busy: the
+  Testing panel receives events in batches, redraws a few times a second and
+  appends console output instead of rewriting it.
 
 ### Security
 

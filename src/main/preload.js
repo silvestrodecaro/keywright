@@ -72,7 +72,8 @@ contextBridge.exposeInMainWorld('keywright', {
   openTestOutput: (file) => ipcRenderer.invoke('tests:open-output', file),
   testOutputUrl: (file) => ipcRenderer.invoke('tests:output-url', file),
   traceUrl: (traceFile) => ipcRenderer.invoke('tests:trace-url', traceFile),
-  onTestEvent: (callback) => subscribe('tests:event', callback),
+  // Events arrive in batches (main.js); the panel still handles them one by one.
+  onTestEvent: (callback) => subscribe('tests:events', (events) => { for (const event of events) callback(event); }),
   onTestOutput: (callback) => subscribe('tests:output', callback),
   onTestsFinished: (callback) => subscribe('tests:finished', callback),
 

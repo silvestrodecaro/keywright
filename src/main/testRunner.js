@@ -74,6 +74,7 @@ class TestRunner extends EventEmitter {
   async _start(project, options) {
     const port = await this._listen();
     this._root = fs.realpathSync.native(project.root); // Robot reports long paths, not 8.3 short names
+    this._relativeCache = new Map();
     const breakpoints = options.debug ? this._absoluteBreakpoints(options.debug.breakpoints) : null;
     const outputDir = path.resolve(project.root, project.config.outputDir);
     const args = [
@@ -155,6 +156,9 @@ class TestRunner extends EventEmitter {
   _relative(source) {
     if (!source || !this._root)
       return source;
+    // Every step reports its file: each one is resolved once per run.
+    if (this._relativeCache.has(source))
+      return this._relativeCache.get(source);
     let real = source;
     try {
       real = fs.realpathSync.native(source); // Robot keeps the form of the path it was given (8.3 or long)
@@ -162,7 +166,9 @@ class TestRunner extends EventEmitter {
       // not a file on disk: keep it as is
     }
     const relative = path.relative(this._root, real);
-    return relative.startsWith('..') || path.isAbsolute(relative) ? source : relative.split(path.sep).join('/');
+    const result = relative.startsWith('..') || path.isAbsolute(relative) ? source : relative.split(path.sep).join('/');
+    this._relativeCache.set(source, result);
+    return result;
   }
 
   /** Stops the running tests. @returns {Promise<void>} resolves once Robot has exited */

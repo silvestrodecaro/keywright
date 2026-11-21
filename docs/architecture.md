@@ -211,7 +211,12 @@ Running disk contents without saving requires an explicit choice and leaves a
 visible notice. Watch runs pause without a dialog while buffers are dirty.
 
 The helper identifies tests by full names because Robot's positional IDs change
-when suites are filtered. Listener events are newline-delimited JSON sent over the
+when suites are filtered. The main process forwards listener events and console
+output to the renderer in batches every 50 ms (`tests:events`, see
+[eventBatch.js](../src/main/eventBatch.js)); debugger events and the end of the run
+are sent at once, after everything before them. While tests run, the Testing panel
+redraws at most every 150 ms and the console appends new text instead of replacing
+it. Listener events are newline-delimited JSON sent over the
 local socket. They describe suite/test starts and ends, body items, logs, traces and
 debugger state. Debugger commands travel in the opposite direction over the socket.
 The listener's first line presents a token generated for the run and passed in the

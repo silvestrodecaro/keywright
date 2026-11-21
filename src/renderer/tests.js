@@ -66,19 +66,26 @@
   // Rendering (batched: listener events can arrive by the hundreds)
 
   let renderQueued = false;
+  // While tests run, events arrive continuously: rebuilding the panel for each frame
+  // would keep the renderer busy, so it is redrawn at most this often.
+  const RUN_RENDER_MS = 150;
+  let lastRender = 0;
+
   function scheduleRender() {
     if (renderQueued)
       return;
     renderQueued = true;
-    requestAnimationFrame(() => {
+    const wait = running ? Math.max(0, RUN_RENDER_MS - (performance.now() - lastRender)) : 0;
+    setTimeout(() => requestAnimationFrame(() => {
       renderQueued = false;
+      lastRender = performance.now();
       renderTree();
       renderSummary();
       renderDetail();
       renderControls();
       renderDebug();
       pushEditorStates();
-    });
+    }), wait);
   }
 
   function testMatches(test) {
@@ -760,10 +767,16 @@
   });
 
   api.onTestOutput((text) => {
-    output = (output + text).slice(-MAX_OUTPUT);
+    output += text;
     const pre = $('#console-output');
     const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
-    pre.textContent = output;
+    // New text is appended; the whole console is rewritten only when it is shortened.
+    if (output.length > MAX_OUTPUT * 1.2) {
+      output = output.slice(-MAX_OUTPUT);
+      pre.textContent = output;
+    } else {
+      pre.append(text);
+    }
     if (atBottom)
       pre.scrollTop = pre.scrollHeight;
   });

@@ -64,6 +64,7 @@ const { clientConfigs, clientLocations, clientStates, connectionPlan } = require
 const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
 const { childProcesses } = require('./processes');
 const { readJson, writeJsonAtomic } = require('./jsonFile');
+const { Batch } = require('./eventBatch');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -603,6 +604,15 @@ ipcMain.handle('project:reveal', (_event, relative) => {
 
 const runHistory = new RunHistory();
 
+// A run can log thousands of messages a second: the Testing panel receives them in
+// batches, a few IPC messages a second, rather than one each.
+const testEvents = new Batch((events) => send('tests:events', events), 50);
+const testOutput = new Batch((chunks) => send('tests:output', chunks.join('')), 50);
+function flushRunMessages() {
+  testOutput.flush();
+  testEvents.flush();
+}
+
 runner.on('event', (event) => {
   runHistory.record(event);
   if (event.type === 'log' && event.html && runOutputDir) {
@@ -610,11 +620,15 @@ runner.on('event', (event) => {
     if (images.length)
       event.images = images.map((file) => pathToFileURL(file).href);
   }
-  send('tests:event', event);
+  testEvents.push(event);
+  // The debugger's pause and the end of a test are shown at once; the rest is batched.
+  if (event.type.startsWith('debug-'))
+    flushRunMessages();
 });
-runner.on('output', (text) => send('tests:output', text));
+runner.on('output', (text) => testOutput.push(text));
 runner.on('finished', (result) => {
   const run = runHistory.finish(result);
+  flushRunMessages(); // every event and output line arrives before the end of the run
   send('tests:finished', result);
   if (run)
     send('tests:history-added', run);
