@@ -61,3 +61,10 @@ test('call arguments with continuation lines', () => {
   const lines = ['*** Test Cases ***', 'T', '    Login As    ada', '    ...    secret', '    Log    x'];
   assert.deepStrictEqual(qf.callArguments(lines, 3, 4), ['ada', 'secret']);
 });
+
+test('END of an IF goes after its ELSE branch, not before it', () => {
+  const lines = ['T', '    IF    $x', '        Log    a', '    ELSE IF    $y', '        Log    b', '    ELSE', '        Log    c', '    Log    after'];
+  assert.deepStrictEqual(qf.endInsertion(lines, 2), { afterLine: 7, lines: ['    END'] });
+  const tried = ['T', '    TRY', '        Fail    x', '    EXCEPT    x', '        Log    caught', '    FINALLY', '        Log    done', '    Log    after'];
+  assert.deepStrictEqual(qf.endInsertion(tried, 2), { afterLine: 7, lines: ['    END'] });
+});

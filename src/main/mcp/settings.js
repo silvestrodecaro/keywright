@@ -2,7 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { randomBytes, randomUUID } = require('crypto');
+const { randomBytes } = require('crypto');
+const { readJson, writeJsonAtomic, parseJson } = require('../jsonFile');
 
 const DEFAULT_PORT = 47811;
 const SETTINGS_FILE = 'mcp.json';
@@ -14,10 +15,7 @@ function newToken() {
 
 /** Writes JSON through a temporary sibling, so a reader never sees half a file. */
 function writeJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
-  fs.renameSync(temporary, file);
+  writeJsonAtomic(file, value, { space: 2, mode: 0o600 });
 }
 
 /**
@@ -38,12 +36,10 @@ class McpSettings {
   read() {
     if (this._values)
       return this._values;
-    let stored = {};
-    try {
-      stored = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-    } catch {
-      // missing or unreadable: defaults, with a new token
-    }
+    // Missing or damaged (kept aside by readJson): defaults, with a new token. A file
+    // that cannot be read at all throws, so the token in it is not replaced.
+    const result = readJson(this.file);
+    const stored = result.status === 'ok' && result.value && typeof result.value === 'object' ? result.value : {};
     const values = {
       enabled: stored.enabled === true,
       token: typeof stored.token === 'string' && stored.token.length >= 32 ? stored.token : newToken(),
@@ -74,9 +70,27 @@ class McpSettings {
     writeJson(this.connectionFile, { url, token, pid: process.pid });
   }
 
+  /** Removes a connection file whose Keywright is no longer running (it crashed). */
+  removeStaleConnection() {
+    let pid;
+    try {
+      pid = parseJson(fs.readFileSync(this.connectionFile, 'utf8')).pid;
+    } catch {
+      return;
+    }
+    try {
+      process.kill(pid, 0); // still running: another Keywright owns it
+      return;
+    } catch (error) {
+      if (error.code === 'EPERM')
+        return; // running, owned by another user
+    }
+    fs.rmSync(this.connectionFile, { force: true });
+  }
+
   removeConnection() {
     try {
-      const current = JSON.parse(fs.readFileSync(this.connectionFile, 'utf8'));
+      const current = parseJson(fs.readFileSync(this.connectionFile, 'utf8'));
       if (current.pid !== process.pid)
         return; // another Keywright window owns it
     } catch {

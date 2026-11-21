@@ -20,11 +20,17 @@ class ProjectWatcher extends EventEmitter {
    * @param {{ ignore?: string[], delay?: number }} [options]
    *   ignore: extra project-relative folders (e.g. the results folder)
    */
-  constructor(root, { ignore = [], delay = 300 } = {}) {
+  constructor(root, { ignore = [], delay = 300, maxWait = 2000 } = {}) {
     super();
     this._root = root;
-    this._ignore = ignore.map((dir) => dir.replace(/\\/g, '/').replace(/\/+$/, '')).filter(Boolean);
+    // `./results/`, `results\`, an absolute path inside the project: compared as one form.
+    this._ignore = ignore.map((dir) => {
+      const relative = path.relative(root, path.resolve(root, String(dir).replace(/\\/g, '/')));
+      return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? fold(relative.split(path.sep).join('/')) : null;
+    }).filter(Boolean);
     this._delay = delay;
+    this._maxWait = maxWait; // changes that never pause (a large checkout) are reported this often
+    this._firstPending = 0;
     this._pending = new Set();
     this._timer = null;
     this._watcher = null;
@@ -47,7 +53,10 @@ class ProjectWatcher extends EventEmitter {
       if (filename)
         this._record(filename.toString());
     });
-    this._watcher.on('error', () => this.stop()); // e.g. the project folder was deleted
+    this._watcher.on('error', (error) => { // e.g. the project folder was deleted
+      this.stop();
+      this.emit('stopped', error);
+    });
   }
 
   stop() {
@@ -64,7 +73,8 @@ class ProjectWatcher extends EventEmitter {
     const parts = relative.split('/');
     if (parts.some((part) => IGNORED_DIRS.has(part)) || IGNORED_FILES.test(parts[parts.length - 1]))
       return false;
-    return !this._ignore.some((dir) => relative === dir || relative.startsWith(dir + '/'));
+    const folded = fold(relative);
+    return !this._ignore.some((dir) => folded === dir || folded.startsWith(dir + '/'));
   }
 
   _record(filename) {
@@ -78,14 +88,22 @@ class ProjectWatcher extends EventEmitter {
     } catch {
       // deleted: report it
     }
+    if (!this._pending.size)
+      this._firstPending = Date.now();
     this._pending.add(relative);
     clearTimeout(this._timer);
+    const waited = Date.now() - this._firstPending;
     this._timer = setTimeout(() => {
       const paths = [...this._pending].sort();
       this._pending.clear();
       this.emit('changes', paths);
-    }, this._delay);
+    }, Math.max(0, Math.min(this._delay, this._maxWait - waited)));
   }
+}
+
+/** Paths compared without case on Windows, where the file system ignores it. */
+function fold(relative) {
+  return process.platform === 'win32' ? relative.toLowerCase() : relative;
 }
 
 module.exports = { ProjectWatcher };

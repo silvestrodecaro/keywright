@@ -115,3 +115,29 @@ test('back reaches a page of another origin', { timeout: 60_000 }, async (t) => 
   assert.equal(stepOf(forward), 'Robot step:\n    Go Forward');
   assert.match(forward, /about:blank/);
 });
+
+test('a second start while the browser is launching is refused, and close waits for the launch', { timeout: 60_000 }, async () => {
+  const browser = new AgentBrowser();
+  const first = browser.start({ headless: true });
+  await assert.rejects(browser.start({ headless: true }), /already open/);
+  await first;
+  await browser.close();
+  assert.equal(browser.open, false);
+
+  const starting = browser.start({ headless: true });
+  await browser.close();
+  await assert.rejects(starting, /closed while it was starting/);
+  assert.equal(browser.open, false);
+});
+
+test('a text assertion is checked as the recorded Get Text step compares it', { timeout: 60_000 }, async (t) => {
+  const browser = new AgentBrowser();
+  t.after(() => browser.close());
+  await browser.start({ headless: true });
+  const snapshot = await browser.navigate('data:text/html,<p>Total<br>5</p>');
+  const ref = refOf(snapshot, 'paragraph');
+  // Get Text compares the rendered text, whose line break is not a space.
+  await assert.rejects(browser.assert(ref, 'text', { text: 'Total 5', exact: true }), /found "Total\\n5"/);
+  await browser.assert(ref, 'text', { text: 'Total\n5', exact: true });
+  await browser.assert(ref, 'text', { text: 'Total' });
+});

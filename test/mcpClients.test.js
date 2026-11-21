@@ -250,3 +250,35 @@ test("Test connection runs the entry from the client's own file, not the offered
   assert.equal((await run('codex')).kind, 'unreadable');
   assert.equal(connectionPlan('http', status, locations).kind, 'http');
 });
+
+test('the connection test reports a command that exits before reading its input', { timeout: 20_000 }, async () => {
+  // Exits at once without reading stdin, so writing the requests fails (EPIPE).
+  const result = await testConnection({ command: process.execPath, args: ['-e', 'process.stdin.destroy(); process.exit(3)'] });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /exited|could not/i);
+});
+
+test('the connection test survives a command that exits after its first answer', { timeout: 20_000 }, async () => {
+  // Answers initialize, then exits at once: the next requests are written to a closed pipe.
+  const script = `
+    process.stdin.once('data', () => {
+      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { serverInfo: { name: 'x' } } }) + '\n', () => process.exit(0));
+    });`;
+  const result = await testConnection({ command: process.execPath, args: ['-e', script] });
+  assert.equal(result.ok, false);
+});
+
+test('client files are read again only when they change', (t) => {
+  const home = tempDir('mcp-home-cache');
+  const locations = clientLocations({ home, env: { APPDATA: path.join(home, 'AppData', 'Roaming') } });
+  const file = locations['claude-code'][0];
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: { keywright: { type: 'stdio', ...sampleStatus.bridge } } }));
+  assert.equal(clientStates(sampleStatus, locations)['claude-code'].state, 'configured');
+  const reads = t.mock.method(fs, 'readFileSync');
+  assert.equal(clientStates(sampleStatus, locations)['claude-code'].state, 'configured');
+  assert.equal(reads.mock.calls.filter((call) => call.arguments[0] === file).length, 0);
+  reads.mock.restore();
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: {} }));
+  assert.equal(clientStates(sampleStatus, locations)['claude-code'].state, 'missing');
+});

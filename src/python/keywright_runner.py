@@ -7,7 +7,8 @@
 * ``python keywright_runner.py serve`` answers editor requests (syntax check of
   unsaved content) as JSON lines on stdin/stdout.
 * ``--listener keywright_runner.Listener`` streams execution events as JSON lines
-  to the TCP port in the ``KEYWRIGHT_PORT`` environment variable. With
+  to the TCP port in the ``KEYWRIGHT_PORT`` environment variable, after a first
+  ``hello`` line with the token in ``KEYWRIGHT_TOKEN``. With
   ``KEYWRIGHT_DEBUG=1`` it also reads debugger commands from that connection and
   pauses at the breakpoints in ``KEYWRIGHT_BREAKPOINTS`` (JSON {source: [lines]}).
 * ``--prerunmodifier keywright_runner.SelectTests`` keeps only the tests whose full
@@ -18,10 +19,12 @@ Suites and tests are identified by their full name (``Tests.Login.Valid User``):
 Robot's own ids (``s1-s2-t1``) are positional and change when tests are filtered.
 """
 
+import functools
 import json
 import os
 import queue
 import re
+import reprlib
 import socket
 import sys
 import threading
@@ -146,7 +149,13 @@ SINGLE_VARIABLE = re.compile(r"^[$@&%]\{.+\}(\[[^\]]*\])*$")
 
 def _normalize_source(path):
     # realpath: Windows 8.3 short names (NAME~1) and symlinks give the same key as Robot's paths.
-    return os.path.normcase(os.path.realpath(path)) if path else None
+    return _normalized(str(path)) if path else None
+
+
+@functools.lru_cache(maxsize=4096)
+def _normalized(path):
+    # Called before every body item while debugging: each file is resolved once per run.
+    return os.path.normcase(os.path.realpath(path))
 
 
 def _source(data):
@@ -159,8 +168,18 @@ def _variable_key(name):
     return name[2:-1].lower().replace(" ", "").replace("_", "")
 
 
+_REPR = reprlib.Repr()
+_REPR.maxstring = _REPR.maxother = 4000
+_REPR.maxlist = _REPR.maxtuple = _REPR.maxset = _REPR.maxdict = 200
+_REPR.maxlevel = 4
+
+
 def _value(value):
-    text = value if isinstance(value, str) else repr(value)
+    """A variable's value for the IDE: bounded, and safe when its repr fails."""
+    try:
+        text = value if isinstance(value, str) else _REPR.repr(value)
+    except Exception as error:
+        text = f"<{type(value).__name__}: repr failed: {error}>"
     return {"value": _truncate(text), "type": type(value).__name__}
 
 
@@ -176,6 +195,7 @@ class Debugger:
         self._mode = None  # None (run to breakpoints), "pause", "into", "over", "out"
         self._depth = 0  # body item depth of the last pause, for stepping
         self._failure_stopped = False  # stopped at a failure: its parents fail too, do not stop again
+        self._detached = False  # the IDE disconnected: never pause again
         threading.Thread(target=self._read, args=(sock,), daemon=True).start()
 
     @staticmethod
@@ -205,10 +225,17 @@ class Debugger:
 
     def _read(self, sock):
         try:
-            for line in sock.makefile("r", encoding="utf-8"):
-                if line.strip():
-                    self._commands.put(json.loads(line))
-        except (OSError, ValueError):
+            with sock.makefile("r", encoding="utf-8", errors="replace") as lines:
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    try:
+                        command = json.loads(line)
+                    except ValueError:
+                        continue  # one malformed line is not a reason to stop reading
+                    if isinstance(command, dict):
+                        self._commands.put(command)
+        except OSError:
             pass
         self._commands.put({"command": "detach"})  # the IDE went away: never block again
 
@@ -225,7 +252,10 @@ class Debugger:
         elif name == "pause":
             self._mode = "pause"
         elif name == "detach":
-            self._breakpoints = set()
+            # Nobody can resume a pause any more: the run continues without the debugger.
+            self._detached = True
+            self._breakpoints = {}
+            self._pause_on_failure = False
             self._mode = None
             return True
         elif name in ("continue", "into", "over", "out"):
@@ -275,6 +305,8 @@ class Debugger:
         self._pause("failure", data, result, depth, list(reversed(frames)), message=_truncate(result.message))
 
     def _pause(self, reason, data, result, depth, frames, message=None):
+        if self._detached:
+            return
         self._depth = depth
         self._listener._send({"type": "debug-paused", "reason": reason, "message": message,
                               "test": self._listener._test, "suite": self._listener._suite(),
@@ -353,23 +385,28 @@ class Listener:
         self._test = None
         self._suites = []  # full names of the running suites
         self._debugger = None
+        self._send_lock = threading.Lock()
         port = os.environ.get("KEYWRIGHT_PORT")
         if port:
             try:
                 self._socket = socket.create_connection(("127.0.0.1", int(port)), timeout=5)
                 self._socket.settimeout(None)  # the debugger waits for commands
-            except OSError as error:
+            except (OSError, ValueError) as error:
                 print(f"[keywright] cannot connect to the IDE: {error}", file=sys.__stderr__)
+        # The IDE listens only to the connection that presents its run's token.
+        self._send({"type": "hello", "token": os.environ.get("KEYWRIGHT_TOKEN", "")})
         if self._socket and os.environ.get("KEYWRIGHT_DEBUG") == "1":
             self._debugger = Debugger(self, self._socket)
 
     def _send(self, event):
-        if not self._socket:
-            return
-        try:
-            self._socket.sendall((json.dumps(event) + "\n").encode("utf-8"))
-        except OSError:
-            self._socket = None
+        # Keywords with [Timeout] run in another thread: one line is written at a time.
+        with self._send_lock:
+            if not self._socket:
+                return
+            try:
+                self._socket.sendall((json.dumps(event) + "\n").encode("utf-8"))
+            except OSError:
+                self._socket = None
 
     def start_suite(self, data, result):
         self._suites.append(result.full_name)
@@ -594,15 +631,31 @@ ROBOCOP_CONFIG_FILES = ("robocop.toml", "pyproject.toml", "robot.toml", ".roboco
 _linters = {}  # project root -> (config files' mtimes, ConfigManager, RobocopLinter)
 
 
-def _robocop_linter(root):
+def _config_stamp(root, path):
+    """Modification times of the configuration files Robocop can use for `path`: in its folder
+    and each folder above it up to the project root (a file added anywhere there counts)."""
+    folders = []
+    folder = os.path.dirname(os.path.abspath(path))
+    while True:
+        folders.append(folder)
+        if os.path.normcase(folder) == os.path.normcase(root) or os.path.dirname(folder) == folder:
+            break
+        folder = os.path.dirname(folder)
+    if os.path.normcase(root) not in (os.path.normcase(f) for f in folders):
+        folders.append(root)  # a file outside the project: the project's own configuration still applies
+    return tuple(os.path.getmtime(os.path.join(f, name)) if os.path.exists(os.path.join(f, name)) else None
+                 for f in folders for name in ROBOCOP_CONFIG_FILES)
+
+
+def _robocop_linter(root, path):
     from robocop.config.manager import ConfigManager
     from robocop.config.schema import RawConfig
     from robocop.linter.runner import RobocopLinter
 
-    stamp = tuple(os.path.getmtime(os.path.join(root, name)) if os.path.exists(os.path.join(root, name)) else None
-                  for name in ROBOCOP_CONFIG_FILES)
+    root = os.path.normcase(os.path.realpath(root))  # one linter per project, whatever the spelling
+    stamp = _config_stamp(root, path)
     cached = _linters.get(root)
-    if cached is None or cached[0] != stamp:  # created again when the configuration changes
+    if cached is None or cached[0] != stamp:  # created again when a configuration changes
         manager = ConfigManager(sources=[root], overwrite_config=RawConfig(silent=True))
         cached = (stamp, manager, RobocopLinter(manager))
         _linters[root] = cached
@@ -626,7 +679,7 @@ def lint(text, path, root):
     from pathlib import Path
 
     source = Path(path)
-    manager, linter = _robocop_linter(root)
+    manager, linter = _robocop_linter(root, path)
     if source.suffix.lower() == ".resource":
         model = get_resource_model(text)
     elif source.stem.lower() == "__init__":
@@ -642,27 +695,39 @@ def lint(text, path, root):
     return {"available": True, "problems": problems}
 
 
+RESULT_PREFIX = "KEYWRIGHT-RESULT "
+
+
 def serve():
     """Answers JSON requests, one per line on stdin: {"id", "command", ...}."""
     commands = {
         "check": lambda request: {"problems": check(request["text"], request.get("path", ""))},
         "lint": lambda request: lint(request["text"], request["path"], request["root"]),
     }
+    # Responses have stdout to themselves: what libraries and Robocop print goes to stderr.
+    responses = sys.stdout
+    sys.stdout = sys.stderr
     for line in sys.stdin:
         if not line.strip():
             continue
         request = {}
         try:
             request = json.loads(line)
+            if not isinstance(request, dict):
+                raise ValueError("a request is a JSON object")
             response = {"id": request.get("id"), "ok": True, **commands[request["command"]](request)}
         except Exception as error:  # keep serving after a bad request
-            response = {"id": request.get("id"), "ok": False, "error": str(error)}
-        sys.stdout.write(json.dumps(response) + "\n")
-        sys.stdout.flush()
+            request_id = request.get("id") if isinstance(request, dict) else None
+            response = {"id": request_id, "ok": False, "error": str(error) or type(error).__name__}
+        responses.write(json.dumps(response) + "\n")
+        responses.flush()
 
 
 def _main(argv):
     command = argv[1] if len(argv) > 1 else None
+    # `python -m robot` imports from the working folder (the project root): so do these.
+    if os.getcwd() not in sys.path:
+        sys.path.insert(1, os.getcwd())
     if command == "discover" and len(argv) >= 3:
         target = os.path.abspath(argv[2])
         root = os.path.abspath(argv[3]) if len(argv) > 3 else os.path.dirname(target)
@@ -689,6 +754,7 @@ if __name__ == "__main__":
         result = _main(sys.argv)
     except Exception as error:  # report data errors to the IDE instead of crashing
         result = {"ok": False, "error": str(error)}
-    # Library imports may print to stdout: the JSON result is always the last line.
+    # Library imports, and their exit handlers, may print to stdout: the result is the
+    # last line with this prefix.
     print()
-    print(json.dumps(result))
+    print(RESULT_PREFIX + json.dumps(result), flush=True)

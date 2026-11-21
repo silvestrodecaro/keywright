@@ -147,14 +147,20 @@
     $('#setup-open').hidden = true;
     $('#setup-back').hidden = true;
 
-    const result = await api.createProject({
-      name,
-      location: $('#create-location').value.trim(),
-      createVenv: $('#opt-venv').checked,
-      installBrowsers: $('#opt-browsers').checked,
-      initGit: $('#opt-git').checked,
-    });
-    $('#create-submit').disabled = false;
+    let result;
+    try {
+      result = await api.createProject({
+        name,
+        location: $('#create-location').value.trim(),
+        createVenv: $('#opt-venv').checked,
+        installBrowsers: $('#opt-browsers').checked,
+        initGit: $('#opt-git').checked,
+      });
+    } catch (error) {
+      result = { ok: false, error: error.message };
+    } finally {
+      $('#create-submit').disabled = false;
+    }
 
     if (!result.root) {
       // Validation failed before anything was created.
@@ -392,9 +398,16 @@
   async function openFile(relative, line = null, column = 1, length = 0) {
     let tab = tabs.find((t) => t.path === relative);
     if (!tab) {
+      const root = currentRoot;
       const file = await workspace.read(relative);
-      tab = { path: relative, content: file.content, reason: file.reason, revision: file.revision };
-      tabs.push(tab);
+      if (currentRoot !== root)
+        return; // another project was opened meanwhile
+      // A second request for the same file may have opened it while this one read it.
+      tab = tabs.find((t) => t.path === relative);
+      if (!tab) {
+        tab = { path: relative, content: file.content, reason: file.reason, revision: file.revision };
+        tabs.push(tab);
+      }
     }
     tab.line = line;
     tab.column = column;
@@ -537,7 +550,8 @@
     renderRecordBar();
   }
 
-  editor.onDirtyChange(() => renderTabs());
+  // Only when a file becomes modified or saved: rebuilding the tabs on every keystroke is wasted work.
+  editor.onDirtyStateChange(() => renderTabs());
 
   // -------------------------------------------------------------------------
   // Record at cursor: browser steps recorded straight into the open file.
@@ -1133,6 +1147,8 @@
       const file = await workspace.read(next);
       Object.assign(tab, { path: next, content: file.content, reason: file.reason, revision: file.revision, line: null });
     }
+    // Breakpoints of the renamed files, open or not, follow them.
+    editor.moveBreakpoints((path) => (names.isWithin(path, relative) ? names.moved(path, relative, result.path) : null));
     if (names.isWithin(activeTab, relative))
       activeTab = names.moved(activeTab, relative, result.path);
     if (affected.length) {
@@ -1218,9 +1234,19 @@
     const revision = tab.revision;
     const version = editor.has(tab.path) ? editor.snapshot(tab.path).version : null;
     const file = await api.readProjectFile(tab.path).catch(() => null);
-    if (!tabs.includes(tab) || tab.revision !== revision || (editor.has(tab.path) && editor.snapshot(tab.path).version !== version))
+    if (!file || !tabs.includes(tab) || tab.revision !== revision || (editor.has(tab.path) && editor.snapshot(tab.path).version !== version))
       return;
-    if (file && file.content !== null && editor.reload(tab.path, file.content))
+    if (!editor.has(tab.path)) {
+      // Not shown yet (a background tab after a folder rename, or one that could not be read):
+      // it has no unsaved edits, so it takes the disk content as it is.
+      Object.assign(tab, { content: file.content, reason: file.reason, revision: file.revision });
+      if (tab.path === activeTab) {
+        shownInEditor = null;
+        renderTabs();
+      }
+      return;
+    }
+    if (file.content !== null && editor.reload(tab.path, file.content))
       Object.assign(tab, { content: file.content, revision: file.revision });
   }
 

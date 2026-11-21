@@ -6,6 +6,26 @@ const { escapeArg } = require('../src/generator/escape');
 const { toBrowserSelector } = require('../src/generator/selectors');
 const { generateRobot, generateSteps } = require('../src/generator/robotGenerator');
 
+test('escapeArg writes other whitespace as escapes, which Robot would treat as separators', () => {
+  // A no-break space next to a space is two spaces for Robot's tokenizer.
+  assert.strictEqual(escapeArg('Total:  5'), String.raw`Total:\xA0 5`);
+  assert.strictEqual(escapeArg('a' + String.fromCharCode(0x2003).repeat(2) + 'b'), 'a' + String.fromCharCode(92) + 'u2003' + String.fromCharCode(92) + 'u2003b');
+  assert.strictEqual(escapeArg(' x'), String.raw`\xA0x`);
+});
+
+test('selector chains: quotes and regular expressions do not hide separators', () => {
+  assert.strictEqual(toBrowserSelector("internal:text=/it's/i >> internal:control=enter-frame >> internal:role=button"),
+    "text=/it's/i >>> role=button");
+  assert.strictEqual(toBrowserSelector("[name='a >> b'] >> internal:role=link"), "[name='a >> b'] >> role=link");
+  assert.strictEqual(toBrowserSelector('internal:text=/a\\/b >> c/ >> internal:role=link'), 'text=/a\\/b >> c/ >> role=link');
+});
+
+test('ambiguous case-insensitive text keeps the selector Playwright produced', () => {
+  assert.strictEqual(toBrowserSelector('internal:text=" Home"i'), 'internal:text=" Home"i');
+  assert.strictEqual(toBrowserSelector('internal:text="a >> b"i'), 'internal:text="a >> b"i');
+  assert.strictEqual(toBrowserSelector('internal:text="Home"i'), 'text=Home');
+});
+
 test('escapeArg', () => {
   assert.strictEqual(escapeArg(''), '${EMPTY}');
   assert.strictEqual(escapeArg('a  b'), 'a ${SPACE}b');
@@ -23,7 +43,7 @@ test('toBrowserSelector', () => {
   assert.strictEqual(toBrowserSelector('internal:role=button[name="Sign in"i]'), 'role=button[name="Sign in"i]');
   assert.strictEqual(toBrowserSelector('internal:text="Hello"i'), 'text=Hello');
   assert.strictEqual(toBrowserSelector('internal:text="Hello"s'), 'text="Hello"');
-  assert.strictEqual(toBrowserSelector('internal:text=" padded "i'), 'text=" padded "i');
+  assert.strictEqual(toBrowserSelector('internal:text=" padded "i'), 'internal:text=" padded "i');
   assert.strictEqual(toBrowserSelector('internal:testid=[data-testid="go"s]'), '[data-testid="go"]');
   assert.strictEqual(toBrowserSelector('internal:label="User"i'), 'internal:label="User"i');
   assert.strictEqual(

@@ -3,10 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveInside } = require('./pathBoundary');
+const { parseJson, retrying } = require('./jsonFile');
 const { createHash, randomUUID } = require('crypto');
 const { spawn } = require('child_process');
 const { projectFiles, CONFIG_FILE, DEFAULT_CONFIG } = require('./projectTemplate');
 const { pythonEnv } = require('./pythonHelper');
+const { childProcesses } = require('./processes');
 
 const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]*$/;
 const IS_WINDOWS = process.platform === 'win32';
@@ -20,7 +22,7 @@ function validateProjectName(name) {
     return 'Enter a project name.';
   if (!PROJECT_NAME.test(name) || name.endsWith('.') || name.endsWith(' '))
     return 'Use letters, digits, spaces, dots, dashes or underscores (starting with a letter or digit).';
-  return null;
+  return RESERVED_NAMES.test(name) ? `${name} is a name reserved by Windows.` : null;
 }
 
 /**
@@ -30,11 +32,11 @@ function validateProjectName(name) {
 function run(command, args, { cwd, onLog = () => {} } = {}) {
   return new Promise((resolve, reject) => {
     onLog(`> ${[command, ...args].join(' ')}\n`);
-    const child = spawn(command, args, {
+    const child = childProcesses.track(spawn(command, args, {
       cwd,
       env: pythonEnv(),
       windowsHide: true,
-    });
+    }));
     child.stdout.on('data', (chunk) => onLog(chunk.toString()));
     child.stderr.on('data', (chunk) => onLog(chunk.toString()));
     child.on('error', reject);
@@ -181,6 +183,18 @@ async function createProject(request, callbacks = {}) {
  * Loads the project at `root`. Any folder can be opened; keywright.json is optional.
  * @returns {{ root: string, name: string, config: typeof DEFAULT_CONFIG, python: string | null }}
  */
+/**
+ * The project's interpreter when keywright.json points outside the project folder, else
+ * null. Keywright runs it on its own when the project opens (keywords, checks), so the
+ * user confirms an interpreter that the project's author chose.
+ */
+function externalInterpreter(project) {
+  if (!project.python || !project.config.python)
+    return null;
+  const relative = path.relative(project.root, project.python);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? project.python : null;
+}
+
 function loadProject(root) {
   const resolved = path.resolve(root);
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
@@ -189,7 +203,7 @@ function loadProject(root) {
   const configPath = path.join(resolved, CONFIG_FILE);
   if (fs.existsSync(configPath)) {
     try {
-      config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf8')) };
+      config = { ...config, ...parseJson(fs.readFileSync(configPath, 'utf8')) };
     } catch (error) {
       throw new Error(`Invalid ${CONFIG_FILE}: ${error.message}`);
     }
@@ -252,7 +266,22 @@ function readProjectFile(root, relative) {
   const buffer = fs.readFileSync(target);
   if (buffer.includes(0))
     return { path: relative, content: null, reason: 'Binary file.' };
-  return { path: relative, content: buffer.toString('utf8'), revision: revisionOf(buffer) };
+  const content = decodeUtf8(buffer);
+  if (content === null)
+    return { path: relative, content: null, reason: NOT_UTF8 };
+  return { path: relative, content, revision: revisionOf(buffer) };
+}
+
+const NOT_UTF8 = 'The file is not UTF-8 text. Saving it would replace its accented and other non-ASCII '
+  + 'characters, so it opens read-only here. Convert it to UTF-8 in another editor to edit it.';
+
+/** The text of `buffer`, or null when it is not valid UTF-8. */
+function decodeUtf8(buffer) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buffer);
+  } catch {
+    return null;
+  }
 }
 
 /** Compare the last read revision before replacing a file; null means it was deleted. */
@@ -282,7 +311,7 @@ function writeProjectFile(root, relative, content, expectedRevision) {
     }
     if (path.relative(target, currentTarget) !== '' || latest !== expectedRevision)
       return { ok: false, conflict: true, revision: latest };
-    fs.renameSync(temporary, target);
+    retrying(() => fs.renameSync(temporary, target)); // a scanner may hold the file a moment
   } finally {
     if (fs.existsSync(temporary))
       fs.unlinkSync(temporary);
@@ -295,6 +324,13 @@ function createProjectFile(root, relative) {
   const clean = String(relative || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
   if (!clean || clean.endsWith('/'))
     throw new Error('Enter a file name, e.g. tests/login.robot');
+  // Each folder and the file name: Windows would refuse or rename reserved names (aux, con),
+  // and drop a final dot or space.
+  for (const part of clean.split('/')) {
+    const invalid = validateEntryName(part);
+    if (invalid)
+      throw new Error(invalid);
+  }
   const target = resolveInProject(root, clean);
   if (fs.existsSync(target))
     throw new Error(`${clean} already exists.`);
@@ -371,4 +407,6 @@ module.exports = {
   writeProjectFile,
   createProjectFile,
   resolveInProject,
+  decodeUtf8,
+  externalInterpreter,
 };

@@ -129,3 +129,30 @@ test('invalidation during libdoc discards the in-flight result and rebuilds curr
   assert.ok(!names(result).includes('Old Keyword'));
   assert.ok(names(await index.build(fixture)).includes('Current Keyword After Invalidation'));
 });
+
+test('a build requested during another sees files written meanwhile; such requests share it', { skip, timeout: 90_000 }, async () => {
+  const fixture = project();
+  fs.writeFileSync(path.join(fixture.root, 'local_library.py'), 'def shared_keyword():\n    pass\n');
+  const index = new KeywordIndex();
+  const first = index.build(fixture); // e.g. the build when the project opened
+  // A resource written while it runs, then two requests for it (editor and AI client).
+  fs.writeFileSync(path.join(fixture.root, 'extra.resource'), '*** Keywords ***\nWritten Meanwhile\n    No Operation\n');
+  const [second, third] = await Promise.all([index.build(fixture), index.build(fixture)]);
+  assert.strictEqual(second, third);
+  assert.notStrictEqual(await first, second);
+  assert.ok(names(second).includes('Written Meanwhile'));
+  assert.ok(names(second).includes('Shared Keyword'));
+});
+
+test('a library changing again and again during a build ends the build after a few tries', { skip, timeout: 60_000 }, async () => {
+  const fixture = project();
+  fs.writeFileSync(path.join(fixture.root, 'local_library.py'), 'def busy_keyword():\n    pass\n');
+  const index = new KeywordIndex();
+  const timer = setInterval(() => index.clear(), 20); // a generator writing modules all the time
+  try {
+    const result = await index.build(fixture);
+    assert.equal(result.ok, true);
+  } finally {
+    clearInterval(timer);
+  }
+});

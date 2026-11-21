@@ -247,3 +247,36 @@ test('a linked folder is renamed as a link, and a link leaving the project is re
   assert.throws(() => projects.renameProjectPath(root, 'escape', 'x'), /outside the project/);
   assert.ok(fs.existsSync(outside));
 });
+
+test('a file that is not UTF-8 opens without content and says why, so a save cannot change its characters', () => {
+  const root = tempDir('latin1');
+  fs.writeFileSync(path.join(root, 'legacy.resource'), Buffer.from('*** Keywords ***\nCaf\xe9\n', 'latin1'));
+  const file = projects.readProjectFile(root, 'legacy.resource');
+  assert.equal(file.content, null);
+  assert.match(file.reason, /not UTF-8/);
+});
+
+test('an interpreter configured outside the project folder is reported for confirmation', () => {
+  const root = tempDir('external-python');
+  const outside = path.join(tempDir('other-python'), 'python.exe');
+  fs.writeFileSync(outside, '');
+  fs.writeFileSync(path.join(root, 'keywright.json'), JSON.stringify({ python: outside }));
+  assert.equal(projects.externalInterpreter(projects.loadProject(root)), outside);
+
+  fs.mkdirSync(path.join(root, 'tools'));
+  fs.writeFileSync(path.join(root, 'tools', 'python.exe'), '');
+  fs.writeFileSync(path.join(root, 'keywright.json'), JSON.stringify({ python: 'tools/python.exe' }));
+  assert.equal(projects.externalInterpreter(projects.loadProject(root)), null);
+  fs.writeFileSync(path.join(root, 'keywright.json'), '{}');
+  assert.equal(projects.externalInterpreter(projects.loadProject(root)), null);
+});
+
+test('names Windows reserves are refused for new projects and new files', () => {
+  assert.match(projects.validateProjectName('con'), /reserved by Windows/);
+  assert.match(projects.validateProjectName('COM1.tests'), /reserved by Windows/);
+  assert.equal(projects.validateProjectName('console'), null);
+  const root = tempDir('reserved-names');
+  assert.throws(() => projects.createProjectFile(root, 'tests/aux/login.robot'), /reserved by Windows/);
+  assert.throws(() => projects.createProjectFile(root, 'tests/login.robot.'), /end with a dot/);
+  assert.equal(projects.createProjectFile(root, 'tests/login.robot'), 'tests/login.robot');
+});

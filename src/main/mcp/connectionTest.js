@@ -37,7 +37,12 @@ function testConnection(config, { timeoutMs = 20_000, baseEnv = process.env } = 
       resolve(result);
     };
     const timer = setTimeout(() => finish({ ok: false, error: `No reply within ${timeoutMs / 1000} seconds.${stderr ? ` ${stderr.trim()}` : ''}` }), timeoutMs);
-    const send = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
+    // A command that exits early closes its input: the write error is reported by 'exit'.
+    child.stdin.on('error', () => {});
+    const send = (message) => {
+      if (!settled && child.stdin.writable)
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+    };
     child.on('error', (error) => finish({ ok: false, error: `Could not start ${config.command}: ${error.message}` }));
     child.on('exit', (code) => finish({ ok: false, error: `The command exited (code ${code}) before answering.${stderr ? ` ${stderr.trim()}` : ''}` }));
     child.stderr.setEncoding('utf8');

@@ -10,6 +10,8 @@ const { collectCalls } = require('./argumentCheck');
 const { normalizeVariable } = require('./navigation');
 
 const BDD_PREFIX = /^(given|when|then|and|but)\s+/i;
+// BuiltIn keywords that take other keywords as arguments (normalized names).
+const RUNS_KEYWORDS = /^(?:runkeyword.*|waituntilkeywordsucceeds|repeatkeyword|registerkeywordtorunonfailure)$/;
 // Keywords whose arguments are conditions evaluated as Python, where variables can be written `$name`.
 const CONDITION_KEYWORDS = new Set(['evaluate', 'shouldbetrue', 'shouldnotbetrue', 'skipif', 'passexecutionif', 'setvariableif',
   'runkeywordif', 'runkeywordunless', 'returnfromkeywordif', 'continueforloopif', 'exitforloopif'].map(normalizeKeyword));
@@ -46,7 +48,7 @@ function keywordOccurrences(lines, keyword, { definition = false } = {}) {
     if (part)
       add(call.keyword, part);
     // Run Keyword, Run Keywords, Wait Until Keyword Succeeds, Repeat Keyword, ...
-    if (normalizeKeyword(call.keyword.text).includes('keyword')) {
+    if (RUNS_KEYWORDS.test(normalizeKeyword(call.keyword.text).replace(/^builtin\./, ''))) {
       for (const arg of call.args) {
         const argPart = keywordPart(arg.text, keyword);
         if (argPart && argPart.start === 0)

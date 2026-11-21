@@ -15,6 +15,7 @@ const { pathToFileURL } = require('url');
 const { RecorderSession } = require('../src/main/recorder');
 const { generateRobot } = require('../src/generator/robotGenerator');
 const { tempDir } = require('./helpers/tempDir');
+const { browserEnvironment } = require('../src/main/browserEnvironment');
 
 const root = path.join(__dirname, '..');
 const python = process.env.KEYWRIGHT_PYTHON || [
@@ -77,7 +78,8 @@ test('recorded session replays with the Browser library', { skip: !python && 'no
   const result = spawnSync(python, ['-m', 'robot', '--outputdir', dir, '--console', 'dotted', file], {
     encoding: 'utf8',
     timeout: 150_000,
-    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    // The browser cache Keywright's own runs use (browserEnvironment), not Browser's private one.
+    env: browserEnvironment({ ...process.env, PYTHONIOENCODING: 'utf-8' }),
   });
   assert.strictEqual(result.status, 0, `robot failed:\n${robotSource}\n${result.stdout}\n${result.stderr}`);
 });

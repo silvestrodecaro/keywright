@@ -20,8 +20,15 @@ function splitChain(selector) {
         quote = null;
       continue;
     }
-    if (ch === '"' || ch === '\'') {
+    // A value starts a quoted string or a regular expression only after = or ( : an
+    // apostrophe in text (it's) does not.
+    const opensValue = i === 0 || selector[i - 1] === '=' || selector[i - 1] === '(';
+    if (ch === '"' || (ch === '\'' && opensValue)) {
       quote = ch;
+      continue;
+    }
+    if (ch === '/' && selector[i - 1] === '=') {
+      quote = '/';
       continue;
     }
     if (selector.startsWith(' >> ', i)) {
@@ -58,7 +65,9 @@ function convertPart(part) {
     // matches `"..."i`; fall back to the quoted body when it would be ambiguous.
     if (plain === plain.trim() && plain !== '' && !/^["'/]/.test(plain) && !plain.includes(' >> '))
       return 'text=' + plain;
-    return `text=${body}`;
+    // Leading or trailing spaces, quotes, ` >> `: the public text= engine would read it
+    // differently, so the selector stays as Playwright wrote it (Browser passes it through).
+    return part;
   }
 
   const testId = /^internal:testid=\[data-testid="([^"\\]*)"s\]$/.exec(part);

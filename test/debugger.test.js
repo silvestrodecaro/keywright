@@ -192,3 +192,79 @@ test('conditional breakpoints stop only when the condition holds', { skip: !pyth
   assert.strictEqual(pauses[1][0], 6);
   assert.match(pauses[1][2], /Breakpoint condition '\$nope > 1' failed/);
 });
+
+function failingProject(lines) {
+  const dir = tempDir('debug');
+  fs.mkdirSync(path.join(dir, 'tests'));
+  fs.writeFileSync(path.join(dir, 'tests', 'fail.robot'), ['*** Test Cases ***', ...lines, ''].join('\n'));
+  return { root: dir, python, config: { testsDir: 'tests', outputDir: path.join(dir, 'results') } };
+}
+
+test('after the IDE disconnects, later failures no longer pause the run', { skip: !python && 'no Python with Robot Framework', timeout: 40_000 }, async () => {
+  const runner = new TestRunner();
+  let pauses = 0;
+  const finished = new Promise((resolve) => runner.on('finished', resolve));
+  runner.on('event', (event) => {
+    if (event.type === 'debug-paused' && ++pauses === 1)
+      runner._socket.destroy(); // the IDE goes away while paused
+  });
+  await runner.run(failingProject(['First', '    Fail    one', 'Second', '    Fail    two']),
+    { debug: { breakpoints: {}, pauseOnFailure: true } });
+  const result = await finished;
+  assert.strictEqual(pauses, 1);
+  assert.strictEqual(result.exitCode, 2);
+});
+
+test('a malformed debugger command is ignored, not a reason to detach', { skip: !python && 'no Python with Robot Framework', timeout: 40_000 }, async () => {
+  const runner = new TestRunner();
+  const pauses = [];
+  const finished = new Promise((resolve) => runner.on('finished', resolve));
+  runner.on('event', (event) => {
+    if (event.type === 'debug-paused') {
+      pauses.push(event.lineno);
+      runner._socket.write('not json\n[1, 2]\n');
+      runner.debugCommand({ command: 'continue' });
+    }
+  });
+  await runner.run(failingProject(['First', '    Fail    one', 'Second', '    Fail    two']),
+    { debug: { breakpoints: {}, pauseOnFailure: true } });
+  await finished;
+  assert.deepStrictEqual(pauses, [3, 5]);
+});
+
+test('expected failures are recognized with the library prefix too', { skip: !python && 'no Python with Robot Framework', timeout: 40_000 }, async () => {
+  const runner = new TestRunner();
+  const pauses = [];
+  const finished = new Promise((resolve) => runner.on('finished', resolve));
+  runner.on('event', (event) => {
+    if (event.type === 'debug-paused') {
+      pauses.push(event.lineno);
+      runner.debugCommand({ command: 'continue' });
+    }
+  });
+  await runner.run(failingProject(['Ignored', '    BuiltIn.Run Keyword And Ignore Error    Fail    ignored', '    Fail    real']),
+    { debug: { breakpoints: {}, pauseOnFailure: true } });
+  await finished;
+  assert.deepStrictEqual(pauses, [4]);
+});
+
+test('a variable whose repr fails still lets the run pause and shows why', { skip: !python && 'no Python with Robot Framework', timeout: 40_000 }, async () => {
+  const runner = new TestRunner();
+  const pauses = [];
+  const finished = new Promise((resolve) => runner.on('finished', resolve));
+  runner.on('event', (event) => {
+    if (event.type === 'debug-paused') {
+      pauses.push(event);
+      runner.debugCommand({ command: 'continue' });
+    }
+  });
+  await runner.run(failingProject([
+    'Broken Repr',
+    "    ${broken}=    Evaluate    type('Broken', (), {'__repr__': lambda self: 1 / 0})()",
+    '    Fail    stop here',
+  ]), { debug: { breakpoints: {}, pauseOnFailure: true } });
+  await finished;
+  assert.strictEqual(pauses.length, 1);
+  const variables = pauses[0].variables.flatMap((group) => group.variables);
+  assert.match(variables.find((v) => v.name === '${broken}').value, /Broken/);
+});

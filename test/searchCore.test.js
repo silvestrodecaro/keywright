@@ -44,3 +44,18 @@ test('files to include', () => {
   assert.ok(nested('tests/a.robot') && nested('tests/x/y/a.robot') && !nested('tests/a.resource'));
   assert.ok(includeFilter('')('anything.txt'));
 });
+
+test('a regex with escapes that only non-Unicode patterns accept still searches', () => {
+  const text = 'Log    a-b\n' + String.raw`Log    \#x: y`;
+  assert.deepStrictEqual(where(findInText(text, buildRegex({ query: String.raw`a\-b`, regex: true }))), ['1:8+3']);
+  // Robot escapes a leading # as \#: the regex \\\# finds the backslash and the #.
+  assert.deepStrictEqual(where(findInText(text, buildRegex({ query: String.raw`\\\#x\:`, regex: true }))), ['2:8+4']);
+  assert.deepStrictEqual(where(findInText(text, buildRegex({ query: String.raw`a\-b`, regex: true, wholeWord: true }))), ['1:8+3']);
+  assert.throws(() => buildRegex({ query: '(unclosed', regex: true }), SyntaxError);
+});
+
+test('$10 with fewer groups is $1 followed by 0, as in String.prototype.replace', () => {
+  const match = /(a)/.exec('a');
+  assert.strictEqual(expandReplacement('$10', match), 'a0');
+  assert.strictEqual(expandReplacement('$10', match), 'a'.replace(/(a)/, '$10'));
+});

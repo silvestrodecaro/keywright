@@ -8,6 +8,9 @@
 
   const STATUS_ICONS = { PASS: '✓', FAIL: '✕', SKIP: '↷', 'NOT RUN': '○', running: '◌', queued: '○', stopped: '■' };
   const MAX_OUTPUT = 500_000;
+  // Log messages kept per test (or suite setup) in the panel; the Robot log has them all.
+  const MAX_TEST_LOGS = 5000;
+  const IMPORTANT_LEVELS = new Set(['FAIL', 'ERROR', 'WARN']);
 
   let rootSuite = null;
   /** @type {Map<string, { test: object, suites: object[] }>} */
@@ -66,19 +69,26 @@
   // Rendering (batched: listener events can arrive by the hundreds)
 
   let renderQueued = false;
+  // While tests run, events arrive continuously: rebuilding the panel for each frame
+  // would keep the renderer busy, so it is redrawn at most this often.
+  const RUN_RENDER_MS = 150;
+  let lastRender = 0;
+
   function scheduleRender() {
     if (renderQueued)
       return;
     renderQueued = true;
-    requestAnimationFrame(() => {
+    const wait = running ? Math.max(0, RUN_RENDER_MS - (performance.now() - lastRender)) : 0;
+    setTimeout(() => requestAnimationFrame(() => {
       renderQueued = false;
+      lastRender = performance.now();
       renderTree();
       renderSummary();
       renderDetail();
       renderControls();
       renderDebug();
       pushEditorStates();
-    });
+    }), wait);
   }
 
   function testMatches(test) {
@@ -369,6 +379,8 @@
     });
     const name = testIndex.get(traceView.testId)?.test.name || traceView.testId;
     const frame = el('iframe', { className: 'trace-frame', src: traceView.url, title: `Trace of ${name}` });
+    // Scripts and its service worker, but no navigation of the Keywright window.
+    frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads');
     target.replaceChildren(
       el('div', { className: 'trace-bar' }, back, el('span', { className: 'muted', textContent: `Trace · ${name}` })),
       frame);
@@ -458,6 +470,8 @@
       if (setups.length)
         nodes.push(...suiteSection('Suite Setup', setups));
       nodes.push(el('h3', { textContent: 'Steps' }));
+      if (runData?.droppedLogs)
+        nodes.push(el('div', { className: 'empty', textContent: `${runData.droppedLogs} more log messages are in the Robot log only (Open log).` }));
       const steps = el('div', { className: 'steps-tree' },
         ...(runData ? runData.logs.map(renderLog) : []),
         ...(runData ? runData.roots.map((step) => renderStep(test.id, step, 0)) : []));
@@ -546,7 +560,11 @@
   }
 
   /** All entry points prepare the same disk state, including imported resources. */
-  async function run(select, { background = false, source = null } = {}) {
+  /**
+   * explicit: the user chose these tests (a row's Run, an editor glyph, Run visible), so tag
+   * filters do not apply; the tests a watch run selects still go through them.
+   */
+  async function run(select, { background = false, source = null, explicit = true } = {}) {
     if (running || preparing)
       return;
     preparing = true;
@@ -573,7 +591,7 @@
           return;
         }
       }
-      await startRun(select, { background });
+      await startRun(select, { background, explicit });
     } catch (error) {
       showError(`Could not start tests: ${error.message}`);
     } finally {
@@ -601,10 +619,10 @@
   }
 
   /** background: watch re-run, keep the current tab. */
-  async function startRun(select, { background }) {
+  async function startRun(select, { background, explicit = true }) {
     showError('');
-    // Tag filters apply to Run all and suites; running a single test is an explicit choice.
-    const filter = select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
+    // Tag filters apply to Run all, suites and watch runs; running chosen tests is explicit.
+    const filter = explicit && select.length && select.every((id) => testIndex.has(id)) ? { include: [], exclude: [] } : tagFilter();
     const scope = testsInScope(select).filter((id) => window.RFTags.selected(testIndex.get(id).test.tags, filter));
     if (!scope.length) {
       showError('No test matches the tag filter of the Run options.');
@@ -731,6 +749,13 @@
         if (!runData)
           break;
         const step = event.step && runData.steps.get(event.step);
+        // A test logging without end (loops, TRACE) would fill the memory: past the limit,
+        // ordinary messages are counted instead of kept; failures and warnings always are.
+        runData.logCount = (runData.logCount || 0) + 1;
+        if (runData.logCount > MAX_TEST_LOGS && !IMPORTANT_LEVELS.has(event.level)) {
+          runData.droppedLogs = (runData.droppedLogs || 0) + 1;
+          break;
+        }
         (step ? step.logs : runData.logs).push(event);
         break;
       }
@@ -754,10 +779,16 @@
   });
 
   api.onTestOutput((text) => {
-    output = (output + text).slice(-MAX_OUTPUT);
+    output += text;
     const pre = $('#console-output');
     const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
-    pre.textContent = output;
+    // New text is appended; the whole console is rewritten only when it is shortened.
+    if (output.length > MAX_OUTPUT * 1.2) {
+      output = output.slice(-MAX_OUTPUT);
+      pre.textContent = output;
+    } else {
+      pre.append(text);
+    }
     if (atBottom)
       pre.scrollTop = pre.scrollHeight;
   });
@@ -777,6 +808,11 @@
     if (!stopped && exitCode >= 252)
       showError('Robot Framework could not run the tests. See the console output below the results.');
     scheduleRender();
+    // Data files written while tests ran are most likely their own output (downloads, created
+    // files): rerunning for them would loop. Suites, resources and libraries still count.
+    for (const path of [...pendingChanges])
+      if (!/\.(robot|resource|py)$/i.test(path))
+        pendingChanges.delete(path);
     if (pendingChanges.size)
       processChanges();
   });
@@ -972,15 +1008,35 @@
     }
   });
 
-  window.addEventListener('keywright:project-opened', (event) => {
-    breakpointsKey = event.detail && event.detail.root ? `keywright.breakpoints:${event.detail.root}` : null;
-    let saved = {};
+  /**
+   * The storage key of a project setting. Windows paths ignore case, so the same folder
+   * opened as C:\Tests or c:\tests keeps its breakpoints and run options.
+   */
+  function projectKey(prefix, root) {
+    if (!root)
+      return null;
+    return `${prefix}:${/^[a-z]:[\\/]/i.test(root) ? root.toLowerCase() : root}`;
+  }
+
+  /** A project's stored setting; also found under the key used before (the root as given). */
+  function storedForProject(prefix, root) {
+    const value = storedObject(projectKey(prefix, root));
+    return Object.keys(value).length || !root ? value : storedObject(`${prefix}:${root}`);
+  }
+
+  /** An object kept in local storage; {} when missing, unreadable or of another shape. */
+  function storedObject(key) {
     try {
-      saved = JSON.parse((breakpointsKey && localStorage.getItem(breakpointsKey)) || '{}');
+      const value = key ? JSON.parse(localStorage.getItem(key) || '{}') : {};
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     } catch {
-      saved = {};
+      return {};
     }
-    window.RFEditor.setBreakpoints(saved);
+  }
+
+  window.addEventListener('keywright:project-opened', (event) => {
+    breakpointsKey = projectKey('keywright.breakpoints', event.detail?.root);
+    window.RFEditor.setBreakpoints(storedForProject('keywright.breakpoints', event.detail?.root));
   });
 
   // -------------------------------------------------------------------------
@@ -1028,13 +1084,8 @@
     $(selector).addEventListener(selector === '#run-browser' || selector === '#run-dryrun' ? 'change' : 'input', saveRunOptions);
 
   window.addEventListener('keywright:project-opened', (event) => {
-    runOptionsKey = event.detail && event.detail.root ? `keywright.runOptions:${event.detail.root}` : null;
-    let saved = {};
-    try {
-      saved = JSON.parse((runOptionsKey && localStorage.getItem(runOptionsKey)) || '{}');
-    } catch {
-      saved = {};
-    }
+    runOptionsKey = projectKey('keywright.runOptions', event.detail?.root);
+    const saved = storedForProject('keywright.runOptions', event.detail?.root);
     for (const [name, selector] of Object.entries(RUN_OPTION_FIELDS))
       $(selector).value = saved[name] || '';
     $('#run-dryrun').checked = !!saved.dryrun;
@@ -1045,18 +1096,35 @@
   // -------------------------------------------------------------------------
   // Watch mode
 
-  async function processChanges() {
+  // One pass at a time: changes arriving meanwhile are taken by another pass, not lost.
+  let processing = null;
+
+  function processChanges() {
+    if (!processing)
+      processing = processPending().finally(() => {
+        processing = null;
+        if (pendingChanges.size && !running && !preparing)
+          processChanges();
+      });
+    return processing;
+  }
+
+  async function processPending() {
     const paths = [...pendingChanges];
     pendingChanges.clear();
     if (!rootSuite || !paths.some((path) => window.RFWatch.RELEVANT.test(path)))
       return;
     await discover({ quiet: true }); // test names and files may have changed
-    if (running || preparing || !rootSuite || (!watchAll && !watched.size))
+    if (!rootSuite || (!watchAll && !watched.size))
       return;
+    if (running || preparing) {
+      paths.forEach((path) => pendingChanges.add(path)); // taken again when the run ends
+      return;
+    }
     const tests = [...testIndex.values()].map(({ test, suites }) => ({ id: test.id, source: test.source, suites: suites.map((s) => s.id) }));
     const ids = window.RFWatch.affectedTests({ paths, tests, watched, watchAll });
     if (ids.length)
-      run(ids.length === tests.length ? [] : ids, { background: true });
+      run(ids.length === tests.length ? [] : ids, { background: true, explicit: false });
   }
 
   window.addEventListener('keywright:files-changed', (event) => {
@@ -1071,6 +1139,7 @@
 
   window.RFTree.bind($('#test-tree'));
 
+  // Run visible passes the visible tests as an explicit list, so tag filters do not apply (user guide).
   $('#tests-run-all').addEventListener('click', () => run(filter ? visibleTests().map((t) => t.id) : []));
   $('#tests-stop').addEventListener('click', () => api.stopTests());
   $('#tests-refresh').addEventListener('click', discover);

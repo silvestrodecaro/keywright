@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { createHash } = require('crypto');
+const { createHash, randomUUID } = require('crypto');
 const { EventEmitter } = require('events');
 const projects = require('../projects');
 
@@ -50,7 +50,12 @@ class ChangeLog extends EventEmitter {
     this.folder = folder;
     this.changes = [];
     this.nextId = 1;
-    fs.rmSync(folder, { recursive: true, force: true });
+    try {
+      // Copies left by the previous session; one Keywright per profile owns this folder.
+      fs.rmSync(folder, { recursive: true, force: true, maxRetries: 3 });
+    } catch (error) {
+      console.error(`Could not empty ${folder}: ${error.message}`);
+    }
   }
 
   /** A file written with `content`; `before` is its earlier text, null when it was created. */
@@ -67,23 +72,27 @@ class ChangeLog extends EventEmitter {
 
   /**
    * Copies an entry about to be deleted, so undo can put it back.
-   * @returns {string | null} the copy, null when it is too large or cannot be copied
+   * @returns {{ copy: string | null, error?: string }} no copy when it is too large or cannot be made
    */
   backup(entry) {
+    // Each copy has its own folder: deletions running together never share one.
+    const folder = path.join(this.folder, randomUUID());
     try {
       if (sizeOf(entry, MAX_BACKUP_BYTES) > MAX_BACKUP_BYTES)
-        return null;
-      const copy = path.join(this.folder, String(this.nextId), path.basename(entry));
-      fs.mkdirSync(path.dirname(copy), { recursive: true });
+        return { copy: null, error: 'Too large to keep a copy: restore it from the Recycle Bin.' };
+      const copy = path.join(folder, path.basename(entry));
+      fs.mkdirSync(folder, { recursive: true });
       fs.cpSync(entry, copy, { recursive: true, verbatimSymlinks: true });
-      return copy;
-    } catch {
-      return null;
+      return { copy };
+    } catch (error) {
+      fs.rmSync(folder, { recursive: true, force: true }); // no partial copy is kept
+      return { copy: null, error: `It could not be copied (${error.message}): restore it from the Recycle Bin.` };
     }
   }
 
+  /** @param {{ copy: string | null, error?: string } | null} backup the result of backup() */
   deleted(root, relative, backup, tool) {
-    this._add({ root, tool, kind: 'delete', path: relative, backup });
+    this._add({ root, tool, kind: 'delete', path: relative, backup: backup?.copy ?? null, backupError: backup?.error ?? null });
   }
 
   renamed(root, relative, to, tool) {
@@ -129,10 +138,18 @@ class ChangeLog extends EventEmitter {
             return { ok: false, error: `${change.path} changed while it was being restored.` };
           break;
         }
-        case 'delete':
+        case 'delete': {
+          // Restored beside the target, then moved in place: a failed copy leaves nothing half restored.
           fs.mkdirSync(path.dirname(target), { recursive: true });
-          fs.cpSync(change.backup, target, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
+          const restoring = `${target}.keywright-restore-${randomUUID()}`;
+          try {
+            fs.cpSync(change.backup, restoring, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
+            fs.renameSync(restoring, target);
+          } finally {
+            fs.rmSync(restoring, { recursive: true, force: true });
+          }
           break;
+        }
         case 'rename':
           fs.renameSync(projects.projectEntry(change.root, change.to).entry, target);
           break;
@@ -165,15 +182,25 @@ class ChangeLog extends EventEmitter {
           return no('Too old: its earlier content is no longer kept.');
         let current;
         try {
-          current = revisionOf(fs.readFileSync(target));
+          // The status is listed after every tool call: a file is hashed again only when
+          // its size, modification time or identity changed.
+          const stat = fs.statSync(target);
+          const key = `${stat.size}:${stat.mtimeMs}:${stat.ino}`;
+          if (change.hashedAs !== key) {
+            change.currentHash = revisionOf(fs.readFileSync(target));
+            change.hashedAs = key;
+          }
+          current = change.currentHash;
         } catch {
           return no(`${change.path} no longer exists.`);
         }
         return current === change.after ? { undoable: true } : no(`${change.path} has changed since.`);
       }
       case 'delete':
-        if (!change.backup || !exists(change.backup))
-          return no('Too large to keep a copy: restore it from the Recycle Bin.');
+        if (!change.backup)
+          return no(change.backupError || 'No copy was kept: restore it from the Recycle Bin.');
+        if (!exists(change.backup))
+          return no('Its copy is gone: restore it from the Recycle Bin.');
         return exists(target) ? no(`${change.path} exists again.`) : { undoable: true };
       case 'rename': {
         let renamed;

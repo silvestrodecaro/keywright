@@ -114,7 +114,9 @@ function endInsertion(lines, headerLine) {
     if (!text.trim() || /^\s*#/.test(text))
       continue;
     const lineDepth = /^\s*/.exec(text)[0].replace(/\t/g, '    ').length;
-    if (lineDepth <= depth && !/^\s*\.\.\./.test(text))
+    // ELSE, ELSE IF, EXCEPT and FINALLY at the header's depth continue the same block.
+    const branch = lineDepth === depth && /^\s*(?:ELSE(?:\s+IF)?|EXCEPT|FINALLY)(?:\s{2,}|\t|$)/.test(text);
+    if (lineDepth <= depth && !branch && !/^\s*\.\.\./.test(text))
       break;
     last = i + 1;
   }

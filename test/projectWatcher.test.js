@@ -54,3 +54,28 @@ test('reports changed files once, debounced, with project-relative paths', async
     watcher.stop();
   }
 });
+
+test('the ignored results folder matches however keywright.json spells it', () => {
+  const root = tempDir('watch-ignore');
+  for (const ignore of ['./results/', 'results\\', path.join(root, 'results')]) {
+    const watcher = new ProjectWatcher(root, { ignore: [ignore] });
+    assert.equal(watcher.accepts('results/browser/screenshot/a.png'), false, ignore);
+    assert.equal(watcher.accepts('tests/results.robot'), true, ignore);
+  }
+  if (process.platform === 'win32')
+    assert.equal(new ProjectWatcher(root, { ignore: ['Results'] }).accepts('results/a.png'), false);
+});
+
+test('changes arriving without pause are still reported after the longest wait', async () => {
+  const root = tempDir('watch-maxwait');
+  const watcher = new ProjectWatcher(root, { delay: 100, maxWait: 300 });
+  const reported = [];
+  watcher.on('changes', (paths) => reported.push(paths));
+  const started = Date.now();
+  while (Date.now() - started < 600) {
+    watcher._record('tests/a.robot');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  watcher.stop();
+  assert.ok(reported.length >= 1, 'nothing was reported while changes kept coming');
+});

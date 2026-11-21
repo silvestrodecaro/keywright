@@ -186,7 +186,9 @@ function parseFile(lines) {
         if (as >= 0 && body[as + 1])
           define(body[as + 1], 'EXCEPT ... AS');
       } else if (head.type === 'keyword' && SET_VARIABLE.test(head.text.toLowerCase().replace(/[\s_]/g, '')) && body[first + 1]) {
-        define(body[first + 1], head.text, { fileWide: true, values: body.slice(first + 2).map((cell) => cell.text) });
+        // Set Local Variable stays in its test or keyword; the others reach further.
+        const local = /local/.test(head.text.toLowerCase());
+        define(body[first + 1], head.text, { fileWide: !local, values: body.slice(first + 2).map((cell) => cell.text) });
       }
     }
   });

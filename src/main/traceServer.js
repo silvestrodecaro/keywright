@@ -36,6 +36,16 @@ const VIEWER_STYLE = `<style>
 ::-webkit-scrollbar-button { display: none; }
 </style>`;
 
+const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+
+function isLocalOrigin(origin) {
+  try {
+    return LOCAL_HOST.test(new URL(origin).host);
+  } catch {
+    return false;
+  }
+}
+
 function isInside(dir, file) {
   const relative = path.relative(dir, file);
   return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -63,6 +73,12 @@ class TraceServer {
   }
 
   /** Folders whose .zip traces may be served (e.g. the open project's results folder). */
+  /** Serves nothing of the previous project's folders (another project opens or it closes). */
+  forget() {
+    this._allowed = [];
+    this._outputDir = null;
+  }
+
   allow(dirs) {
     this._allowed = dirs.map((dir) => path.resolve(dir));
   }
@@ -82,23 +98,32 @@ class TraceServer {
       this._server.close();
     this._server = null;
     this._port = null;
+    this._starting = null;
   }
 
   _start() {
     if (this._server)
       return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const server = http.createServer((request, response) => this._handle(request, response));
-      server.on('error', reject);
-      server.listen(0, '127.0.0.1', () => {
-        this._server = server;
-        this._port = server.address().port;
-        resolve();
-      });
-    });
+    // A start already under way is shared, so two first requests never create two servers.
+    if (!this._starting)
+      this._starting = new Promise((resolve, reject) => {
+        const server = http.createServer((request, response) => this._handle(request, response));
+        server.on('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          this._server = server;
+          this._port = server.address().port;
+          resolve();
+        });
+      }).finally(() => { this._starting = null; });
+    return this._starting;
   }
 
   _handle(request, response) {
+    // Only Keywright's own frames: a web page whose name resolves to 127.0.0.1 (DNS
+    // rebinding) or that requests across origins must not read test reports and traces.
+    const origin = request.headers?.origin;
+    if (!LOCAL_HOST.test(request.headers?.host || '') || (origin && !isLocalOrigin(origin)))
+      return this._send(response, 403);
     let url, pathname;
     try {
       url = new URL(request.url, 'http://127.0.0.1');

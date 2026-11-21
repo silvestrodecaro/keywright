@@ -3,9 +3,16 @@
 const path = require('path');
 const { execFile } = require('child_process');
 const { browserEnvironment } = require('./browserEnvironment');
+const { childProcesses, killTree } = require('./processes');
 
-// In the packaged app the helper is unpacked from app.asar (see "asarUnpack" in
-// package.json): it is run by the project's Python, which cannot read archives.
+// Discovery, the keyword index and library documentation of large libraries take
+// seconds; a helper still running after this long is stuck, often at an import.
+const HELPER_TIMEOUT_MS = 180_000;
+// Starts the helper's result line (RESULT_PREFIX in keywright_runner.py).
+const RESULT_PREFIX = 'KEYWRIGHT-RESULT ';
+
+// Keywright runs from source. Should it be packaged in app.asar again, the helper
+// must be unpacked: it is run by the project's Python, which cannot read archives.
 const HELPER_DIR = path.join(__dirname, '..', 'python').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 const HELPER = path.join(HELPER_DIR, 'keywright_runner.py');
 
@@ -21,11 +28,21 @@ function pythonEnv(extra = {}) {
  * its JSON result on the last line of stdout.
  * @returns {Promise<object>} the parsed result, or { ok: false, error }
  */
-function runHelper(python, args, { cwd } = {}) {
+function runHelper(python, args, { cwd, timeoutMs = HELPER_TIMEOUT_MS } = {}) {
   return new Promise((resolve) => {
-    execFile(python, [HELPER, ...args], { cwd, env: pythonEnv(), windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+    let timedOut = false;
+    const child = execFile(python, [HELPER, ...args], { cwd, env: pythonEnv(), windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
       (error, stdout, stderr) => {
-        const line = String(stdout).trim().split('\n').pop();
+        clearTimeout(timer);
+        if (timedOut) {
+          resolve({ ok: false, error: `The Python helper did not finish within ${timeoutMs / 1000} seconds `
+            + '(a library may be waiting at import). Close and reopen the project to try again.' });
+          return;
+        }
+        // The result line has a prefix: libraries may print after it while Python exits.
+        const lines = String(stdout).trim().split('\n');
+        const marked = lines.findLast((text) => text.startsWith(RESULT_PREFIX));
+        const line = marked ? marked.slice(RESULT_PREFIX.length) : lines.pop();
         try {
           resolve(JSON.parse(line));
         } catch {
@@ -36,6 +53,11 @@ function runHelper(python, args, { cwd } = {}) {
             : (output || 'The Python helper failed.').trim() });
         }
       });
+    childProcesses.track(child);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killTree(child);
+    }, timeoutMs);
   });
 }
 

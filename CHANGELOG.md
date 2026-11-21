@@ -9,6 +9,121 @@ run from source; there are no installers yet.
 
 - Escape restores keyboard focus to the Explorer after a file change refreshes
   the tree while its context menu is open.
+- Starting Keywright a second time with the same profile brings the open window
+  to the front. A second instance used to empty the first one's undo copies of
+  AI deletions and could overwrite its recovery copies.
+- Quitting from the crash dialog, or by any other route, stops running tests,
+  browsers, the language worker and project setup processes. Some of them used
+  to keep running after Keywright closed.
+- Starting a run, the recorder, the AI browser or the MCP server twice at the
+  same moment no longer starts two of them. Stop and project changes made while
+  one is starting now take effect.
+- A Python helper or language worker stuck at a library import is stopped after
+  a time limit, and the next request starts a new one. Its error output is shown
+  when it stops.
+- The window opens even when the MCP server cannot start.
+- An AI deletion whose copy could not be made shows why, and deletions made at
+  the same time keep separate copies for undo.
+- A debug run whose connection to Keywright closes no longer stops forever at
+  the next failure, and a malformed debugger command no longer ends debugging.
+- Pausing shows a variable whose value cannot be displayed by its type instead
+  of skipping the pause.
+- Only the run's own Robot process can send events to the Testing panel and
+  receive debugger commands.
+- Keyword documentation is read for libraries that print when Python exits, and
+  for libraries imported by module name from the project folder.
+- Text that a library prints while the editor checks a file no longer delays
+  the check until it times out.
+- A file that is not UTF-8 opens read-only with an explanation. Saving it, or
+  replacing text in it from Search, used to replace its accented characters.
+- Replace in Files saves each file like the editor does: it skips files changed
+  since the search or with unsaved edits, and names them.
+- A damaged recovery file, recent projects list, MCP settings file or run
+  history is kept as `<name>.corrupt-<time>` instead of being emptied and
+  overwritten. A `keywright.json` or `mcp.json` saved with a byte order mark,
+  as Notepad does, now reads correctly.
+- Saves and settings files retry for a moment when an antivirus scanner holds
+  them, and leave no temporary file behind when they fail.
+- A section header followed by column names, as in data-driven tests
+  (`*** Test Cases ***    Username    Password`), is recognized; the file used
+  to lose highlighting and checks.
+- Regular expressions in Search accept escapes such as `\-` and `\#`, and `$10`
+  in a replacement works as in JavaScript.
+- **Add END** places `END` after the `ELSE`, `EXCEPT` and `FINALLY` branches.
+- `&` works as AND in tag filters, as in Robot Framework.
+- Renaming a keyword no longer changes arguments of unrelated keywords whose name
+  contains "keyword", and a file with `[Template]` in a comment keeps its checks.
+- `Set Local Variable` counts only in its own test or keyword.
+- A rename that fails on one file changes no file, and Go to Definition and
+  Peek show a closed file's current content, also after switching projects.
+- When the Robot check cannot run, the file says why instead of showing no
+  problems.
+- Saving a `.robot` file checks that file again in Problems instead of the whole
+  project.
+- Opening the same file twice quickly opens one tab, breakpoints follow renamed
+  files, and tabs inside a renamed folder show their current content.
+- Watch mode no longer misses changes made while it looks for affected tests,
+  applies tag filters to partial watch runs as it does to full ones, and no
+  longer reruns because the tests wrote data files.
+- The tab strip is no longer rebuilt on every keystroke.
+- The AI browser opens only web pages and files of the open project; other
+  local files and browser pages are refused.
+- An address such as `localhost:3000` opens as `http://localhost:3000` in the
+  recorder and the AI browser.
+- Recorded text with no-break or other Unicode spaces is written as escapes, so
+  it stays one argument in the generated test.
+- Selectors containing an apostrophe in a regular expression (`/it's/`) keep
+  their frame boundaries, and text with leading spaces or quotes keeps the
+  selector Playwright recorded.
+- An AI text check is compared as the generated `Get Text` step will compare it,
+  so a check that passes in the AI browser also passes in the test.
+- Runs with many tests or log messages no longer keep the window busy: the
+  Testing panel receives events in batches, redraws a few times a second and
+  appends console output instead of rewriting it.
+- The end-to-end recording test runs Robot with the browser cache Keywright
+  uses, as the app does; it used to fail when only that cache had Chromium.
+- CI fails when a test is skipped or a desktop test passes only on a retry.
+- Recording with a Playwright that lacks the recorder API fails with an
+  explanation instead of recording nothing, and an action the recorder sends in
+  an unknown format is logged instead of disappearing.
+- Long runs no longer keep every step and screenshot in memory for AI clients,
+  and the Testing panel keeps up to 5,000 log messages per test: failures and
+  warnings always, the rest in the Robot log.
+- While an AI client works, the MCP status no longer reads every changed file
+  and client configuration again after each tool call; and a hidden Search
+  panel searches again only when it is shown.
+- A `keywright.json` that cannot be read while you edit it shows its error in
+  the editor status and the Testing panel instead of leaving them loading.
+- Deleting a file that was removed after the menu opened reports it instead of
+  failing silently.
+- A Robocop configuration added in a test folder applies to the editor's lint
+  without reloading the libraries.
+- The results folder is left out of file watching and Search however
+  `keywright.json` spells it (`./results/`, an absolute path, other case). File
+  watching starts again after an error, and long bursts of changes are reported
+  at least every 2 seconds.
+- Names Windows reserves (`con`, `aux`, `com1`) are refused for new projects and
+  files, as they already were for renames.
+- A connection file left by a Keywright that crashed is removed at start.
+- The stdio bridge answers a last request sent without a final newline.
+- An AI edit in a file with Windows line endings keeps them.
+- Breakpoints and run options belong to a project folder however its path is
+  capitalized on Windows; those saved before are still found.
+- Keyword lookups requested while one runs share one new Python run that sees
+  files written meanwhile, and a library that
+  keeps changing during a lookup no longer keeps Python busy without end.
+
+### Security
+
+- A Python interpreter that `keywright.json` sets outside the project folder is
+  used only after you confirm it, once per project. One chosen in Project
+  Settings counts as confirmed.
+- Robot reports and traces are refused to other host names and to web pages
+  (DNS rebinding), and the previous project's folders are no longer served.
+- Report and trace frames are sandboxed and get no browser permissions.
+- **Test connection** shows the command and asks first when it comes from a
+  configuration file inside the project.
+- `SECURITY.md` describes what opening a project runs and the MCP threat model.
 
 ## 0.5.0 - 2026-11-16
 

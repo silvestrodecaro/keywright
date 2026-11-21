@@ -21,7 +21,13 @@ function escapeArg(value, options = {}) {
     .replace(/([$@&%])\{/g, '\\$1{')
     .replace(/\r/g, '\\r')
     .replace(/\n/g, '\\n')
-    .replace(/\t/g, '\\t');
+    .replace(/\t/g, '\\t')
+    // Robot separates cells on any two whitespace characters (a no-break space and a
+    // space too) and strips them at the ends: other whitespace is written as an escape.
+    .replace(/[^\S ]/g, (ch) => {
+      const code = ch.charCodeAt(0);
+      return code < 0x100 ? `\\x${code.toString(16).toUpperCase().padStart(2, '0')}` : `\\u${code.toString(16).toUpperCase().padStart(4, '0')}`;
+    });
 
   if (escapeNamedArg && IDENTIFIER_BEFORE_EQUALS.test(text))
     text = text.replace('=', '\\=');

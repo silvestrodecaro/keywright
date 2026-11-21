@@ -214,3 +214,53 @@ test('test_failure_details shows the failing line in its file, the log and the s
   assert.equal((await f.raw('test_failure_details', { test: 'Missing' })).result.isError, true);
   assert.equal((await f.raw('test_failure_details', { test: 'Login' })).result.content[0].text.split('\n')[0], 'FAIL  Tests.Login.Login');
 });
+
+test('the AI browser opens web pages and project files only', async () => {
+  const f = setup();
+  const visited = [];
+  f.app.browser = { open: true, navigate: async (url) => { visited.push(url); return 'snapshot'; }, start: async () => {} };
+  fs.writeFileSync(path.join(f.root, 'page.html'), '<p>hi</p>');
+  const inside = require('url').pathToFileURL(path.join(f.root, 'page.html')).href;
+  const outside = require('url').pathToFileURL(path.join(tempDir('outside'), 'secret.txt')).href;
+
+  assert.equal((await f.callTool('browser_navigate', { url: 'https://example.com/login' })).isError, false);
+  assert.equal((await f.callTool('browser_navigate', { url: inside })).isError, false);
+  for (const url of [outside, 'chrome://settings', 'javascript:alert(1)', 'view-source:https://example.com']) {
+    const result = await f.callTool('browser_navigate', { url });
+    assert.equal(result.isError, true, url);
+    assert.match(result.text, /only opens web pages|project/i);
+  }
+  const opened = await f.callTool('browser_open', { url: outside });
+  assert.equal(opened.isError, true);
+  assert.deepEqual(visited, ['https://example.com/login', inside]);
+});
+
+test('a long run keeps the failing step and the last screenshots, not every step', async () => {
+  const runner = new EventEmitter();
+  const tracker = new RunTracker(runner);
+  const run = await tracker.start(async () => {});
+  runner.emit('event', { type: 'test-start', id: 'S.T' });
+  for (let i = 0; i < 5000; i++) {
+    runner.emit('event', { type: 'step-start', id: `k${i}`, name: 'Log', args: [String(i)], test: 'S.T' });
+    runner.emit('event', { type: 'step-end', id: `k${i}`, status: 'PASS', test: 'S.T' });
+  }
+  for (let i = 0; i < 50; i++)
+    runner.emit('event', { type: 'log', test: 'S.T', level: 'INFO', text: 'shot', images: [`file:///shot-${i}.png`] });
+  runner.emit('event', { type: 'step-start', id: 'fail', name: 'Fail', args: ['boom'], test: 'S.T', lineno: 9, source: 'tests/a.robot' });
+  runner.emit('event', { type: 'step-end', id: 'fail', status: 'FAIL', test: 'S.T' });
+  runner.emit('event', { type: 'test-end', id: 'S.T', status: 'FAIL', message: 'boom' });
+  assert.equal(run.steps.size, 0);
+  const test = run.tests.get('S.T');
+  assert.match(test.failedStep, /^Fail {4}boom \(tests\/a\.robot:9\)$/);
+  assert.ok(test.images.length <= 10);
+  assert.equal(test.images.at(-1), 'file:///shot-49.png');
+});
+
+test('an edit in a CRLF file keeps CRLF line endings, even when old_text is one line', async () => {
+  const f = setup();
+  const file = path.join(f.root, 'tests', 'login.robot');
+  const result = await f.callTool('edit_file', { path: 'tests/login.robot', old_text: '    Log    one', new_text: '    Log    one\n    Log    two' });
+  assert.equal(result.isError, false, result.text);
+  const text = fs.readFileSync(file, 'utf8');
+  assert.equal(text, '*** Test Cases ***\r\nLogin\r\n    Log    one\r\n    Log    two\r\n');
+});

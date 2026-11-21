@@ -4,8 +4,10 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const { EventEmitter } = require('events');
-const { spawn, execFile } = require('child_process');
+const { spawn } = require('child_process');
 const { pythonEnv, runHelper } = require('./pythonHelper');
+const { killTree } = require('./processes');
+const { randomUUID, timingSafeEqual } = require('crypto');
 
 /**
  * Builds the suite/test tree of `project` with Robot's own parser.
@@ -18,16 +20,6 @@ function discoverTests(project) {
   if (!fs.existsSync(testsPath))
     return Promise.resolve({ ok: false, error: `Tests folder not found: ${project.config.testsDir}` });
   return runHelper(project.python, ['discover', testsPath, project.root], { cwd: project.root });
-}
-
-/** Kills a process and all its children (the Browser library starts Node and browsers). */
-function killTree(child) {
-  if (!child || child.exitCode !== null)
-    return;
-  if (process.platform === 'win32')
-    execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
-  else
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
 }
 
 /**
@@ -46,10 +38,12 @@ class TestRunner extends EventEmitter {
     this._socket = null; // the listener's connection
     this._root = null;
     this._stopped = false;
+    this._starting = false; // between run() and the spawn, so a second run() is refused
+    this._finished = null; // resolves when the running process has exited
   }
 
   get running() {
-    return !!this._child;
+    return this._starting || !!this._child;
   }
 
   /**
@@ -61,13 +55,26 @@ class TestRunner extends EventEmitter {
    *   debug: stop at breakpoints (project-relative path -> lines) and accept debugCommand()
    */
   async run(project, options = {}) {
-    if (this._child)
+    if (this.running)
       throw new Error('Tests are already running.');
     if (!project.python)
       throw new Error('This project has no virtual environment (.venv) with Robot Framework.');
+    this._starting = true;
+    this._stopped = false;
+    try {
+      await this._start(project, options);
+    } catch (error) {
+      this._closeServer();
+      throw error;
+    } finally {
+      this._starting = false;
+    }
+  }
 
+  async _start(project, options) {
     const port = await this._listen();
     this._root = fs.realpathSync.native(project.root); // Robot reports long paths, not 8.3 short names
+    this._relativeCache = new Map();
     const breakpoints = options.debug ? this._absoluteBreakpoints(options.debug.breakpoints) : null;
     const outputDir = path.resolve(project.root, project.config.outputDir);
     const args = [
@@ -90,11 +97,11 @@ class TestRunner extends EventEmitter {
     args.push(...splitArgs(options.extraArgs));
     args.push(path.join(project.root, project.config.testsDir));
 
-    this._stopped = false;
     const child = spawn(project.python, args, {
       cwd: project.root,
       env: pythonEnv({
         KEYWRIGHT_PORT: String(port),
+        KEYWRIGHT_TOKEN: this._token,
         KEYWRIGHT_SELECT: JSON.stringify(options.select || []),
         // Browser library: record a Playwright trace for every `New Context`.
         ...(options.trace ? { ROBOT_FRAMEWORK_BROWSER_TRACING: 'true' } : {}),
@@ -108,15 +115,24 @@ class TestRunner extends EventEmitter {
       detached: process.platform !== 'win32', // own process group, so killTree can reach the children
     });
     this._child = child;
+    let finish;
+    this._finished = new Promise((resolve) => { finish = resolve; });
     this.emit('output', `> robot ${args.slice(2).join(' ')}\n`);
-    child.stdout.on('data', (chunk) => this.emit('output', chunk.toString()));
-    child.stderr.on('data', (chunk) => this.emit('output', chunk.toString()));
+    // Decoded as a stream, so a character split between two chunks stays whole.
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (text) => this.emit('output', text));
+    child.stderr.on('data', (text) => this.emit('output', text));
     child.on('error', (error) => this.emit('output', `\n${error.message}\n`));
     child.on('close', (exitCode) => {
       this._child = null;
+      this._finished = null;
       this._closeServer();
       this.emit('finished', { exitCode, stopped: this._stopped, outputDir });
+      finish();
     });
+    if (this._stopped) // stop() was called while the run was starting
+      killTree(child);
   }
 
   /**
@@ -140,6 +156,9 @@ class TestRunner extends EventEmitter {
   _relative(source) {
     if (!source || !this._root)
       return source;
+    // Every step reports its file: each one is resolved once per run.
+    if (this._relativeCache.has(source))
+      return this._relativeCache.get(source);
     let real = source;
     try {
       real = fs.realpathSync.native(source); // Robot keeps the form of the path it was given (8.3 or long)
@@ -147,20 +166,29 @@ class TestRunner extends EventEmitter {
       // not a file on disk: keep it as is
     }
     const relative = path.relative(this._root, real);
-    return relative.startsWith('..') || path.isAbsolute(relative) ? source : relative.split(path.sep).join('/');
+    const result = relative.startsWith('..') || path.isAbsolute(relative) ? source : relative.split(path.sep).join('/');
+    this._relativeCache.set(source, result);
+    return result;
   }
 
-  stop() {
+  /** Stops the running tests. @returns {Promise<void>} resolves once Robot has exited */
+  async stop() {
+    if (this._starting)
+      this._stopped = true; // the run kills its process as soon as it has one
     if (!this._child)
       return;
     this._stopped = true;
-    killTree(this._child);
+    const finished = this._finished;
+    await killTree(this._child);
+    await finished;
   }
 
   _listen() {
+    // The listener's first line presents this token; other local connections are closed.
+    this._token = randomUUID();
     return new Promise((resolve, reject) => {
       const server = net.createServer((socket) => {
-        this._socket = socket;
+        let accepted = false;
         let buffer = '';
         socket.setEncoding('utf8');
         socket.on('data', (chunk) => {
@@ -171,6 +199,15 @@ class TestRunner extends EventEmitter {
             buffer = buffer.slice(newline + 1);
             if (!line.trim())
               continue;
+            if (!accepted) {
+              if (this._socket || !this._isHello(line)) {
+                socket.destroy();
+                return;
+              }
+              accepted = true;
+              this._socket = socket;
+              continue;
+            }
             try {
               const event = JSON.parse(line);
               if (event.type === 'step-start' && event.source)
@@ -193,6 +230,17 @@ class TestRunner extends EventEmitter {
         resolve(server.address().port);
       });
     });
+  }
+
+  _isHello(line) {
+    try {
+      const hello = JSON.parse(line);
+      return hello?.type === 'hello' && typeof hello.token === 'string'
+        && hello.token.length === this._token.length
+        && timingSafeEqual(Buffer.from(hello.token), Buffer.from(this._token));
+    } catch {
+      return false;
+    }
   }
 
   _closeServer() {

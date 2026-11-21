@@ -5,12 +5,14 @@
 
 const fs = require('fs');
 const path = require('path');
-const { resolveInProject } = require('./projects');
+const { resolveInProject, readProjectFile, writeProjectFile, decodeUtf8 } = require('./projects');
 const { buildRegex, findInText, applyReplacements, includeFilter } = require('../renderer/searchCore');
 
 const SKIP_DIRS = new Set(['.git', '.venv', 'venv', 'node_modules', '__pycache__', '.pytest_cache', '.idea', '.vscode']);
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_RESULTS = 5000;
+
+const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === String(b).toLowerCase() : a === b);
 
 /** Project-relative paths of the files to search, skipping tool folders and the results folder. */
 function projectFiles(root, outputDir, relative = '', depth = 0) {
@@ -25,17 +27,17 @@ function projectFiles(root, outputDir, relative = '', depth = 0) {
   return entries.sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
     const entryPath = relative ? `${relative}/${entry.name}` : entry.name;
     if (entry.isDirectory())
-      return SKIP_DIRS.has(entry.name) || entryPath === outputDir ? [] : projectFiles(root, outputDir, entryPath, depth + 1);
+      return SKIP_DIRS.has(entry.name) || samePath(entryPath, outputDir) ? [] : projectFiles(root, outputDir, entryPath, depth + 1);
     return entry.isFile() ? [entryPath] : [];
   });
 }
 
-/** Text content, or null for binary and large files. */
+/** Text content, or null for binary, large and not UTF-8 files. */
 function readText(file) {
   const buffer = fs.readFileSync(file);
   if (buffer.length > MAX_FILE_BYTES || buffer.includes(0))
     return null;
-  return buffer.toString('utf8');
+  return decodeUtf8(buffer);
 }
 
 /**
@@ -51,7 +53,9 @@ function searchProject(root, options, { exclude = [], outputDir = 'results' } = 
   const excluded = new Set(exclude);
   const files = [];
   let total = 0;
-  for (const relative of projectFiles(root, outputDir.replace(/\\/g, '/').replace(/\/$/, ''))) {
+  // `./results/` or an absolute path inside the project: the same folder as `results`.
+  const output = path.relative(root, path.resolve(root, String(outputDir).replace(/\\/g, '/'))).split(path.sep).join('/');
+  for (const relative of projectFiles(root, output)) {
     if (excluded.has(relative) || !include(relative))
       continue;
     let text;
@@ -76,15 +80,25 @@ function searchProject(root, options, { exclude = [], outputDir = 'results' } = 
 /**
  * Replaces matches in files on disk, found again with the same options.
  * @param {{ path: string, at?: { line: number, column: number }[] }[]} entries at: only these matches
- * @returns {{ count: number, files: string[] }}
+ * @param {{ dirtyPaths?: string[] }} [scope] dirtyPaths: files with unsaved editor changes, left alone
+ * @returns {{ count: number, files: string[], skipped: string[] }} skipped: unsaved or changed meanwhile
  */
-function replaceInProject(root, options, replacement, entries) {
+function replaceInProject(root, options, replacement, entries, { dirtyPaths = [] } = {}) {
   const re = buildRegex(options);
+  const dirty = new Set(dirtyPaths);
   let count = 0;
   const changed = [];
+  const skipped = [];
   for (const entry of entries) {
+    if (dirty.has(entry.path)) {
+      skipped.push(entry.path);
+      continue;
+    }
     const file = resolveInProject(root, entry.path);
-    const text = readText(file);
+    if (fs.statSync(file).size > MAX_FILE_BYTES)
+      continue;
+    // The same revision-checked, atomic replacement as an editor save.
+    const { content: text, revision } = readProjectFile(root, entry.path);
     if (text === null)
       continue;
     let matches = findInText(text, re, { replacement, regex: options.regex });
@@ -92,11 +106,14 @@ function replaceInProject(root, options, replacement, entries) {
       matches = matches.filter((m) => entry.at.some((at) => at.line === m.line && at.column === m.column));
     if (!matches.length)
       continue;
-    fs.writeFileSync(file, applyReplacements(text, matches));
+    if (!writeProjectFile(root, entry.path, applyReplacements(text, matches), revision).ok) {
+      skipped.push(entry.path);
+      continue;
+    }
     count += matches.length;
     changed.push(entry.path);
   }
-  return { count, files: changed };
+  return { count, files: changed, skipped };
 }
 
 module.exports = { searchProject, replaceInProject, projectFiles };

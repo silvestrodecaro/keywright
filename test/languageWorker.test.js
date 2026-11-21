@@ -72,3 +72,66 @@ test('lints unsaved content with Robocop and the project configuration', { skip:
       await new Promise((resolve) => child.once('exit', resolve));
   }
 });
+
+test('a helper that stops reports what it printed', { timeout: 20_000 }, async () => {
+  // Node cannot run the Python helper: it stops at once with a SyntaxError on stderr.
+  const worker = new LanguageWorker(process.execPath, root);
+  try {
+    await assert.rejects(worker.request('check', { path: 'a.robot', text: '' }), /stopped unexpectedly[\s\S]*SyntaxError/);
+  } finally {
+    worker.dispose();
+  }
+});
+
+test('a request left unanswered stops the helper, so the next request starts a new one', { skip: !python && 'no Python with Robot Framework', timeout: 30_000 }, async () => {
+  const worker = new LanguageWorker(python, root, { timeoutMs: 1 });
+  try {
+    const request = worker.request('check', { path: 'tests/ok.robot', text: '*** Test Cases ***\nT\n    Log    x\n' });
+    const child = worker._child;
+    await assert.rejects(request, /No answer/);
+    if (child.exitCode === null)
+      await new Promise((resolve) => child.once('exit', resolve));
+    assert.notStrictEqual(worker._child, child);
+  } finally {
+    worker.dispose();
+  }
+});
+
+test('a line of stdout that is JSON but not a response is ignored', () => {
+  const worker = new LanguageWorker(python || 'python', root);
+  assert.doesNotThrow(() => worker._onData('null\n42\n"text"\n'));
+  worker.dispose();
+});
+
+test('a request that is JSON but not an object does not stop the worker', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
+  const worker = new LanguageWorker(python, root);
+  try {
+    worker._ensureStarted().stdin.write('[1, 2]\n');
+    const { problems } = await worker.request('check', { path: 'tests/ok.robot', text: '*** Test Cases ***\nT\n    Log    x\n' });
+    assert.deepStrictEqual(problems, []);
+  } finally {
+    worker.dispose();
+  }
+});
+
+test('a Robocop configuration added in a subfolder applies without restarting the worker', { skip: !python && 'no Python with Robot Framework', timeout: 60_000 }, async () => {
+  const dir = tempDir('lint-nested');
+  fs.mkdirSync(path.join(dir, 'tests'));
+  const worker = new LanguageWorker(python, dir);
+  const lint = (text) => worker.request('lint', { path: path.join(dir, 'tests', 'a.robot'), root: dir, text });
+  try {
+    const text = '*** Test Cases ***\nmy test\n    Log    x\n';
+    const first = await lint(text);
+    if (!first.available)
+      return; // robotframework-robocop is not installed in this Python
+    assert.ok(first.problems.some((p) => p.rule === 'NAME07'));
+    fs.writeFileSync(path.join(dir, 'tests', 'robocop.toml'), '[tool.robocop.lint]\nignore = ["NAME07"]\n');
+    const configured = await lint(text);
+    assert.ok(!configured.problems.some((p) => p.rule === 'NAME07'));
+  } finally {
+    const child = worker._child;
+    worker.dispose();
+    if (child && child.exitCode === null)
+      await new Promise((resolve) => child.once('exit', resolve));
+  }
+});

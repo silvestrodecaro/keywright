@@ -60,7 +60,9 @@ jobs:
         run: .\.venv\Scripts\python.exe -m Browser.entry init chromium
       - name: Verify Python test dependencies
         run: .\.venv\Scripts\python.exe -c "import robot, Browser, robocop"
-      - run: npm test
+      # Fails when a test is skipped: every layer must run on CI.
+      - name: Run the Node tests
+        run: node scripts/test-regression.js --node-only
       - name: Run the example Robot Framework tests
         run: .\.venv\Scripts\python.exe -m robot --outputdir examples/browser-walkthrough/results examples/browser-walkthrough/tests
       - name: Verify setup from a long path with spaces
@@ -91,7 +93,7 @@ jobs:
           $formatter = (Select-String -Path requirements-dev.txt -Pattern '^robotframework-robocop==').Line
           & $env:KEYWRIGHT_PYTHON -m pip install $formatter
       - name: Run the Keywright desktop UI tests
-        run: npm run test:ui
+        run: node scripts/test-regression.js --desktop-only
       - name: Upload setup and desktop UI failure evidence
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

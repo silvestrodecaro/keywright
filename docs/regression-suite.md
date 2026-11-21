@@ -29,6 +29,16 @@ for the failed test. Desktop fixtures use temporary projects and profiles. The
 [Verify workflow](../.github/workflows/verify.yml) also runs the example from
 the Robot CLI and performs guided setup from a long Windows path.
 
+The suite fails when a test is skipped, and when a desktop test passes only on a
+retry. `--node-only` and `--desktop-only` run one layer; the Verify workflow runs
+them as separate steps, so a missing Python, Git or browser on the runner fails
+the job instead of skipping tests. Process lifecycle, JSON persistence, search,
+helper timeouts and event batching have their own files:
+[processes](../test/processes.test.js), [JSON files](../test/jsonFile.test.js),
+[project search](../test/projectSearch.test.js),
+[Python helper](../test/pythonHelper.test.js) and
+[event batches](../test/eventBatch.test.js).
+
 ## Manual checks
 
 | Scenario | What to verify |

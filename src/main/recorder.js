@@ -24,6 +24,8 @@ class RecorderSession extends EventEmitter {
     this._browser = null;
     this._context = null;
     this._stopping = null;
+    this._launching = null; // while the browser is launching
+    this._launchCancelled = false;
     this._recordingActions = false;
     this._recordingGeneration = 0;
     this._activePage = null;
@@ -46,7 +48,7 @@ class RecorderSession extends EventEmitter {
    *   headless is only meant for tests; record: false opens the browser without recording (to pick locators)
    */
   async start(options = {}) {
-    if (this._browser)
+    if (this._browser || this._launching)
       throw new Error('A recording is already in progress.');
     const browserType = playwright[options.browser || 'chromium'];
     if (!browserType)
@@ -55,10 +57,28 @@ class RecorderSession extends EventEmitter {
     this.actions = [];
     this.emit('actions', this.actions);
 
-    const browser = await browserType.launch({
-      headless: !!options.headless,
-      ...(options.channel ? { channel: options.channel } : {}),
-    });
+    // Set before the first await, so a second start() or a stop() sees the launch.
+    this._launchCancelled = false;
+    const launching = (async () => {
+      const launched = await browserType.launch({
+        headless: !!options.headless,
+        ...(options.channel ? { channel: options.channel } : {}),
+      });
+      if (this._launchCancelled) {
+        await launched.close().catch(() => {});
+        return null;
+      }
+      return launched;
+    })();
+    this._launching = launching;
+    let browser;
+    try {
+      browser = await launching;
+    } finally {
+      this._launching = null;
+    }
+    if (!browser)
+      throw new Error('The recorder was stopped while the browser was starting.');
     this._browser = browser;
     browser.on('disconnected', () => this._onClosed(browser));
     try {
@@ -88,6 +108,10 @@ class RecorderSession extends EventEmitter {
   }
 
   async stop() {
+    if (this._launching) {
+      this._launchCancelled = true; // start() closes the browser as soon as it is up
+      await this._launching.catch(() => {});
+    }
     if (!this._browser)
       return;
     if (!this._stopping) {
@@ -141,6 +165,10 @@ class RecorderSession extends EventEmitter {
     const context = this._context;
     if (!context || this._stopping)
       return;
+    // A private Playwright API: a different playwright-core may not have it.
+    if (typeof context._startRecording !== 'function')
+      throw new Error('This Playwright has no recorder API (BrowserContext._startRecording). '
+        + 'Keywright records with the playwright-core version pinned in package.json; run npm ci.');
     const generation = ++this._recordingGeneration;
     const active = () => this._recordingActions && this._context === context && this._recordingGeneration === generation;
     this._recordingActions = true;
@@ -187,8 +215,14 @@ class RecorderSession extends EventEmitter {
 
   _add(data, code) {
     const action = parseAction(data, code);
-    if (!action)
+    if (!action) {
+      // The recorder's jsonl format changed (another playwright-core): say so once.
+      if (!this._unreadableReported) {
+        this._unreadableReported = true;
+        this.emit('unreadable-action', `${data?.name || 'action'}: ${String(code).slice(0, 200)}`);
+      }
       return;
+    }
     this.actions.push(action);
     this.emit('actions', this.actions);
   }
@@ -237,8 +271,12 @@ function parseAction(data, code) {
 
 function normalizeUrl(url) {
   const trimmed = url.trim();
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed))
+  // `localhost:3000` is a host and port, not a scheme: only `x://` and the schemes without
+  // slashes that browsers use count as one.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) || /^(?:about|data|javascript|blob|view-source|chrome|edge|mailto):/i.test(trimmed))
     return trimmed;
+  if (/^(?:localhost|127(?:\.\d+){3}|\[::1\]|0\.0\.0\.0)(?::\d+)?(?:[/?#]|$)/i.test(trimmed))
+    return 'http://' + trimmed; // local development servers rarely have certificates
   return 'https://' + trimmed;
 }
 

@@ -154,3 +154,56 @@ test('tag filters, dry run and extra arguments', { skip, timeout: 60_000 }, asyn
   const dry = await runAndCollect(fixtureProject(), { select: ['Tests.Basic.Failing Test'], dryrun: true });
   assert.deepStrictEqual(testEnds(dry.events), { 'Tests.Basic.Failing Test': 'PASS' });
 });
+
+test('a second run while the first is starting is refused', { skip, timeout: 60_000 }, async () => {
+  const runner = new TestRunner();
+  const finished = new Promise((resolve) => runner.once('finished', resolve));
+  const project = fixtureProject();
+  const first = runner.run(project, { select: ['Tests.Basic.Passing Test'] });
+  await assert.rejects(runner.run(project, { select: ['Tests.Basic.Passing Test'] }), /already running/);
+  await first;
+  await finished;
+  assert.strictEqual(runner.running, false);
+});
+
+test('stop resolves once Robot has exited', { skip, timeout: 60_000 }, async () => {
+  const runner = new TestRunner();
+  const started = new Promise((resolve) => runner.once('event', resolve));
+  await runner.run(fixtureProject(), { select: ['Tests.Basic.Passing Test'] });
+  await started;
+  await runner.stop();
+  assert.strictEqual(runner.running, false);
+});
+
+test('a run that fails to start closes its listener and can be retried', { skip }, async () => {
+  const runner = new TestRunner();
+  const project = { ...fixtureProject(), root: path.join(tempDir('missing'), 'gone') };
+  await assert.rejects(runner.run(project, {}));
+  assert.strictEqual(runner.running, false);
+  assert.strictEqual(runner._server, null, 'the listener socket stays open');
+  await assert.rejects(runner.run(project, {}), (error) => !/already running/.test(error.message));
+});
+
+test('only the run\'s own listener is heard on the event port', { skip, timeout: 60_000 }, async () => {
+  const net = require('net');
+  const runner = new TestRunner();
+  const events = [];
+  runner.on('event', (event) => events.push(event));
+  const finished = new Promise((resolve) => runner.once('finished', resolve));
+  const listening = runner._listen.bind(runner);
+  let intruder;
+  // Another local process connects to the port before Robot does and sends an event.
+  runner._listen = async () => {
+    const port = await listening();
+    intruder = net.connect(port, '127.0.0.1', () => intruder.write(`${JSON.stringify({ type: 'test-end', id: 'Forged', status: 'PASS' })}\n`));
+    intruder.on('error', () => {});
+    await new Promise((resolve) => intruder.once('connect', resolve));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return port;
+  };
+  await runner.run(fixtureProject(), { select: ['Tests.Basic.Passing Test'] });
+  await finished;
+  intruder.destroy();
+  assert.ok(!events.some((event) => event.id === 'Forged'), 'an event from another process was accepted');
+  assert.deepStrictEqual(testEnds(events), { 'Tests.Basic.Passing Test': 'PASS' });
+});

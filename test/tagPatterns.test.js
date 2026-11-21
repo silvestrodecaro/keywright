@@ -26,3 +26,9 @@ test('include and exclude lists', () => {
   assert.ok(!selected(['smoke', 'slow'], { include: ['smoke'], exclude: ['slow'] }));
   assert.ok(selected([], {}));
 });
+
+test('& is AND, as in Robot Framework', () => {
+  assert.strictEqual(selected(['a', 'b'], { include: ['a&b'] }), true);
+  assert.strictEqual(selected(['a'], { include: ['a&b'] }), false);
+  assert.strictEqual(selected(['a', 'b'], { exclude: ['a & b'] }), false);
+});

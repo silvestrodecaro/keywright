@@ -16,7 +16,6 @@ const POPUP_WAIT = 600;
 // Playwright's modifier bitmask, as in recorded actions (see robotGenerator.js).
 const MODIFIER_BITS = { Alt: 1, Control: 2, Meta: 4, Shift: 8 };
 
-const normalizeSpace = (text) => String(text ?? '').replace(/\s+/g, ' ').trim();
 
 /**
  * A headed browser driven by an AI client through the MCP tools. The model reads
@@ -40,6 +39,8 @@ class AgentBrowser extends EventEmitter {
     this.actions = [];
     this.options = { browser: 'chromium', channel: null, viewport: null };
     this._browser = null;
+    this._launching = null; // while the browser is launching
+    this._launchCancelled = false;
     this._context = null;
     this._page = null;
     this._pageIds = new WeakMap();
@@ -57,7 +58,7 @@ class AgentBrowser extends EventEmitter {
    *           headless?: boolean }} options headless is only meant for tests
    */
   async start(options = {}) {
-    if (this._browser)
+    if (this._browser || this._launching)
       throw new ToolError('The browser is already open. Use browser_navigate, or browser_close first.');
     const browserType = playwright[options.browser || 'chromium'];
     if (!browserType)
@@ -65,7 +66,25 @@ class AgentBrowser extends EventEmitter {
     this.options = { browser: options.browser || 'chromium', channel: options.channel || null, viewport: options.viewport || null };
     this.actions = [];
     this.emit('actions', this.actions);
-    const browser = await browserType.launch({ headless: !!(options.headless ?? this.headless), ...(options.channel ? { channel: options.channel } : {}) });
+    // Set before the first await, so a second start() or a close() sees the launch.
+    this._launchCancelled = false;
+    const launching = (async () => {
+      const launched = await browserType.launch({ headless: !!(options.headless ?? this.headless), ...(options.channel ? { channel: options.channel } : {}) });
+      if (this._launchCancelled) {
+        await launched.close().catch(() => {});
+        return null;
+      }
+      return launched;
+    })();
+    this._launching = launching;
+    let browser;
+    try {
+      browser = await launching;
+    } finally {
+      this._launching = null;
+    }
+    if (!browser)
+      throw new ToolError('The browser was closed while it was starting.');
     this._browser = browser;
     browser.on('disconnected', () => this._onClosed(browser));
     try {
@@ -85,6 +104,10 @@ class AgentBrowser extends EventEmitter {
   }
 
   async close() {
+    if (this._launching) {
+      this._launchCancelled = true; // start() closes the browser as soon as it is up
+      await this._launching.catch(() => {});
+    }
     const browser = this._browser;
     if (browser)
       await browser.close().catch(() => {});
@@ -310,10 +333,12 @@ ${pressed}`;
           throw new ToolError('kind "text" needs the expected "text".');
         action = { name: 'assertText', text, substring: !exact };
         check = async () => {
+          // Compared as the recorded `Get Text  ==` / `*=` step will compare it: not normalized,
+          // so a step that passes here passes in the test too. The actual text is shown with
+          // its line breaks, for the AI to correct its expectation.
           // biome-ignore lint/performance/useDomNodeTextContent: Playwright's Locator.innerText, the rendered text Browser's Get Text compares
-          const actual = normalizeSpace(await locator.innerText());
-          const expected = normalizeSpace(text);
-          return { ok: exact ? actual === expected : actual.includes(expected), actual: `"${actual}"` };
+          const actual = await locator.innerText();
+          return { ok: exact ? actual === text : actual.includes(text), actual: JSON.stringify(actual) };
         };
         break;
       }

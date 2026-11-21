@@ -30,6 +30,16 @@ The window denies every new window and page navigation. HTTP and HTTPS links, fr
 keyword documentation, Robot logs or traces, open in the system browser; other
 schemes are ignored.
 
+One Keywright runs per profile (`userData`): a second start focuses the first
+window and exits, because both would share the recovery copies, the MCP undo folder
+and the MCP connection file. Every way of quitting goes through `before-quit`, which
+stops the runner, the language worker, the recorder, picker and AI browsers, the
+local servers and the processes in the shared registry of
+[processes.js](../src/main/processes.js) (project setup, installs, formatting,
+Python helpers), each with a time limit, before the application exits. A failure
+to start the MCP server is logged and written as a crash report; the window opens
+regardless.
+
 The page draws the title bar in `index.html`, outside the views. The window uses
 `titleBarStyle: 'hidden'` with `titleBarOverlay`, so the system still draws the
 window buttons over the page and provides Snap Layouts, the system menu and top-edge
@@ -88,7 +98,8 @@ the executable exists. Package availability is determined by subsequent operatio
 not by that existence check.
 
 Opening a project stops the current runner, language worker and recorder/picker
-sessions, loads project state and recreates its file watcher. File changes are
+sessions, waits for the test process to exit, loads project state and recreates its
+file watcher. Opening and closing projects run one after another. File changes are
 published as project-relative paths. The renderer reloads unmodified open files and
 refreshes indices, diagnostics, search and watch-mode selection as applicable.
 
@@ -99,7 +110,12 @@ of that file, and marks only that captured version saved. The tab retains the
 revision returned by the last read or successful write. Watcher reloads never
 advance the revision of a dirty model or apply a response made stale by a newer edit.
 
-`projects.readProjectFile()` returns a SHA-256 revision of the bytes read.
+`projects.readProjectFile()` returns a SHA-256 revision of the bytes read. A file that
+is not valid UTF-8 is returned without content and with the reason, so it opens
+read-only: saving the decoded text would replace its non-ASCII characters. Search and
+replace skip such files too. A replacement on disk reads and writes each file through
+`readProjectFile()` and `writeProjectFile()`, so it has the same revision check and
+atomic rename as an editor save, and leaves alone files with unsaved editor changes.
 `writeProjectFile()` requires that revision, writes a temporary sibling, rechecks
 the destination and renames the replacement. It returns either the new revision
 or a conflict without overwriting. A deleted destination has revision `null` and
@@ -195,9 +211,19 @@ Running disk contents without saving requires an explicit choice and leaves a
 visible notice. Watch runs pause without a dialog while buffers are dirty.
 
 The helper identifies tests by full names because Robot's positional IDs change
-when suites are filtered. Listener events are newline-delimited JSON sent over the
+when suites are filtered. The main process forwards listener events and console
+output to the renderer in batches every 50 ms (`tests:events`, see
+[eventBatch.js](../src/main/eventBatch.js)); debugger events and the end of the run
+are sent at once, after everything before them. While tests run, the Testing panel
+redraws at most every 150 ms and the console appends new text instead of replacing
+it. Listener events are newline-delimited JSON sent over the
 local socket. They describe suite/test starts and ends, body items, logs, traces and
 debugger state. Debugger commands travel in the opposite direction over the socket.
+The listener's first line presents a token generated for the run and passed in the
+environment; the runner closes connections without it and accepts only one, so
+another local process cannot send events or receive debugger commands. The Python
+side skips malformed command lines. When the connection closes, the debugger
+detaches: breakpoints and pause-on-failure are dropped and the run continues.
 
 The Python debugger handles breakpoints, conditions, stepping, pause-on-failure,
 stack/variable inspection and evaluation in the running test. Paths are normalized
@@ -208,18 +234,35 @@ children do not remain running.
 The renderer maintains discovered tests, current results, suite setup/teardown
 steps, trace references and debugger state. Watch mode uses a pure selection helper:
 suite changes target their watched tests; other relevant dependencies conservatively
-target all watched tests.
+target all watched tests. Watch runs apply the Run options' tag filters, whether they
+run every watched test or some. Changes are processed one pass at a time; those that
+arrive while tests run are taken when the run ends, except data files (not `.robot`,
+`.resource` or `.py`), which are most likely written by the tests themselves.
+
+The Problems panel checks every Robot file when the project opens and when keywords
+load. A changed `.robot` file is checked again alone; a change to a resource, library
+or other file checks every file again, since it can change their problems. When the
+Python check cannot run, the file gets an information marker with the reason instead
+of looking clean. Definition previews of closed files are discarded when the file
+changes on disk or the project changes, and rename reads closed files from disk.
 
 ## Editor analysis and Python helpers
 
 There are two helper modes:
 
 - `runHelper()` starts a one-shot process for discovery, project indexing or libdoc.
-  Its result is the last JSON line on stdout, allowing imported libraries to print
-  earlier diagnostic text.
+  Its result is the last stdout line starting with `KEYWRIGHT-RESULT `, so imported
+  libraries can print before it and their exit handlers after it. The project root
+  is on `sys.path`, as for `python -m robot`, so libraries named by module in the
+  project folder are found.
 - `LanguageWorker` keeps a `serve` process for syntax and Robocop lint requests.
-  Requests have IDs, newline framing and timeouts; a later request can restart a
-  worker that exited.
+  Requests have IDs, newline framing and a 15-second timeout. Responses have stdout
+  to themselves: during `serve`, what libraries print goes to stderr. A request left
+  unanswered stops the worker, so the next one starts a new process; so does a
+  worker that exited. Errors include the end of the worker's error output.
+
+One-shot helpers stop after three minutes and report that a library may be waiting
+at import.
 
 `KeywordIndex` combines parsed project keywords with cached library documentation.
 The cache key includes project root, Python executable and library import. Libdoc
@@ -294,11 +337,13 @@ image content.
 
 [changes.js](../src/main/mcp/changes.js) records each file change the tools make.
 An update keeps the earlier text and the SHA-256 of the written content; a deletion
-first copies the entry (up to 20 MB) to `mcp-undo/` in `userData`; a rename keeps
-both paths. Undo (`mcp:undo-change`) applies only while the disk still matches the
+first copies the entry (up to 20 MB) to its own folder in `mcp-undo/` in `userData`,
+and a copy that could not be made is listed with its reason; a rename keeps both
+paths. Undo (`mcp:undo-change`) applies only while the disk still matches the
 change: the written content's hash, the absence of the deleted path, or the renamed
 entry at its new name. It refuses paths with unsaved editor changes and restores
-updates through `writeProjectFile()` with the written revision. The log keeps 100
+updates through `writeProjectFile()` with the written revision. A deleted entry is
+copied beside its path and then moved in place, so a failed copy restores nothing. The log keeps 100
 changes and 32 MB of earlier text; older changes stay listed without undo.
 `mcpStatus()` includes the open project's changes, and the dialog asks again when
 the watcher reports file changes.
@@ -346,6 +391,13 @@ does. `ariaSnapshot` modes, `getByRef` and `normalize` are public Playwright API
 | Robot reports and Browser artifacts | Configured `outputDir` | Written by the current run; later runs can replace artifacts |
 | Run history | `<outputDir>/.keywright-history.json` | Up to 30 summaries with test statuses, timings and shortened messages |
 | Recent projects | `recent-projects.json` in Electron `userData` | Shared application setting |
+
+The JSON files Keywright keeps for itself (recent projects, recovery copies, MCP
+settings and run history) go through [jsonFile.js](../src/main/jsonFile.js). Writes use
+a temporary sibling and one rename, retried while Windows briefly locks the file. A
+byte order mark is ignored when reading. A file that is not valid JSON is renamed to
+`<name>.corrupt-<time>` and logged, instead of being read as empty and overwritten by
+the next save; a file that cannot be read at all is not overwritten.
 | Breakpoints and run options | Renderer local storage in Electron `userData` | Keyed by project root |
 | Sidebar width, lint preference and watches | Renderer local storage | Shared application settings |
 | Unsaved editor models | Renderer memory | Current session only |
@@ -354,13 +406,19 @@ does. `ariaSnapshot` modes, `getByRef` and `normalize` are public Playwright API
 | Library docs and worker state | Main-process memory / helper process | Application or worker session |
 | MCP server setting, token and preferred port | `mcp.json` in Electron `userData` | Until changed in the MCP server dialog |
 | MCP server address | `mcp-connection.json` in Electron `userData` | While the server listens |
-| File changes by AI clients | Main-process memory; copies of deleted entries in `mcp-undo/` in Electron `userData` | Until Keywright closes; the folder is emptied at the next start |
+| File changes by AI clients | Main-process memory; copies of deleted entries in `mcp-undo/` in Electron `userData` | Until Keywright closes; the folder is emptied at the next start, which only one Keywright per profile can make |
 | The AI's recorded browser steps | Main-process memory | Until the AI's browser is reopened or its steps are cleared |
 
 Changing project locations changes the keys used for project-specific renderer
 settings.
 
 `TraceServer` serves Playwright's viewer and permitted output paths on `127.0.0.1`.
+Requests whose `Host` is not a loopback name, or whose `Origin` is not local, receive
+HTTP 403, as for the MCP server. The allowed folders are forgotten when a project
+opens or closes; opening a trace allows the open project's results folder. The
+frames showing reports and traces are sandboxed (scripts, popups and downloads, no
+top navigation), and the session grants permissions only to the app's own page
+(clipboard, for Monaco's Copy and Paste).
 Malformed URL paths and paths containing NUL receive HTTP 400 before filesystem
 access. A rejected request leaves the server available for subsequent requests.
 Output and trace requests also check canonical destinations against their allowed

@@ -6,6 +6,7 @@ const { fileURLToPath } = require('url');
 const projects = require('../projects');
 const { searchProject } = require('../projectSearch');
 const { ToolError } = require('./protocol');
+const { normalizeUrl } = require('../recorder');
 
 const MAX_LIST_ENTRIES = 2000;
 const MAX_KEYWORDS = 60;
@@ -17,6 +18,8 @@ const MAX_TEST_LOGS = 40;
 const IMPORTANT_LEVELS = new Set(['FAIL', 'ERROR', 'WARN']);
 const SOURCE_CONTEXT = 3;
 const MAX_FAILURE_IMAGES = 2;
+// Screenshots kept per test while a run goes on (test_failure_details returns the last ones).
+const MAX_KEPT_IMAGES = 10;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
 const INSTRUCTIONS = `Keywright is a desktop IDE for Robot Framework projects that use the Browser library.
@@ -74,12 +77,15 @@ class RunTracker {
       else if (event.type === 'step-end' && event.status === 'FAIL' && event.test) {
         const test = run.tests.get(event.test);
         const step = run.steps.get(event.id);
+        run.steps.delete(event.id);
         // The first failing step to end is the innermost one.
         if (test && step && !test.failedStep) {
           const where = step.source ? ` (${step.source}${step.lineno ? `:${step.lineno}` : ''})` : step.lineno ? ` (line ${step.lineno})` : '';
           test.failedStep = `${step.name}${step.args.length ? `    ${step.args.join('    ')}` : ''}${where}`;
           test.failedAt = step.source && step.lineno ? { source: step.source, line: step.lineno } : null;
         }
+      } else if (event.type === 'step-end') {
+        run.steps.delete(event.id); // a step that passed is not needed again
       } else if (event.type === 'log' && event.test) {
         // Messages and Browser's screenshots (main.js adds `images` as file URLs).
         const test = run.tests.get(event.test);
@@ -90,6 +96,8 @@ class RunTracker {
           if (drop >= 0)
             test.logs.splice(drop, 1);
           test.images.push(...(event.images || []));
+          if (test.images.length > MAX_KEPT_IMAGES) // only the last ones are shown
+            test.images.splice(0, test.images.length - MAX_KEPT_IMAGES);
         }
       } else if (event.type === 'test-end') {
         const test = run.tests.get(event.id) || { name: event.id };
@@ -304,6 +312,32 @@ function createTools(app) {
     return revision === null ? 'created' : 'updated';
   }
 
+  /**
+   * The AI's browser opens web pages and files of the open project only: a page it reads
+   * must not lead it to local files elsewhere or to the browser's own pages.
+   */
+  function allowedBrowserUrl(url) {
+    const target = normalizeUrl(String(url));
+    let parsed;
+    try {
+      parsed = new URL(target);
+    } catch {
+      throw new ToolError(`Not a valid address: ${url}`);
+    }
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || target === 'about:blank')
+      return target;
+    if (parsed.protocol === 'file:') {
+      const { root } = project();
+      try {
+        projects.resolveInProject(root, path.relative(root, fileURLToPath(parsed)));
+        return target;
+      } catch {
+        throw new ToolError('The browser only opens files of the open project.');
+      }
+    }
+    throw new ToolError('The browser only opens web pages (http, https) and files of the open project.');
+  }
+
   function readText(root, relative) {
     let file;
     try {
@@ -438,9 +472,11 @@ function createTools(app) {
         const text = readText(root, relative);
         let from = oldText;
         let to = newText;
-        // Windows files: accept text sent with \n line endings.
-        if (!text.includes(from) && text.includes('\r\n') && !from.includes('\r\n')) {
-          from = from.replace(/\n/g, '\r\n');
+        // Windows files: accept text sent with \n line endings, and write the new text with
+        // the file's CRLF, also when old_text is a single line.
+        if (text.includes('\r\n')) {
+          if (!text.includes(from) && !from.includes('\r\n'))
+            from = from.replace(/\n/g, '\r\n');
           to = to.replace(/\r?\n/g, '\r\n');
         }
         const count = text.split(from).length - 1;
@@ -699,6 +735,8 @@ function createTools(app) {
       handler: ({ url, browser = 'chromium', width, height }) => browserCall(async () => {
         const target = app.browsers[browser] || app.browsers.chromium;
         const viewport = width && height ? { width, height } : null;
+        if (url)
+          allowedBrowserUrl(url);
         await app.browser.start({ ...target, viewport });
         return url ? app.browser.navigate(url) : app.browser.snapshot();
       }),
@@ -708,7 +746,7 @@ function createTools(app) {
       title: 'Go to a URL',
       description: 'Loads a URL in the active page (recorded as Go To, or New Page for the first address).',
       inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
-      handler: ({ url }) => browserCall(() => app.browser.navigate(url)),
+      handler: ({ url }) => browserCall(async () => app.browser.navigate(allowedBrowserUrl(url))),
     },
     {
       name: 'browser_back',
@@ -799,7 +837,7 @@ function createTools(app) {
         properties: {
           ref,
           kind: { type: 'string', enum: ['text', 'visible', 'value', 'checked'] },
-          text: { type: 'string', description: 'For kind text.' },
+          text: { type: 'string', description: 'For kind text: the rendered text as Get Text returns it, line breaks included (\\n).' },
           exact: { type: 'boolean', description: 'For kind text: equal instead of contains.' },
           value: { type: 'string', description: 'For kind value.' },
           checked: { type: 'boolean', description: 'For kind checked (default true).' },

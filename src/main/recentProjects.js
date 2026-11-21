@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readJson, writeJsonAtomic } = require('./jsonFile');
 
 const MAX_RECENT = 12;
 
@@ -27,18 +28,15 @@ class RecentProjects {
     this._write(this._read().filter((entry) => !samePath(entry.root, root)));
   }
 
+  /** A damaged list is kept aside (readJson) and starts again empty. */
   _read() {
-    try {
-      const data = JSON.parse(fs.readFileSync(this._file, 'utf8'));
-      return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
-    }
+    const stored = readJson(this._file);
+    const data = stored.status === 'ok' ? stored.value : [];
+    return Array.isArray(data) ? data.filter((entry) => entry && typeof entry.root === 'string') : [];
   }
 
   _write(entries) {
-    fs.mkdirSync(path.dirname(this._file), { recursive: true });
-    fs.writeFileSync(this._file, JSON.stringify(entries, null, 2));
+    writeJsonAtomic(this._file, entries, { space: 2 });
   }
 }
 

@@ -3,8 +3,8 @@
 // History of test runs, kept in the project's results folder (.keywright-history.json):
 // for each run its options and the status and time of every test that ran.
 
-const fs = require('fs');
 const path = require('path');
+const { readJson, writeJsonAtomic } = require('./jsonFile');
 
 const FILE_NAME = '.keywright-history.json';
 const MAX_RUNS = 30;
@@ -36,6 +36,11 @@ class RunHistory {
     };
   }
 
+  /** Forgets the run being recorded, which did not start. */
+  cancel() {
+    this._current = null;
+  }
+
   /** Listener events: keeps the last status of each test (a failing suite teardown sends it again). */
   record(event) {
     if (!this._current || event.type !== 'test-end')
@@ -57,24 +62,31 @@ class RunHistory {
     run.duration = (Date.now() - Date.parse(run.startedAt)) / 1000;
     run.exitCode = exitCode;
     run.stopped = !!stopped;
-    const runs = [run, ...this.list(path.dirname(this._file))].slice(0, MAX_RUNS);
     try {
-      fs.mkdirSync(path.dirname(this._file), { recursive: true });
-      fs.writeFileSync(this._file, JSON.stringify(runs));
-    } catch {
+      // A history that cannot be read is not replaced by this one run.
+      const runs = [run, ...this._saved(path.dirname(this._file))].slice(0, MAX_RUNS);
+      writeJsonAtomic(this._file, runs);
+    } catch (error) {
       // the results folder is not writable: the history is lost, the run is not
+      console.error(`Could not save the run history to ${this._file}: ${error.message}`);
     }
     return run;
   }
 
-  /** Saved runs, newest first. */
+  /** Saved runs, newest first; none when the file cannot be read. */
   list(outputDir) {
     try {
-      const runs = JSON.parse(fs.readFileSync(path.join(outputDir, FILE_NAME), 'utf8'));
-      return Array.isArray(runs) ? runs : [];
-    } catch {
+      return this._saved(outputDir);
+    } catch (error) {
+      console.error(`Could not read the run history: ${error.message}`);
       return [];
     }
+  }
+
+  /** Saved runs; a damaged file is kept aside (readJson), an unreadable one throws. */
+  _saved(outputDir) {
+    const stored = readJson(path.join(outputDir, FILE_NAME));
+    return stored.status === 'ok' && Array.isArray(stored.value) ? stored.value : [];
   }
 }
 

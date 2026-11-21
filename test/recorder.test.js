@@ -67,3 +67,32 @@ test('closing a page while recording remains a real recorded action', async () =
   assert.deepEqual(f.session.actions.map((action) => action.name), ['closePage']);
   await f.session.stop();
 });
+
+test('an address without a scheme gets one, local servers http', () => {
+  const { normalizeUrl } = require('../src/main/recorder');
+  assert.equal(normalizeUrl('example.com/login'), 'https://example.com/login');
+  assert.equal(normalizeUrl('localhost:3000'), 'http://localhost:3000');
+  assert.equal(normalizeUrl('localhost'), 'http://localhost');
+  assert.equal(normalizeUrl('127.0.0.1:8000/app'), 'http://127.0.0.1:8000/app');
+  assert.equal(normalizeUrl('example.com:8080/x'), 'https://example.com:8080/x');
+  assert.equal(normalizeUrl('http://localhost:3000'), 'http://localhost:3000');
+  assert.equal(normalizeUrl('about:blank'), 'about:blank');
+  assert.equal(normalizeUrl('file:///C:/site/index.html'), 'file:///C:/site/index.html');
+});
+
+test('a Playwright without the recorder API fails to record with an explanation', async () => {
+  const session = new RecorderSession();
+  session._context = { _stopRecording: async () => {} };
+  session._browser = { close: async () => {} };
+  await assert.rejects(session._startRecordingActions(), /recorder API.*playwright-core/i);
+});
+
+test('an action in an unknown format is reported, not silently dropped', async () => {
+  const f = await recording();
+  const reported = [];
+  f.session.on('unreadable-action', (detail) => reported.push(detail));
+  f.callbacks.actionAdded({}, { name: 'click', selector: 'id=a' }, 'not the jsonl format');
+  assert.equal(f.session.actions.length, 0);
+  assert.equal(reported.length, 1);
+  assert.match(reported[0], /not the jsonl format/);
+});
