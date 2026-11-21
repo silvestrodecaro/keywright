@@ -16,7 +16,6 @@ const POPUP_WAIT = 600;
 // Playwright's modifier bitmask, as in recorded actions (see robotGenerator.js).
 const MODIFIER_BITS = { Alt: 1, Control: 2, Meta: 4, Shift: 8 };
 
-const normalizeSpace = (text) => String(text ?? '').replace(/\s+/g, ' ').trim();
 
 /**
  * A headed browser driven by an AI client through the MCP tools. The model reads
@@ -334,10 +333,12 @@ ${pressed}`;
           throw new ToolError('kind "text" needs the expected "text".');
         action = { name: 'assertText', text, substring: !exact };
         check = async () => {
+          // Compared as the recorded `Get Text  ==` / `*=` step will compare it: not normalized,
+          // so a step that passes here passes in the test too. The actual text is shown with
+          // its line breaks, for the AI to correct its expectation.
           // biome-ignore lint/performance/useDomNodeTextContent: Playwright's Locator.innerText, the rendered text Browser's Get Text compares
-          const actual = normalizeSpace(await locator.innerText());
-          const expected = normalizeSpace(text);
-          return { ok: exact ? actual === expected : actual.includes(expected), actual: `"${actual}"` };
+          const actual = await locator.innerText();
+          return { ok: exact ? actual === text : actual.includes(text), actual: JSON.stringify(actual) };
         };
         break;
       }

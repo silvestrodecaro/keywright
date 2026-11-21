@@ -70,6 +70,13 @@ run from source; there are no installers yet.
   local files and browser pages are refused.
 - An address such as `localhost:3000` opens as `http://localhost:3000` in the
   recorder and the AI browser.
+- Recorded text with no-break or other Unicode spaces is written as escapes, so
+  it stays one argument in the generated test.
+- Selectors containing an apostrophe in a regular expression (`/it's/`) keep
+  their frame boundaries, and text with leading spaces or quotes keeps the
+  selector Playwright recorded.
+- An AI text check is compared as the generated `Get Text` step will compare it,
+  so a check that passes in the AI browser also passes in the test.
 
 ### Security
 

@@ -129,3 +129,15 @@ test('a second start while the browser is launching is refused, and close waits 
   await assert.rejects(starting, /closed while it was starting/);
   assert.equal(browser.open, false);
 });
+
+test('a text assertion is checked as the recorded Get Text step compares it', { timeout: 60_000 }, async (t) => {
+  const browser = new AgentBrowser();
+  t.after(() => browser.close());
+  await browser.start({ headless: true });
+  const snapshot = await browser.navigate('data:text/html,<p>Total<br>5</p>');
+  const ref = refOf(snapshot, 'paragraph');
+  // Get Text compares the rendered text, whose line break is not a space.
+  await assert.rejects(browser.assert(ref, 'text', { text: 'Total 5', exact: true }), /found "Total\\n5"/);
+  await browser.assert(ref, 'text', { text: 'Total\n5', exact: true });
+  await browser.assert(ref, 'text', { text: 'Total' });
+});

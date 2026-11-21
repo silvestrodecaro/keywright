@@ -828,7 +828,7 @@ function createTools(app) {
         properties: {
           ref,
           kind: { type: 'string', enum: ['text', 'visible', 'value', 'checked'] },
-          text: { type: 'string', description: 'For kind text.' },
+          text: { type: 'string', description: 'For kind text: the rendered text as Get Text returns it, line breaks included (\\n).' },
           exact: { type: 'boolean', description: 'For kind text: equal instead of contains.' },
           value: { type: 'string', description: 'For kind value.' },
           checked: { type: 'boolean', description: 'For kind checked (default true).' },
