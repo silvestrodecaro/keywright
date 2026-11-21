@@ -92,6 +92,12 @@ run from source; there are no installers yet.
 - While an AI client works, the MCP status no longer reads every changed file
   and client configuration again after each tool call; and a hidden Search
   panel searches again only when it is shown.
+- A `keywright.json` that cannot be read while you edit it shows its error in
+  the editor status and the Testing panel instead of leaving them loading.
+- Deleting a file that was removed after the menu opened reports it instead of
+  failing silently.
+- A Robocop configuration added in a test folder applies to the editor's lint
+  without reloading the libraries.
 
 ### Security
 

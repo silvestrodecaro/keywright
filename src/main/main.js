@@ -258,8 +258,18 @@ function trustInterpreter(root, python) {
 }
 
 /** The open project read again from disk, with the interpreter choice applied. */
-function reloadProject() {
-  return withTrustedInterpreter(projects.loadProject(currentProject.root));
+/**
+ * Reads the open project again from disk, with the interpreter choice applied.
+ * @returns {string | null} why it could not be read (keywright.json being edited, say); the
+ *   project then stays as it was
+ */
+function refreshProject() {
+  try {
+    currentProject = withTrustedInterpreter(projects.loadProject(currentProject.root));
+    return null;
+  } catch (error) {
+    return error.message;
+  }
 }
 
 function openProject(root) {
@@ -461,12 +471,13 @@ ipcMain.handle('project:delete-path', async (_event, relative, unsaved = 0) => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.' };
   let entry;
+  let folder;
   try {
     ({ entry } = projects.projectEntry(currentProject.root, relative));
+    folder = (await fs.lstat(entry)).isDirectory(); // it may have gone since the menu opened
   } catch (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: error.code === 'ENOENT' ? `${relative} no longer exists.` : error.message };
   }
-  const folder = (await fs.lstat(entry)).isDirectory();
   const name = path.basename(entry);
   const details = [folder ? 'The folder and everything in it will be moved to the Recycle Bin.' : 'The file will be moved to the Recycle Bin.'];
   if (unsaved)
@@ -493,7 +504,9 @@ ipcMain.handle('project:delete-path', async (_event, relative, unsaved = 0) => {
 ipcMain.handle('project:keywords', async () => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.', keywords: [], errors: [] };
-  currentProject = reloadProject();
+  const unreadable = refreshProject();
+  if (unreadable)
+    return { ok: false, error: unreadable, keywords: [], errors: [] };
   return keywordIndex.build(currentProject);
 });
 
@@ -641,7 +654,9 @@ ipcMain.handle('tests:discover', () => {
   if (!currentProject)
     return { ok: false, error: 'No project is open.' };
   // Reload: the virtual environment may have been created since the project was opened.
-  currentProject = reloadProject();
+  const unreadable = refreshProject();
+  if (unreadable)
+    return { ok: false, error: unreadable };
   return discoverTests(currentProject);
 });
 
@@ -884,7 +899,9 @@ function createMcpService() {
     dirtyPaths: () => editorDirtyPaths,
     trash: (entry) => shell.trashItem(entry),
     keywords: async () => {
-      currentProject = reloadProject();
+      const unreadable = refreshProject();
+      if (unreadable)
+        return { ok: false, error: unreadable, keywords: [], errors: [] };
       return keywordIndex.build(currentProject);
     },
     check: async (relative, text) => {
@@ -899,7 +916,9 @@ function createMcpService() {
       }
     },
     discover: async () => {
-      currentProject = reloadProject();
+      const unreadable = refreshProject();
+      if (unreadable)
+        return { ok: false, error: unreadable };
       return discoverTests(currentProject);
     },
     runner,

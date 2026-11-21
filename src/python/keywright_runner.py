@@ -631,15 +631,31 @@ ROBOCOP_CONFIG_FILES = ("robocop.toml", "pyproject.toml", "robot.toml", ".roboco
 _linters = {}  # project root -> (config files' mtimes, ConfigManager, RobocopLinter)
 
 
-def _robocop_linter(root):
+def _config_stamp(root, path):
+    """Modification times of the configuration files Robocop can use for `path`: in its folder
+    and each folder above it up to the project root (a file added anywhere there counts)."""
+    folders = []
+    folder = os.path.dirname(os.path.abspath(path))
+    while True:
+        folders.append(folder)
+        if os.path.normcase(folder) == os.path.normcase(root) or os.path.dirname(folder) == folder:
+            break
+        folder = os.path.dirname(folder)
+    if os.path.normcase(root) not in (os.path.normcase(f) for f in folders):
+        folders.append(root)  # a file outside the project: the project's own configuration still applies
+    return tuple(os.path.getmtime(os.path.join(f, name)) if os.path.exists(os.path.join(f, name)) else None
+                 for f in folders for name in ROBOCOP_CONFIG_FILES)
+
+
+def _robocop_linter(root, path):
     from robocop.config.manager import ConfigManager
     from robocop.config.schema import RawConfig
     from robocop.linter.runner import RobocopLinter
 
-    stamp = tuple(os.path.getmtime(os.path.join(root, name)) if os.path.exists(os.path.join(root, name)) else None
-                  for name in ROBOCOP_CONFIG_FILES)
+    root = os.path.normcase(os.path.realpath(root))  # one linter per project, whatever the spelling
+    stamp = _config_stamp(root, path)
     cached = _linters.get(root)
-    if cached is None or cached[0] != stamp:  # created again when the configuration changes
+    if cached is None or cached[0] != stamp:  # created again when a configuration changes
         manager = ConfigManager(sources=[root], overwrite_config=RawConfig(silent=True))
         cached = (stamp, manager, RobocopLinter(manager))
         _linters[root] = cached
@@ -663,7 +679,7 @@ def lint(text, path, root):
     from pathlib import Path
 
     source = Path(path)
-    manager, linter = _robocop_linter(root)
+    manager, linter = _robocop_linter(root, path)
     if source.suffix.lower() == ".resource":
         model = get_resource_model(text)
     elif source.stem.lower() == "__init__":
