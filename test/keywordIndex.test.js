@@ -129,3 +129,25 @@ test('invalidation during libdoc discards the in-flight result and rebuilds curr
   assert.ok(!names(result).includes('Old Keyword'));
   assert.ok(names(await index.build(fixture)).includes('Current Keyword After Invalidation'));
 });
+
+test('builds requested together for a project share one build', { skip, timeout: 60_000 }, async () => {
+  const fixture = project();
+  fs.writeFileSync(path.join(fixture.root, 'local_library.py'), 'def shared_keyword():\n    pass\n');
+  const index = new KeywordIndex();
+  const [first, second] = await Promise.all([index.build(fixture), index.build(fixture)]);
+  assert.strictEqual(first, second);
+  assert.ok(names(first).includes('Shared Keyword'));
+});
+
+test('a library changing again and again during a build ends the build after a few tries', { skip, timeout: 60_000 }, async () => {
+  const fixture = project();
+  fs.writeFileSync(path.join(fixture.root, 'local_library.py'), 'def busy_keyword():\n    pass\n');
+  const index = new KeywordIndex();
+  const timer = setInterval(() => index.clear(), 20); // a generator writing modules all the time
+  try {
+    const result = await index.build(fixture);
+    assert.equal(result.ok, true);
+  } finally {
+    clearInterval(timer);
+  }
+});

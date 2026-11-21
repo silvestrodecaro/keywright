@@ -107,6 +107,10 @@ run from source; there are no installers yet.
 - A connection file left by a Keywright that crashed is removed at start.
 - The stdio bridge answers a last request sent without a final newline.
 - An AI edit in a file with Windows line endings keeps them.
+- Breakpoints and run options belong to a project folder however its path is
+  capitalized on Windows; those saved before are still found.
+- Keyword lookups requested together share one Python run, and a library that
+  keeps changing during a lookup no longer keeps Python busy without end.
 
 ### Security
 

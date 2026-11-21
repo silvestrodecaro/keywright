@@ -1008,6 +1008,22 @@
     }
   });
 
+  /**
+   * The storage key of a project setting. Windows paths ignore case, so the same folder
+   * opened as C:\Tests or c:\tests keeps its breakpoints and run options.
+   */
+  function projectKey(prefix, root) {
+    if (!root)
+      return null;
+    return `${prefix}:${/^[a-z]:[\\/]/i.test(root) ? root.toLowerCase() : root}`;
+  }
+
+  /** A project's stored setting; also found under the key used before (the root as given). */
+  function storedForProject(prefix, root) {
+    const value = storedObject(projectKey(prefix, root));
+    return Object.keys(value).length || !root ? value : storedObject(`${prefix}:${root}`);
+  }
+
   /** An object kept in local storage; {} when missing, unreadable or of another shape. */
   function storedObject(key) {
     try {
@@ -1019,8 +1035,8 @@
   }
 
   window.addEventListener('keywright:project-opened', (event) => {
-    breakpointsKey =event.detail && event.detail.root ? `keywright.breakpoints:${event.detail.root}` : null;
-    window.RFEditor.setBreakpoints(storedObject(breakpointsKey));
+    breakpointsKey = projectKey('keywright.breakpoints', event.detail?.root);
+    window.RFEditor.setBreakpoints(storedForProject('keywright.breakpoints', event.detail?.root));
   });
 
   // -------------------------------------------------------------------------
@@ -1068,8 +1084,8 @@
     $(selector).addEventListener(selector === '#run-browser' || selector === '#run-dryrun' ? 'change' : 'input', saveRunOptions);
 
   window.addEventListener('keywright:project-opened', (event) => {
-    runOptionsKey = event.detail && event.detail.root ? `keywright.runOptions:${event.detail.root}` : null;
-    const saved = storedObject(runOptionsKey);
+    runOptionsKey = projectKey('keywright.runOptions', event.detail?.root);
+    const saved = storedForProject('keywright.runOptions', event.detail?.root);
     for (const [name, selector] of Object.entries(RUN_OPTION_FIELDS))
       $(selector).value = saved[name] || '';
     $('#run-dryrun').checked = !!saved.dryrun;

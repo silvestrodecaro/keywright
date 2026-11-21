@@ -4,6 +4,9 @@ const { runHelper } = require('./pythonHelper');
 const fs = require('fs/promises');
 const path = require('path');
 
+// Builds of one request when the cache keeps being invalidated meanwhile.
+const MAX_ATTEMPTS = 3;
+
 async function sourceStamp(source) {
   if (!source)
     return null;
@@ -32,7 +35,24 @@ class KeywordIndex {
    * @param {{ root: string, python: string|null }} project
    * @returns {Promise<{ ok: boolean, error?: string, keywords: object[], errors: object[] }>}
    */
-  async build(project) {
+  /**
+   * Builds requested together for the same project share one build; a cache invalidated
+   * while it runs starts it again, a few times at most (a generator writing modules
+   * without pause would otherwise keep Python busy for ever).
+   */
+  build(project) {
+    const key = JSON.stringify([path.resolve(project.root), project.python]);
+    if (this._building?.key === key)
+      return this._building.promise;
+    const promise = this._build(project).finally(() => {
+      if (this._building?.promise === promise)
+        this._building = null;
+    });
+    this._building = { key, promise };
+    return promise;
+  }
+
+  async _build(project, attempt = 1) {
     if (!project.python)
       return { ok: false, error: 'No virtual environment (.venv): keyword completion is not available.', keywords: [], errors: [] };
     const generation = this._generation;
@@ -54,14 +74,14 @@ class KeywordIndex {
         return { ok: false, error: docs.error || 'Could not load library documentation.', keywords: [], errors };
       const loaded = await Promise.all((docs.libraries || []).map(async (library) => ({ library, stamp: await sourceStamp(library.source) })));
       // A watcher may invalidate the cache while Python is still documenting a library.
-      if (generation !== this._generation)
-        return this.build(project);
+      if (generation !== this._generation && attempt < MAX_ATTEMPTS)
+        return this._build(project, attempt + 1);
       for (const cached of loaded)
         this._libraries.set(key(cached.library.import), cached);
       errors.push(...(docs.errors || []));
     }
-    if (generation !== this._generation)
-      return this.build(project);
+    if (generation !== this._generation && attempt < MAX_ATTEMPTS)
+      return this._build(project, attempt + 1);
 
     const keywords = [...index.keywords.map((kw) => ({ ...kw, docFormat: 'ROBOT', user: true }))];
     for (const name of index.libraries) {
