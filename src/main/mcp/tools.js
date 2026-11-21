@@ -472,9 +472,11 @@ function createTools(app) {
         const text = readText(root, relative);
         let from = oldText;
         let to = newText;
-        // Windows files: accept text sent with \n line endings.
-        if (!text.includes(from) && text.includes('\r\n') && !from.includes('\r\n')) {
-          from = from.replace(/\n/g, '\r\n');
+        // Windows files: accept text sent with \n line endings, and write the new text with
+        // the file's CRLF, also when old_text is a single line.
+        if (text.includes('\r\n')) {
+          if (!text.includes(from) && !from.includes('\r\n'))
+            from = from.replace(/\n/g, '\r\n');
           to = to.replace(/\r?\n/g, '\r\n');
         }
         const count = text.split(from).length - 1;

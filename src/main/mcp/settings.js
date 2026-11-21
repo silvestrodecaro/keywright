@@ -70,6 +70,24 @@ class McpSettings {
     writeJson(this.connectionFile, { url, token, pid: process.pid });
   }
 
+  /** Removes a connection file whose Keywright is no longer running (it crashed). */
+  removeStaleConnection() {
+    let pid;
+    try {
+      pid = parseJson(fs.readFileSync(this.connectionFile, 'utf8')).pid;
+    } catch {
+      return;
+    }
+    try {
+      process.kill(pid, 0); // still running: another Keywright owns it
+      return;
+    } catch (error) {
+      if (error.code === 'EPERM')
+        return; // running, owned by another user
+    }
+    fs.rmSync(this.connectionFile, { force: true });
+  }
+
   removeConnection() {
     try {
       const current = parseJson(fs.readFileSync(this.connectionFile, 'utf8'));

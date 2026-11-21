@@ -255,3 +255,12 @@ test('a long run keeps the failing step and the last screenshots, not every step
   assert.ok(test.images.length <= 10);
   assert.equal(test.images.at(-1), 'file:///shot-49.png');
 });
+
+test('an edit in a CRLF file keeps CRLF line endings, even when old_text is one line', async () => {
+  const f = setup();
+  const file = path.join(f.root, 'tests', 'login.robot');
+  const result = await f.callTool('edit_file', { path: 'tests/login.robot', old_text: '    Log    one', new_text: '    Log    one\n    Log    two' });
+  assert.equal(result.isError, false, result.text);
+  const text = fs.readFileSync(file, 'utf8');
+  assert.equal(text, '*** Test Cases ***\r\nLogin\r\n    Log    one\r\n    Log    two\r\n');
+});

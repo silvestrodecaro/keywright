@@ -213,3 +213,26 @@ test('two starts of the HTTP transport share one server', async (t) => {
   const [first, second] = await Promise.all([server.start(0), server.start(0)]);
   assert.equal(first, second);
 });
+
+test('a connection file left by a Keywright that crashed is removed at start', async () => {
+  const folder = tempDir('mcp-stale');
+  const settings = new McpSettings(folder);
+  fs.writeFileSync(settings.connectionFile, JSON.stringify({ url: 'http://127.0.0.1:1/mcp', token: 'x', pid: 2 ** 22 + 12345 }));
+  const service = new McpService({ folder, version: '1.0.0', tools: [echo] });
+  await service.restore(); // the setting is off: nothing listens
+  assert.equal(fs.existsSync(settings.connectionFile), false);
+});
+
+test('the bridge answers a last request sent without a newline before stdin closes', { timeout: 20_000 }, async () => {
+  const missing = path.join(tempDir('mcp-bridge-end'), 'mcp-connection.json');
+  const child = spawn(process.execPath, [BRIDGE, '--connection', missing], { stdio: ['pipe', 'pipe', 'inherit'] });
+  let output = '';
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => { output += chunk; });
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.stdin.end(JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'ping' }));
+  await exited;
+  const reply = JSON.parse(output.trim());
+  assert.equal(reply.id, 7);
+  assert.match(reply.error.message, /not running/);
+});

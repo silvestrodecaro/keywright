@@ -270,3 +270,13 @@ test('an interpreter configured outside the project folder is reported for confi
   fs.writeFileSync(path.join(root, 'keywright.json'), '{}');
   assert.equal(projects.externalInterpreter(projects.loadProject(root)), null);
 });
+
+test('names Windows reserves are refused for new projects and new files', () => {
+  assert.match(projects.validateProjectName('con'), /reserved by Windows/);
+  assert.match(projects.validateProjectName('COM1.tests'), /reserved by Windows/);
+  assert.equal(projects.validateProjectName('console'), null);
+  const root = tempDir('reserved-names');
+  assert.throws(() => projects.createProjectFile(root, 'tests/aux/login.robot'), /reserved by Windows/);
+  assert.throws(() => projects.createProjectFile(root, 'tests/login.robot.'), /end with a dot/);
+  assert.equal(projects.createProjectFile(root, 'tests/login.robot'), 'tests/login.robot');
+});

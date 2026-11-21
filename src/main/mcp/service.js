@@ -76,6 +76,7 @@ class McpService extends EventEmitter {
 
   /** Starts the server when the setting is on (application start). */
   async restore() {
+    this.settings.removeStaleConnection(); // clients would otherwise try a server that is gone
     if (this.settings.read().enabled)
       await this.start();
     return this.status();

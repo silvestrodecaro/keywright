@@ -147,6 +147,22 @@ function watchProject(project) {
       keywordIndex.clear(); // A library may import another project Python module.
     send('project:files-changed', paths);
   });
+  // Without the watcher, tabs, watch mode and keyword caches stop following the disk:
+  // it is started again once, after a moment (a folder briefly renamed, a network drive).
+  const watcher = projectWatcher;
+  watcher.on('stopped', (error) => {
+    console.error(`Stopped watching ${project.root}: ${error?.message || 'unknown error'}`);
+    crashReports.note('watcher-stopped', { reason: error?.message || null });
+    setTimeout(() => {
+      if (projectWatcher === watcher && currentProject?.root === project.root) {
+        try {
+          watcher.start();
+        } catch (restartError) {
+          console.error(`Cannot watch ${project.root} again: ${restartError.message}`);
+        }
+      }
+    }, 2000);
+  });
   try {
     projectWatcher.start();
   } catch (error) {

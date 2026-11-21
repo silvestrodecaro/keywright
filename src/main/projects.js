@@ -22,7 +22,7 @@ function validateProjectName(name) {
     return 'Enter a project name.';
   if (!PROJECT_NAME.test(name) || name.endsWith('.') || name.endsWith(' '))
     return 'Use letters, digits, spaces, dots, dashes or underscores (starting with a letter or digit).';
-  return null;
+  return RESERVED_NAMES.test(name) ? `${name} is a name reserved by Windows.` : null;
 }
 
 /**
@@ -324,6 +324,13 @@ function createProjectFile(root, relative) {
   const clean = String(relative || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
   if (!clean || clean.endsWith('/'))
     throw new Error('Enter a file name, e.g. tests/login.robot');
+  // Each folder and the file name: Windows would refuse or rename reserved names (aux, con),
+  // and drop a final dot or space.
+  for (const part of clean.split('/')) {
+    const invalid = validateEntryName(part);
+    if (invalid)
+      throw new Error(invalid);
+  }
   const target = resolveInProject(root, clean);
   if (fs.existsSync(target))
     throw new Error(`${clean} already exists.`);

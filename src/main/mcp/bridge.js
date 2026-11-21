@@ -94,30 +94,38 @@ function main() {
       process.stdout.write(`${JSON.stringify(value)}\n`);
   };
   process.stdin.setEncoding('utf8');
+  const handle = (text) => {
+    const line = text.trim();
+    if (!line)
+      return;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      write({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Invalid JSON.' } });
+      return;
+    }
+    // Replies may arrive out of order (JSON-RPC matches them by id), so a long
+    // tool call does not hold back pings; only notifications keep their order.
+    const run = () => forward(message, connectionFile).then(write);
+    const task = message && message.id === undefined ? (notifications = notifications.then(run, run)) : run();
+    inFlight.add(task);
+    task.finally(() => inFlight.delete(task));
+  };
   process.stdin.on('data', (chunk) => {
     buffer += chunk;
     let newline;
     while ((newline = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, newline).trim();
+      const line = buffer.slice(0, newline);
       buffer = buffer.slice(newline + 1);
-      if (!line)
-        continue;
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        write({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Invalid JSON.' } });
-        continue;
-      }
-      // Replies may arrive out of order (JSON-RPC matches them by id), so a long
-      // tool call does not hold back pings; only notifications keep their order.
-      const run = () => forward(message, connectionFile).then(write);
-      const task = message && message.id === undefined ? (notifications = notifications.then(run, run)) : run();
-      inFlight.add(task);
-      task.finally(() => inFlight.delete(task));
+      handle(line);
     }
   });
-  process.stdin.on('end', () => Promise.allSettled([...inFlight]).then(() => process.exit(0)));
+  process.stdin.on('end', () => {
+    handle(buffer); // a last message without a final newline still gets its reply
+    buffer = '';
+    Promise.allSettled([...inFlight]).then(() => process.exit(0));
+  });
 }
 
 if (require.main === module)

@@ -98,6 +98,15 @@ run from source; there are no installers yet.
   failing silently.
 - A Robocop configuration added in a test folder applies to the editor's lint
   without reloading the libraries.
+- The results folder is left out of file watching and Search however
+  `keywright.json` spells it (`./results/`, an absolute path, other case). File
+  watching starts again after an error, and long bursts of changes are reported
+  at least every 2 seconds.
+- Names Windows reserves (`con`, `aux`, `com1`) are refused for new projects and
+  files, as they already were for renames.
+- A connection file left by a Keywright that crashed is removed at start.
+- The stdio bridge answers a last request sent without a final newline.
+- An AI edit in a file with Windows line endings keeps them.
 
 ### Security
 

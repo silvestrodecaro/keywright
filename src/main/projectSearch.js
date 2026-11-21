@@ -12,6 +12,8 @@ const SKIP_DIRS = new Set(['.git', '.venv', 'venv', 'node_modules', '__pycache__
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_RESULTS = 5000;
 
+const samePath = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === String(b).toLowerCase() : a === b);
+
 /** Project-relative paths of the files to search, skipping tool folders and the results folder. */
 function projectFiles(root, outputDir, relative = '', depth = 0) {
   if (depth > 12)
@@ -25,7 +27,7 @@ function projectFiles(root, outputDir, relative = '', depth = 0) {
   return entries.sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
     const entryPath = relative ? `${relative}/${entry.name}` : entry.name;
     if (entry.isDirectory())
-      return SKIP_DIRS.has(entry.name) || entryPath === outputDir ? [] : projectFiles(root, outputDir, entryPath, depth + 1);
+      return SKIP_DIRS.has(entry.name) || samePath(entryPath, outputDir) ? [] : projectFiles(root, outputDir, entryPath, depth + 1);
     return entry.isFile() ? [entryPath] : [];
   });
 }
@@ -51,7 +53,9 @@ function searchProject(root, options, { exclude = [], outputDir = 'results' } = 
   const excluded = new Set(exclude);
   const files = [];
   let total = 0;
-  for (const relative of projectFiles(root, outputDir.replace(/\\/g, '/').replace(/\/$/, ''))) {
+  // `./results/` or an absolute path inside the project: the same folder as `results`.
+  const output = path.relative(root, path.resolve(root, String(outputDir).replace(/\\/g, '/'))).split(path.sep).join('/');
+  for (const relative of projectFiles(root, output)) {
     if (excluded.has(relative) || !include(relative))
       continue;
     let text;
