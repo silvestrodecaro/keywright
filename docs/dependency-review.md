@@ -52,12 +52,16 @@ the replacement. See [Architecture](architecture.md#build-and-packaging).
 
 ## Verification
 
-The Windows checks for Keywright 0.5.0 passed on Node.js 24.16.0 and Python 3.13.14.
+The Windows checks for Keywright 0.6.0 passed on 2026-11-21 on Node.js 24.16.0 and
+Python 3.13.14, with the dependency versions listed above.
 
 - A clean `npm ci` installed 27 packages. The complete audit and
   `npm audit --omit=dev` both reported zero findings.
 - `setup.bat --check --no-pause` passed the prerequisite checks. Robot Framework
-  ran both Browser tests in the example successfully.
-- `npm.cmd run test:regression` passed 236 Node tests and 32 desktop UI tests
-  with zero skips. It includes the recorder integration, the editor sanitizer
-  check and Source Control workflows using temporary Git repositories.
+  ran both Browser tests in the example successfully, with Keywright's shared
+  browser cache (`PLAYWRIGHT_BROWSERS_PATH`) as the app's own runs use it.
+- `npm.cmd run test:regression` passed 309 Node tests and 33 desktop UI tests
+  with zero skips and no retries. It includes the recorder integration and Browser
+  replay, the editor sanitizer check, process shutdown, the debugger protocol,
+  JSON persistence and Source Control workflows using temporary Git repositories.
+- The Verify workflow passed on Node.js 24 and 26 for the merged changes.

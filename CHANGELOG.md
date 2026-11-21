@@ -5,6 +5,8 @@ run from source; there are no installers yet.
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-21
+
 ### Fixed
 
 - Escape restores keyboard focus to the Explorer after a file change refreshes
