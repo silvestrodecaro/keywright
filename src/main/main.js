@@ -753,6 +753,10 @@ function publishState(extra = {}) {
 
 session.on('actions', publishCode);
 session.on('stopped', () => publishState());
+session.on('unreadable-action', (detail) => {
+  console.error(`The recorder sent an action Keywright cannot read; it was not recorded: ${detail}`);
+  crashReports.note('unreadable-recorder-action', { detail });
+});
 
 ipcMain.handle('recorder:start', async (_event, options) => {
   const target = BROWSERS[options.browser] || BROWSERS.chromium;

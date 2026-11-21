@@ -165,6 +165,10 @@ class RecorderSession extends EventEmitter {
     const context = this._context;
     if (!context || this._stopping)
       return;
+    // A private Playwright API: a different playwright-core may not have it.
+    if (typeof context._startRecording !== 'function')
+      throw new Error('This Playwright has no recorder API (BrowserContext._startRecording). '
+        + 'Keywright records with the playwright-core version pinned in package.json; run npm ci.');
     const generation = ++this._recordingGeneration;
     const active = () => this._recordingActions && this._context === context && this._recordingGeneration === generation;
     this._recordingActions = true;
@@ -211,8 +215,14 @@ class RecorderSession extends EventEmitter {
 
   _add(data, code) {
     const action = parseAction(data, code);
-    if (!action)
+    if (!action) {
+      // The recorder's jsonl format changed (another playwright-core): say so once.
+      if (!this._unreadableReported) {
+        this._unreadableReported = true;
+        this.emit('unreadable-action', `${data?.name || 'action'}: ${String(code).slice(0, 200)}`);
+      }
       return;
+    }
     this.actions.push(action);
     this.emit('actions', this.actions);
   }

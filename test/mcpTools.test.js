@@ -234,3 +234,24 @@ test('the AI browser opens web pages and project files only', async () => {
   assert.equal(opened.isError, true);
   assert.deepEqual(visited, ['https://example.com/login', inside]);
 });
+
+test('a long run keeps the failing step and the last screenshots, not every step', async () => {
+  const runner = new EventEmitter();
+  const tracker = new RunTracker(runner);
+  const run = await tracker.start(async () => {});
+  runner.emit('event', { type: 'test-start', id: 'S.T' });
+  for (let i = 0; i < 5000; i++) {
+    runner.emit('event', { type: 'step-start', id: `k${i}`, name: 'Log', args: [String(i)], test: 'S.T' });
+    runner.emit('event', { type: 'step-end', id: `k${i}`, status: 'PASS', test: 'S.T' });
+  }
+  for (let i = 0; i < 50; i++)
+    runner.emit('event', { type: 'log', test: 'S.T', level: 'INFO', text: 'shot', images: [`file:///shot-${i}.png`] });
+  runner.emit('event', { type: 'step-start', id: 'fail', name: 'Fail', args: ['boom'], test: 'S.T', lineno: 9, source: 'tests/a.robot' });
+  runner.emit('event', { type: 'step-end', id: 'fail', status: 'FAIL', test: 'S.T' });
+  runner.emit('event', { type: 'test-end', id: 'S.T', status: 'FAIL', message: 'boom' });
+  assert.equal(run.steps.size, 0);
+  const test = run.tests.get('S.T');
+  assert.match(test.failedStep, /^Fail {4}boom \(tests\/a\.robot:9\)$/);
+  assert.ok(test.images.length <= 10);
+  assert.equal(test.images.at(-1), 'file:///shot-49.png');
+});

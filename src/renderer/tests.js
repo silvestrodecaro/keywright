@@ -8,6 +8,9 @@
 
   const STATUS_ICONS = { PASS: '✓', FAIL: '✕', SKIP: '↷', 'NOT RUN': '○', running: '◌', queued: '○', stopped: '■' };
   const MAX_OUTPUT = 500_000;
+  // Log messages kept per test (or suite setup) in the panel; the Robot log has them all.
+  const MAX_TEST_LOGS = 5000;
+  const IMPORTANT_LEVELS = new Set(['FAIL', 'ERROR', 'WARN']);
 
   let rootSuite = null;
   /** @type {Map<string, { test: object, suites: object[] }>} */
@@ -467,6 +470,8 @@
       if (setups.length)
         nodes.push(...suiteSection('Suite Setup', setups));
       nodes.push(el('h3', { textContent: 'Steps' }));
+      if (runData?.droppedLogs)
+        nodes.push(el('div', { className: 'empty', textContent: `${runData.droppedLogs} more log messages are in the Robot log only (Open log).` }));
       const steps = el('div', { className: 'steps-tree' },
         ...(runData ? runData.logs.map(renderLog) : []),
         ...(runData ? runData.roots.map((step) => renderStep(test.id, step, 0)) : []));
@@ -744,6 +749,13 @@
         if (!runData)
           break;
         const step = event.step && runData.steps.get(event.step);
+        // A test logging without end (loops, TRACE) would fill the memory: past the limit,
+        // ordinary messages are counted instead of kept; failures and warnings always are.
+        runData.logCount = (runData.logCount || 0) + 1;
+        if (runData.logCount > MAX_TEST_LOGS && !IMPORTANT_LEVELS.has(event.level)) {
+          runData.droppedLogs = (runData.droppedLogs || 0) + 1;
+          break;
+        }
         (step ? step.logs : runData.logs).push(event);
         break;
       }

@@ -83,6 +83,12 @@ run from source; there are no installers yet.
 - The end-to-end recording test runs Robot with the browser cache Keywright
   uses, as the app does; it used to fail when only that cache had Chromium.
 - CI fails when a test is skipped or a desktop test passes only on a retry.
+- Recording with a Playwright that lacks the recorder API fails with an
+  explanation instead of recording nothing, and an action the recorder sends in
+  an unknown format is logged instead of disappearing.
+- Long runs no longer keep every step and screenshot in memory for AI clients,
+  and the Testing panel keeps up to 5,000 log messages per test: failures and
+  warnings always, the rest in the Robot log.
 
 ### Security
 

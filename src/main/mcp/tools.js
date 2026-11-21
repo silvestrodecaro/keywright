@@ -18,6 +18,8 @@ const MAX_TEST_LOGS = 40;
 const IMPORTANT_LEVELS = new Set(['FAIL', 'ERROR', 'WARN']);
 const SOURCE_CONTEXT = 3;
 const MAX_FAILURE_IMAGES = 2;
+// Screenshots kept per test while a run goes on (test_failure_details returns the last ones).
+const MAX_KEPT_IMAGES = 10;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
 const INSTRUCTIONS = `Keywright is a desktop IDE for Robot Framework projects that use the Browser library.
@@ -75,12 +77,15 @@ class RunTracker {
       else if (event.type === 'step-end' && event.status === 'FAIL' && event.test) {
         const test = run.tests.get(event.test);
         const step = run.steps.get(event.id);
+        run.steps.delete(event.id);
         // The first failing step to end is the innermost one.
         if (test && step && !test.failedStep) {
           const where = step.source ? ` (${step.source}${step.lineno ? `:${step.lineno}` : ''})` : step.lineno ? ` (line ${step.lineno})` : '';
           test.failedStep = `${step.name}${step.args.length ? `    ${step.args.join('    ')}` : ''}${where}`;
           test.failedAt = step.source && step.lineno ? { source: step.source, line: step.lineno } : null;
         }
+      } else if (event.type === 'step-end') {
+        run.steps.delete(event.id); // a step that passed is not needed again
       } else if (event.type === 'log' && event.test) {
         // Messages and Browser's screenshots (main.js adds `images` as file URLs).
         const test = run.tests.get(event.test);
@@ -91,6 +96,8 @@ class RunTracker {
           if (drop >= 0)
             test.logs.splice(drop, 1);
           test.images.push(...(event.images || []));
+          if (test.images.length > MAX_KEPT_IMAGES) // only the last ones are shown
+            test.images.splice(0, test.images.length - MAX_KEPT_IMAGES);
         }
       } else if (event.type === 'test-end') {
         const test = run.tests.get(event.id) || { name: event.id };
