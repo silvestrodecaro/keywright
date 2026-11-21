@@ -98,6 +98,8 @@ test('navigates to and renames a resource keyword across editor and disk', async
   await page.keyboard.press('End');
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('F12');
+  // The watcher can report the resource file while the definition opens (it was just written).
+  await page.evaluate((changed) => window.dispatchEvent(new CustomEvent('keywright:files-changed', { detail: { paths: [changed] } })), resource);
   await expect(page.locator('#file-path')).toHaveText(resource);
   await expect(code).toContainText('Prepare Navigation Sample');
 

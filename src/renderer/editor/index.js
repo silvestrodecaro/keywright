@@ -352,8 +352,28 @@ function disposePreviews(paths = [...previews]) {
   }
 }
 
-// A preview shows the file as it was read: changed on disk, it is read again when next needed.
-window.addEventListener('keywright:files-changed', (event) => disposePreviews(event.detail?.paths || undefined));
+/**
+ * A preview changed on disk is read again in place. It is not disposed: Go to Definition
+ * may be opening it at this moment, and a disposed model would leave the editor where it was.
+ */
+async function refreshPreviews(paths = [...previews]) {
+  for (const path of paths) {
+    if (!previews.has(path) || RFEditor.has(path))
+      continue;
+    const file = await window.keywright.readProjectFile(path).catch(() => null);
+    const model = monaco.editor.getModel(uriFor(path));
+    if (!model || model.isDisposed() || !previews.has(path) || RFEditor.has(path))
+      continue; // opened in a tab meanwhile: the tab keeps its own content
+    if (file && file.content !== null) {
+      if (model.getValue() !== file.content)
+        model.setValue(file.content);
+    } else {
+      disposePreviews([path]); // gone or unreadable: read again when next needed
+    }
+  }
+}
+
+window.addEventListener('keywright:files-changed', (event) => refreshPreviews(event.detail?.paths || undefined));
 window.addEventListener('keywright:project-opened', () => disposePreviews());
 window.addEventListener('keywright:project-closed', () => disposePreviews());
 

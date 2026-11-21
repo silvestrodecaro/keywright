@@ -109,7 +109,8 @@ run from source; there are no installers yet.
 - An AI edit in a file with Windows line endings keeps them.
 - Breakpoints and run options belong to a project folder however its path is
   capitalized on Windows; those saved before are still found.
-- Keyword lookups requested together share one Python run, and a library that
+- Keyword lookups requested while one runs share one new Python run that sees
+  files written meanwhile, and a library that
   keeps changing during a lookup no longer keeps Python busy without end.
 
 ### Security

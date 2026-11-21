@@ -36,19 +36,28 @@ class KeywordIndex {
    * @returns {Promise<{ ok: boolean, error?: string, keywords: object[], errors: object[] }>}
    */
   /**
-   * Builds requested together for the same project share one build; a cache invalidated
-   * while it runs starts it again, a few times at most (a generator writing modules
-   * without pause would otherwise keep Python busy for ever).
+   * A request made while a build of the same project runs waits for it, then runs one
+   * new build shared by every request made meanwhile: the running build may have read
+   * the files before they changed. A cache invalidated during a build starts it again,
+   * a few times at most (a generator writing modules without pause would otherwise
+   * keep Python busy for ever).
    */
   build(project) {
     const key = JSON.stringify([path.resolve(project.root), project.python]);
-    if (this._building?.key === key)
-      return this._building.promise;
+    const running = this._building;
+    if (running?.key === key) {
+      running.next ??= running.promise.catch(() => {}).then(() => this._start(project, key));
+      return running.next;
+    }
+    return this._start(project, key);
+  }
+
+  _start(project, key) {
     const promise = this._build(project).finally(() => {
       if (this._building?.promise === promise)
         this._building = null;
     });
-    this._building = { key, promise };
+    this._building = { key, promise, next: null };
     return promise;
   }
 
