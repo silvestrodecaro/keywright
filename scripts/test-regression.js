@@ -39,18 +39,21 @@ function checkDesktop(env) {
   fs.rmSync(uiReport, { force: true });
   if (!node([require.resolve('@playwright/test/cli'), 'test'], { ...env, PLAYWRIGHT_JSON_OUTPUT_FILE: uiReport })) return false;
   const { stats } = JSON.parse(fs.readFileSync(uiReport, 'utf8'));
-  if (!stats.expected || stats.skipped) {
-    console.error(`Desktop regression checks require all tests to run (${stats.expected} passed, ${stats.skipped} skipped).`);
+  // A flaky test passed only on a retry: it counts as a failure here.
+  if (!stats.expected || stats.skipped || stats.flaky) {
+    console.error(`Desktop regression checks require all tests to run and pass the first time (${stats.expected} passed, ${stats.skipped} skipped, ${stats.flaky || 0} flaky).`);
     return false;
   }
   return true;
 }
 
+// --node-only and --desktop-only run one layer, as CI does in separate steps.
 async function main() {
   const env = browserEnvironment();
   process.env.PLAYWRIGHT_BROWSERS_PATH = env.PLAYWRIGHT_BROWSERS_PATH;
-  const nodePassed = await checkNode();
-  const desktopPassed = checkDesktop(env);
+  const args = new Set(process.argv.slice(2));
+  const nodePassed = args.has('--desktop-only') || await checkNode();
+  const desktopPassed = args.has('--node-only') || checkDesktop(env);
   if (!nodePassed || !desktopPassed) process.exitCode = 1;
 }
 

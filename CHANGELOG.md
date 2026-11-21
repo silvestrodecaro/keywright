@@ -80,6 +80,9 @@ run from source; there are no installers yet.
 - Runs with many tests or log messages no longer keep the window busy: the
   Testing panel receives events in batches, redraws a few times a second and
   appends console output instead of rewriting it.
+- The end-to-end recording test runs Robot with the browser cache Keywright
+  uses, as the app does; it used to fail when only that cache had Chromium.
+- CI fails when a test is skipped or a desktop test passes only on a retry.
 
 ### Security
 
