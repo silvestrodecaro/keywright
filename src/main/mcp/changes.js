@@ -182,7 +182,15 @@ class ChangeLog extends EventEmitter {
           return no('Too old: its earlier content is no longer kept.');
         let current;
         try {
-          current = revisionOf(fs.readFileSync(target));
+          // The status is listed after every tool call: a file is hashed again only when
+          // its size, modification time or identity changed.
+          const stat = fs.statSync(target);
+          const key = `${stat.size}:${stat.mtimeMs}:${stat.ino}`;
+          if (change.hashedAs !== key) {
+            change.currentHash = revisionOf(fs.readFileSync(target));
+            change.hashedAs = key;
+          }
+          current = change.currentHash;
         } catch {
           return no(`${change.path} no longer exists.`);
         }

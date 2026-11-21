@@ -246,6 +246,21 @@ function compareEntry(entry, status) {
  * What each client's own configuration says about Keywright, read-only.
  * @returns {Record<string, { state: 'configured'|'outdated'|'missing'|'unreadable'|'manual', detail: string|null, file: string|null }>}
  */
+// The MCP status is published after every tool call, and a client's file can be
+// large (~/.claude.json): its text is kept until its size, time or identity changes.
+const fileCache = new Map();
+
+function readCached(file) {
+  const stat = fs.statSync(file); // throws when there is no file, like readFileSync
+  const key = `${stat.size}:${stat.mtimeMs}:${stat.ino}`;
+  const cached = fileCache.get(file);
+  if (cached?.key === key)
+    return cached.text;
+  const text = fs.readFileSync(file, 'utf8');
+  fileCache.set(file, { key, text });
+  return text;
+}
+
 function clientStates(status, locations = clientLocations()) {
   const states = {};
   for (const [id, files] of Object.entries(locations)) {
@@ -253,7 +268,7 @@ function clientStates(status, locations = clientLocations()) {
     for (const file of files) {
       let text;
       try {
-        text = fs.readFileSync(file, 'utf8');
+        text = readCached(file);
       } catch {
         continue; // not installed, or not configured yet
       }

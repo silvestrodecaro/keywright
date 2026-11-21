@@ -267,3 +267,18 @@ test('the connection test survives a command that exits after its first answer',
   const result = await testConnection({ command: process.execPath, args: ['-e', script] });
   assert.equal(result.ok, false);
 });
+
+test('client files are read again only when they change', (t) => {
+  const home = tempDir('mcp-home-cache');
+  const locations = clientLocations({ home, env: { APPDATA: path.join(home, 'AppData', 'Roaming') } });
+  const file = locations['claude-code'][0];
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: { keywright: { type: 'stdio', ...sampleStatus.bridge } } }));
+  assert.equal(clientStates(sampleStatus, locations)['claude-code'].state, 'configured');
+  const reads = t.mock.method(fs, 'readFileSync');
+  assert.equal(clientStates(sampleStatus, locations)['claude-code'].state, 'configured');
+  assert.equal(reads.mock.calls.filter((call) => call.arguments[0] === file).length, 0);
+  reads.mock.restore();
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: {} }));
+  assert.equal(clientStates(sampleStatus, locations)['claude-code'].state, 'missing');
+});

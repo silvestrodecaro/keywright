@@ -128,3 +128,16 @@ test('a copy that could not be made is reported as such, not as too large', () =
   assert.equal(change.undoable, false);
   assert.match(change.reason, /could not be copied/i);
 });
+
+test('listing the changes again does not read unchanged files again', async (t) => {
+  const f = setup();
+  await f.call('write_file', { path: 'tests/login.robot', content: 'by the AI' });
+  assert.equal(f.changes.list(f.root)[0].undoable, true);
+  const reads = t.mock.method(fs, 'readFileSync');
+  f.changes.list(f.root);
+  f.changes.list(f.root);
+  assert.equal(reads.mock.callCount(), 0);
+  reads.mock.restore();
+  fs.writeFileSync(path.join(f.root, 'tests', 'login.robot'), 'by the user, longer');
+  assert.equal(f.changes.list(f.root)[0].undoable, false);
+});

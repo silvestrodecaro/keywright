@@ -89,6 +89,9 @@ run from source; there are no installers yet.
 - Long runs no longer keep every step and screenshot in memory for AI clients,
   and the Testing panel keeps up to 5,000 log messages per test: failures and
   warnings always, the rest in the Robot log.
+- While an AI client works, the MCP status no longer reads every changed file
+  and client configuration again after each tool call; and a hidden Search
+  panel searches again only when it is shown.
 
 ### Security
 

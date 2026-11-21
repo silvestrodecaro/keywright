@@ -238,10 +238,23 @@
   }, true);
 
   // Keep results fresh when files change (on disk or in the editor).
+  // A hidden panel does not search again (each search reads the project's files);
+  // it does when it is shown, if something changed meanwhile.
+  let stale = false;
   window.addEventListener('keywright:files-changed', () => {
-    if ($('#search-query').value)
+    if (!$('#search-query').value)
+      return;
+    if (isVisible())
       schedule(400);
+    else
+      stale = true;
   });
+  new MutationObserver(() => {
+    if (stale && isVisible() && $('#search-query').value) {
+      stale = false;
+      schedule(0);
+    }
+  }).observe($('#sidebar-search'), { attributes: true, attributeFilter: ['hidden'] });
   editor.onDirtyChange(() => {
     if ($('#search-query').value && isVisible())
       schedule(400);
