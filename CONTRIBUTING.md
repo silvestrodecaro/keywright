@@ -167,7 +167,7 @@ requests; review its release notes and run the desktop UI tests before merging.
 
 ## Verified environment
 
-Local verification for Keywright 0.5.0 on 2026-11-16 used this combination. The Python baseline is
+Local verification for Keywright 0.6.0 on 2026-11-21 used this combination. The Python baseline is
 pinned in [requirements-dev.txt](requirements-dev.txt); the JavaScript dependency
 tree is recorded in `package-lock.json`. This is a tested combination, not a claim
 that every version accepted by the project creator is compatible.
