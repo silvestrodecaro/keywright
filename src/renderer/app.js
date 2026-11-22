@@ -295,9 +295,15 @@
     const tree = await api.projectTree();
     if (renaming)
       return;
+    // A save changes no entry: the Explorer is rebuilt only when what it shows changed.
+    const shown = JSON.stringify([tree, [...expanded].sort(), activeTab]);
+    if (shown === lastTreeShown && $('#tree').childElementCount)
+      return;
+    lastTreeShown = shown;
     treeNodes.clear();
     window.RFTree.replace($('#tree'), tree.map((node) => renderNode(node, 0)), activeTab);
   }
+  let lastTreeShown = null;
 
   function renderNode(node, depth) {
     const row = el('div', {
@@ -1076,6 +1082,7 @@
     input.setAttribute('aria-label', `New name for ${original}`);
     const error = el('div', { className: 'error tree-rename-error', hidden: true });
     renaming = relative;
+    lastTreeShown = null; // the row is changed in place: the next refresh rebuilds it
     row.classList.add('is-renaming');
     label.hidden = true;
     label.after(input);

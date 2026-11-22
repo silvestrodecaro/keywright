@@ -280,3 +280,12 @@ test('names Windows reserves are refused for new projects and new files', () => 
   assert.throws(() => projects.createProjectFile(root, 'tests/login.robot.'), /end with a dot/);
   assert.equal(projects.createProjectFile(root, 'tests/login.robot'), 'tests/login.robot');
 });
+
+test('the asynchronous tree lists the same entries as the synchronous one', async () => {
+  const root = tempDir('tree-async');
+  for (const file of ['tests/b.robot', 'tests/a.robot', 'resources/x.resource', 'README.md', '.venv/lib/x.py', 'tests/deep/1/2/c.robot'])
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true }) || fs.writeFileSync(path.join(root, file), '');
+  for (const file of ['tests/b.robot', 'tests/a.robot', 'resources/x.resource', 'README.md', '.venv/lib/x.py', 'tests/deep/1/2/c.robot'])
+    fs.writeFileSync(path.join(root, file), '');
+  assert.deepEqual(await projects.listTreeAsync(root), projects.listTree(root));
+});

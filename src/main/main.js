@@ -383,7 +383,8 @@ ipcMain.handle('projects:close', () => projectTransitionTask(async () => {
   setWindowTitle();
 }));
 
-ipcMain.handle('project:tree', () => (currentProject ? projects.listTree(currentProject.root) : []));
+// Asked after every file change: read without blocking the main process.
+ipcMain.handle('project:tree', () => (currentProject ? projects.listTreeAsync(currentProject.root) : []));
 
 async function sourceControlRequest(root, operation) {
   if (currentProject?.root !== root || !sourceControl)

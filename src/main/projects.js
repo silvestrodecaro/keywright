@@ -241,6 +241,30 @@ function listTree(root, relative = '', depth = 0) {
     });
 }
 
+/**
+ * listTree without blocking the main process: the Explorer asks for the tree after every
+ * file change, and a large project takes a while to read.
+ */
+async function listTreeAsync(root, relative = '', depth = 0) {
+  if (depth > 8)
+    return [];
+  let entries;
+  try {
+    entries = await fs.promises.readdir(path.join(root, relative), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const sorted = entries
+    .filter((entry) => !(entry.isDirectory() && HIDDEN_DIRS.has(entry.name)))
+    .sort((a, b) => (b.isDirectory() - a.isDirectory()) || a.name.localeCompare(b.name));
+  return Promise.all(sorted.map(async (entry) => {
+    const entryPath = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory())
+      return { name: entry.name, path: entryPath, type: 'dir', children: await listTreeAsync(root, entryPath, depth + 1) };
+    return { name: entry.name, path: entryPath, type: 'file' };
+  }));
+}
+
 /** Resolves a project-relative path, refusing paths outside the project. */
 function resolveInProject(root, relative) {
   try {
@@ -403,6 +427,7 @@ module.exports = {
   createProject,
   loadProject,
   listTree,
+  listTreeAsync,
   readProjectFile,
   writeProjectFile,
   createProjectFile,

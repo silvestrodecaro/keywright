@@ -15,6 +15,8 @@ run from source; there are no installers yet.
   the editor does not stay read-only.
 - Opening a project again quickly no longer offers or stores the previous
   project's unsaved-file copies.
+- Saving a file no longer rebuilds the Explorer, and reading the project tree no
+  longer holds up the rest of Keywright in large projects.
 
 ## 0.6.0 - 2026-11-21
 
