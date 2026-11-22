@@ -5,6 +5,17 @@ run from source; there are no installers yet.
 
 ## Unreleased
 
+### Fixed
+
+- A test run ends when Robot exits, even when a process the tests started keeps
+  running with Robot's output; the Testing panel used to wait for that process.
+- The Testing panel and run history show the open project's tests and runs only,
+  also when an earlier request answers after another project opened.
+- Closing the project during a recording at the cursor stops the recording, so
+  the editor does not stay read-only.
+- Opening a project again quickly no longer offers or stores the previous
+  project's unsaved-file copies.
+
 ## 0.6.0 - 2026-11-21
 
 ### Fixed

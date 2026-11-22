@@ -539,11 +539,18 @@
   }
 
   /** @param {{ quiet?: boolean }} [options] quiet: keep the current tree while loading */
+  // Only the latest discovery is applied: an earlier one may answer after another project
+  // opened, or after the files changed again.
+  let discoverRequest = 0;
+
   async function discover({ quiet = false } = {}) {
+    const request = ++discoverRequest;
     showError('');
     if (!quiet)
       $('#test-tree').replaceChildren(el('li', { className: 'empty', textContent: 'Loading tests…' }));
     const result = await api.discoverTests();
+    if (request !== discoverRequest)
+      return;
     if (!result.ok) {
       rootSuite = null;
       testIndex = new Map();

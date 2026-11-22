@@ -443,6 +443,9 @@
   async function closeAllTabs() {
     if (!await resolveUnsaved(tabs.map((t) => t.path)))
       return false;
+    // Recording at the cursor of a closing file would leave the editor read-only.
+    if (tabs.some((tab) => editor.recordingPath() === tab.path))
+      await api.stopRecording();
     for (const tab of tabs)
       editor.close(tab.path);
     tabs = [];
@@ -778,7 +781,12 @@
       recoveryTimer = setTimeout(storeRecovery, 1000);
   }
 
+  // A project opened again quickly starts a new offer: the earlier one must not store or show
+  // the previous project's copies.
+  let recoveryRequest = 0;
+
   async function offerRecovery() {
+    const request = ++recoveryRequest;
     recoveryReady = false;
     // The last copy may predate a save made just before closing: skip what is already on disk.
     const entries = [];
@@ -787,6 +795,8 @@
       if (!disk || disk.content !== entry.content)
         entries.push(entry);
     }
+    if (request !== recoveryRequest)
+      return;
     if (!entries.length) {
       recoveryReady = true;
       await storeRecovery();

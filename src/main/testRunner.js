@@ -9,6 +9,9 @@ const { pythonEnv, runHelper } = require('./pythonHelper');
 const { killTree } = require('./processes');
 const { randomUUID, timingSafeEqual } = require('crypto');
 
+// How long output may still arrive after Robot has exited.
+const OUTPUT_AFTER_EXIT_MS = 2000;
+
 /**
  * Builds the suite/test tree of `project` with Robot's own parser.
  * @returns {Promise<{ ok: true, suite: object } | { ok: false, error: string }>}
@@ -124,13 +127,30 @@ class TestRunner extends EventEmitter {
     child.stdout.on('data', (text) => this.emit('output', text));
     child.stderr.on('data', (text) => this.emit('output', text));
     child.on('error', (error) => this.emit('output', `\n${error.message}\n`));
-    child.on('close', (exitCode) => {
+    let ended = false;
+    let exitTimer = null;
+    const end = (exitCode) => {
+      if (ended)
+        return;
+      ended = true;
+      clearTimeout(exitTimer);
       this._child = null;
       this._finished = null;
       this._closeServer();
       this.emit('finished', { exitCode, stopped: this._stopped, outputDir });
       finish();
+    };
+    // 'close' waits until every holder of Robot's output has closed it. A process a test
+    // started can inherit it and keep running: after Robot exits, the rest of its output
+    // has a moment to arrive, then the run is over.
+    child.on('exit', (exitCode) => {
+      exitTimer = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        end(exitCode);
+      }, OUTPUT_AFTER_EXIT_MS);
     });
+    child.on('close', (exitCode) => end(exitCode));
     if (this._stopped) // stop() was called while the run was starting
       killTree(child);
   }

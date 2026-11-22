@@ -207,3 +207,28 @@ test('only the run\'s own listener is heard on the event port', { skip, timeout:
   assert.ok(!events.some((event) => event.id === 'Forged'), 'an event from another process was accepted');
   assert.deepStrictEqual(testEnds(events), { 'Tests.Basic.Passing Test': 'PASS' });
 });
+
+test('a run ends when Robot exits, even if a process it started keeps its output open', { skip, timeout: 60_000 }, async () => {
+  const dir = tempDir('grandchild');
+  fs.mkdirSync(path.join(dir, 'tests'));
+  fs.writeFileSync(path.join(dir, 'tests', 'leak.robot'), [
+    '*** Test Cases ***',
+    'Leaves A Process',
+    "    ${pid}=    Evaluate    __import__('subprocess').Popen([__import__('sys').executable, '-c', 'import time; time.sleep(20)']).pid",
+    '    Log To Console    GRANDCHILD=${pid}',
+    '',
+  ].join('\n'));
+  const runner = new TestRunner();
+  let output = '';
+  runner.on('output', (text) => { output += text; });
+  const finished = new Promise((resolve) => runner.once('finished', resolve));
+  const started = Date.now();
+  await runner.run({ root: dir, python, config: { testsDir: 'tests', outputDir: path.join(dir, 'results') } }, {});
+  const result = await finished;
+  const pid = Number(/GRANDCHILD=(\d+)/.exec(output)?.[1]);
+  if (pid)
+    try { process.kill(pid); } catch { /* already gone */ }
+  assert.strictEqual(result.exitCode, 0);
+  assert.ok(Date.now() - started < 15_000, `the run ended only after ${Date.now() - started} ms`);
+  assert.strictEqual(runner.running, false);
+});
