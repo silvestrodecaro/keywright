@@ -51,6 +51,24 @@ test('uses tag filters and dry run, then shows a real Browser trace, Robot repor
   await expect(output.contentFrame().getByRole('heading', { name: /Log/ }).first()).toBeVisible();
 });
 
+test('additional arguments that name the suite keep tests, selected runs and results together', async ({ desktop }) => {
+  const { page } = desktop;
+  await openTesting(page);
+  await page.locator('#run-options summary').click();
+  const args = page.locator('#run-args');
+  await args.fill('--nosuchoption');
+  await args.press('Tab');
+  await expect(page.locator('#tests-error')).toContainText('nosuchoption');
+  await args.fill('--name "Renamed Suite"');
+  await args.press('Tab');
+  await expect(page.locator('#test-tree')).toContainText('Renamed Suite');
+  await page.locator('#run-dryrun').check();
+  const row = page.locator('#test-tree .is-test').filter({ hasText: 'Member Can Request A Code' });
+  await row.hover();
+  await row.getByTitle('Run Member Can Request A Code').click();
+  await expectResult(page, 1, 0);
+});
+
 test('pauses at an editor breakpoint, inspects and watches a value, then steps and continues', async ({ desktop }) => {
   const { page, project } = desktop;
   const relative = 'tests/debug-probe.robot';

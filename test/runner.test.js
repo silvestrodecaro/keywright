@@ -60,6 +60,44 @@ test('discoverTests returns suites and tests by full name', { skip }, async () =
   assert.deepStrictEqual(basic.tests[0].tags, ['smoke']);
 });
 
+/** A project whose root suite is renamed or whose tests need options to be read. */
+function optionsProject() {
+  const folder = tempDir('discovery options');
+  fs.mkdirSync(path.join(folder, 'tests'));
+  fs.writeFileSync(path.join(folder, 'tests', 'plain.robot'), '*** Test Cases ***\nOne\n    No Operation\nTwo\n    No Operation\n');
+  fs.writeFileSync(path.join(folder, 'tests', 'other.suite'), '*** Test Cases ***\nThree\n    No Operation\n');
+  return { root: folder, python, config: { testsDir: 'tests', outputDir: path.join(folder, 'results') } };
+}
+
+test('discovery and selected runs agree on the names given by additional arguments', { skip, timeout: 60_000 }, async () => {
+  const project = optionsProject();
+  const extraArgs = '--name "My Suite" --settag nightly';
+  const { ok, error, suite } = await discoverTests(project, { extraArgs });
+  assert.ok(ok, error);
+  assert.deepStrictEqual(suite.suites[0].tests.map((t) => [t.id, t.tags]), [['My Suite.Plain.One', ['nightly']], ['My Suite.Plain.Two', ['nightly']]]);
+  const run = await runAndCollect(project, { select: ['My Suite.Plain.Two'], extraArgs });
+  assert.deepStrictEqual(testEnds(run.events), { 'My Suite.Plain.Two': 'PASS' }, run.output);
+});
+
+test('discovery reads the files that additional arguments add, also from an argument file', { skip }, async () => {
+  const project = optionsProject();
+  const sources = async (extraArgs) => {
+    const result = await discoverTests(project, { extraArgs });
+    assert.ok(result.ok, result.error);
+    return result.suite.suites.map((s) => s.source).sort();
+  };
+  assert.deepStrictEqual(await sources(''), ['tests/plain.robot']);
+  assert.deepStrictEqual(await sources('--extension robot:suite'), ['tests/other.suite', 'tests/plain.robot']);
+  fs.writeFileSync(path.join(project.root, 'args.txt'), '--extension suite\n');
+  assert.deepStrictEqual(await sources('--argumentfile args.txt'), ['tests/other.suite']);
+});
+
+test('discovery reports additional arguments that Robot refuses', { skip }, async () => {
+  const result = await discoverTests(optionsProject(), { extraArgs: '--nosuchoption' });
+  assert.strictEqual(result.ok, false);
+  assert.match(result.error, /nosuchoption/);
+});
+
 test('discoverTests reports a missing virtual environment', async () => {
   const result = await discoverTests({ ...fixtureProject(), python: null });
   assert.strictEqual(result.ok, false);

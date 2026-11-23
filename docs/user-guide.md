@@ -456,6 +456,11 @@ tests. The template's
 setup uses `${BROWSER}` and `${HEADLESS}`; recorded source with literal values must
 be adapted if you want those controls to affect it.
 
+The test tree is read again when you change the arguments: options such as
+`--extension`, `--language` or `--name` change the tests it lists. Options that filter
+tests, such as `--test`, and pre-run modifiers apply only to the run. Arguments that
+Robot refuses are reported in place of the tree.
+
 Arguments are passed to Robot, not to a shell. Quote a value containing spaces;
 shell pipelines, redirections and environment expansion are not supported here.
 Run options are stored per project. Avoid overriding output paths with extra Robot

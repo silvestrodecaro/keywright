@@ -1,6 +1,7 @@
 """Robot Framework helpers used by the IDE. Runs with the project's Python.
 
-* ``python keywright_runner.py discover <path>`` prints the suite/test tree as JSON.
+* ``python keywright_runner.py discover <path> [root] [robot arguments]`` prints the
+  suite/test tree as JSON, read and named as a run with these arguments does.
 * ``python keywright_runner.py index <project root>`` prints the library/resource
   imports and the user keywords of every .robot/.resource file as JSON.
 * ``python keywright_runner.py libdoc <library>...`` prints library keywords as JSON.
@@ -30,6 +31,9 @@ import sys
 import threading
 
 from robot.api import SuiteVisitor, TestSuiteBuilder
+from robot.conf import RobotSettings
+from robot.errors import Information
+from robot.run import RobotFramework
 
 MAX_TEXT = 4000
 # Logged by the Browser library's New Context when tracing is enabled.
@@ -64,8 +68,35 @@ def _suite_to_dict(suite, root):
     }
 
 
-def discover(path, root):
-    suite = TestSuiteBuilder().build(path)
+def _robot_arguments(args):
+    """Robot's own reading of a command line: (options, data sources)."""
+    options, sources = RobotFramework().parse_arguments(args)
+    return {name: value for name, value in options.items() if value not in (None, [])}, sources
+
+
+def discover(path, root, robot_args=()):
+    """The tests of a run with ``robot_args``. Options that filter or reorder tests, and
+    pre-run modifiers, are left to the run."""
+    try:
+        options, sources = _robot_arguments([*robot_args, path])
+    except Information:  # --help or --version: there is no run
+        options, sources = {}, [path]
+    settings = RobotSettings(options)
+    sys.path[:0] = getattr(settings, "pythonpath", None) or []
+    # Robot versions differ in the options they have: those not set are not passed.
+    reading = {
+        "included_extensions": getattr(settings, "extension", None),
+        "included_files": getattr(settings, "parse_include", None),
+        "custom_parsers": getattr(settings, "parsers", None),
+        "rpa": getattr(settings, "rpa", None),
+        "lang": getattr(settings, "languages", None),
+        "allow_empty_suite": settings.run_empty_suite,
+    }
+    suite = TestSuiteBuilder(**{name: value for name, value in reading.items() if value}).build(*sources)
+    if options.get("name"):
+        suite.name = options["name"]
+    if options.get("settag"):
+        suite.set_tags(options["settag"])
     return _suite_to_dict(suite, root)
 
 
@@ -74,8 +105,12 @@ class SelectTests(SuiteVisitor):
 
     def __init__(self):
         self.names = set(json.loads(os.environ.get("KEYWRIGHT_SELECT") or "[]"))
+        self.root_name = _robot_arguments(sys.argv[1:])[0].get("name")
 
     def start_suite(self, suite):
+        # Robot applies --name after pre-run modifiers; the selected names have it already.
+        if suite.parent is None and self.root_name:
+            suite.name = self.root_name
         if not self.names or self._selected(suite):
             return
         suite.tests = [test for test in suite.tests if test.full_name in self.names]
@@ -731,7 +766,7 @@ def _main(argv):
     if command == "discover" and len(argv) >= 3:
         target = os.path.abspath(argv[2])
         root = os.path.abspath(argv[3]) if len(argv) > 3 else os.path.dirname(target)
-        return {"ok": True, "suite": discover(target, root)}
+        return {"ok": True, "suite": discover(target, root, argv[4:])}
     if command == "index" and len(argv) == 3:
         return {"ok": True, **project_index(os.path.abspath(argv[2]))}
     if command == "libdoc" and len(argv) >= 3:
@@ -742,7 +777,7 @@ def _main(argv):
             except Exception as error:
                 errors.append({"import": name, "error": str(error).splitlines()[0]})
         return {"ok": True, "libraries": libraries, "errors": errors}
-    print("usage: keywright_runner.py discover <path> [root] | index <root> | libdoc <library>...", file=sys.stderr)
+    print("usage: keywright_runner.py discover <path> [root] [robot arguments] | index <root> | libdoc <library>...", file=sys.stderr)
     sys.exit(2)
 
 
