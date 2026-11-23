@@ -32,7 +32,8 @@ schemes are ignored.
 
 One Keywright runs per profile (`userData`): a second start focuses the first
 window and exits, because both would share the recovery copies, the MCP undo folder
-and the MCP connection file. Every way of quitting goes through `before-quit`, which
+and the MCP connection file. Every way of quitting goes through `before-quit`
+([shutdown.js](../src/main/shutdown.js)), which
 stops the runner, the language worker, the recorder, picker and AI browsers, the
 local servers and the processes in the shared registry of
 [processes.js](../src/main/processes.js) (project setup, installs, formatting,
