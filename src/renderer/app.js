@@ -592,9 +592,7 @@
   editor.onDirtyChange(scheduleRecovery);
 
   // -------------------------------------------------------------------------
-  // Keyword index for completion and hover
-
-  let keywordTimer = null;
+  // Editor status line, and the keyword index for completion and hover (keywordLoader.js)
 
   function setEditorStatus(text, isError = false) {
     const status = $('#editor-status');
@@ -602,38 +600,17 @@
     status.classList.toggle('is-error', isError);
   }
 
-  async function loadKeywords() {
-    const result = await api.projectKeywords();
-    // Unknown keywords are only reported when every imported library could be documented.
-    const failedImports = (result.errors || []).filter((e) => e.import);
-    editor.setKeywords(result.keywords || [], { complete: result.ok && failedImports.length === 0 });
-    window.dispatchEvent(new CustomEvent('keywright:keywords-loaded'));
-    editor.revalidate();
-    if (!result.ok) {
-      setEditorStatus(result.error, true);
-      return;
-    }
-    const problems = result.errors.map((e) => `${e.import || e.source}: ${e.error}`);
-    setEditorStatus(`${result.keywords.length} keywords` + (problems.length ? ` · ${problems.length} import problem(s)` : ''), problems.length > 0);
-    $('#editor-status').title = problems.join('\n');
-  }
-
-  $('#reload-libraries').addEventListener('click', async (event) => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    clearTimeout(keywordTimer);
-    setEditorStatus('Reloading libraries…');
-    try {
-      await api.reloadLibraries();
-      await loadKeywords();
-    } finally {
-      button.disabled = false;
-    }
+  const keywordLoader = window.RFKeywordLoader.create({
+    api, editor, status: setEditorStatus,
+    statusTitle: (title) => { $('#editor-status').title = title; },
   });
 
+  function loadKeywords() {
+    return keywordLoader.load();
+  }
+
   function scheduleKeywords() {
-    clearTimeout(keywordTimer);
-    keywordTimer = setTimeout(loadKeywords, 500);
+    keywordLoader.schedule();
   }
 
   const names = window.RFFileNames;
