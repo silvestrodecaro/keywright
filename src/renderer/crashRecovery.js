@@ -69,8 +69,8 @@
         recoveryTimer = setTimeout(storeRecovery, 1000);
     }
 
-    // A project opened again quickly starts a new offer: the earlier one must not store or show
-    // the previous project's copies.
+    // A new offer or suspend() ends the earlier offer and restore: they must not store, show or
+    // open the previous project's copies, or allow storing before the new offer is answered.
     let recoveryRequest = 0;
 
     async function offerRecovery() {
@@ -96,7 +96,7 @@
       notice.hidden = false;
     }
 
-    async function restoreRecovery(entries) {
+    async function restoreRecovery(entries, request) {
       const failed = [];
       for (const entry of entries) {
         if (!tabs().some((t) => t.path === entry.path)) {
@@ -106,6 +106,8 @@
           } catch {
             // Deleted since the crash: saving recreates it.
           }
+          if (request !== recoveryRequest)
+            return;
           const tab = restoredTab(entry, disk);
           if (!tab) {
             failed.push(entry.path);
@@ -122,18 +124,22 @@
     }
 
     async function finishRecovery(restore) {
+      const request = recoveryRequest;
       const notice = $('#recovery-notice');
       const entries = JSON.parse(notice.dataset.entries || '[]');
       notice.hidden = true;
       delete notice.dataset.entries;
       if (restore)
-        await restoreRecovery(entries);
+        await restoreRecovery(entries, request);
+      if (request !== recoveryRequest)
+        return;
       recoveryReady = true;
       await storeRecovery();
     }
 
-    /** Closing or reopening the project: stop storing and hide a pending offer. */
+    /** Closing or reopening the project: stop storing and drop a pending offer or restore. */
     function suspend() {
+      recoveryRequest++;
       recoveryReady = false;
       $('#recovery-notice').hidden = true;
     }
