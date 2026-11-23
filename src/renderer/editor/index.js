@@ -14,6 +14,7 @@ import { collectCalls, checkCall } from './argumentCheck.js';
 import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
   isDynamicVariableFile, unresolvedVariables, normalizeVariable } from './navigation.js';
 import { keywordPart, keywordOccurrences, variablePart, variableOccurrences, invalidName, applyEdits } from './rename.js';
+import { setKeywords, allKeywords, catalogComplete, findKeywords, keywordsCalled, signature } from './keywordCatalog.js';
 import { similarNames, keywordStub, keywordInsertion, variableInsertion, endInsertion, applyInsertion, callArguments } from './quickFix.js';
 
 self.MonacoEnvironment = {
@@ -121,47 +122,6 @@ const TEST_SETTINGS = ['[Documentation]', '[Tags]', '[Setup]', '[Teardown]', '[T
 const KEYWORD_SETTINGS = ['[Documentation]', '[Arguments]', '[Tags]', '[Setup]', '[Teardown]', '[Timeout]'];
 const SECTION_HEADERS = ['*** Settings ***', '*** Variables ***', '*** Test Cases ***', '*** Tasks ***', '*** Keywords ***', '*** Comments ***'];
 
-let keywords = [];
-let byName = new Map();
-let embedded = []; // [{ regex, keyword }] for keywords with embedded arguments
-// False when some library could not be imported: unknown keywords are then not reported.
-let keywordsComplete = false;
-
-function setKeywords(list, { complete = true } = {}) {
-  keywords = list;
-  keywordsComplete = complete && list.length > 0;
-  byName = new Map();
-  embedded = [];
-  for (const kw of list) {
-    const key = normalizeKeyword(kw.name);
-    if (!byName.has(key))
-      byName.set(key, []);
-    byName.get(key).push(kw);
-    if (kw.name.includes('${')) {
-      const pattern = kw.name.split(/\$\{[^}]+\}/).map((part) => normalizeKeyword(part).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+?');
-      embedded.push({ regex: new RegExp(`^${pattern}$`), keyword: kw });
-    }
-  }
-}
-
-function findKeywords(name) {
-  const text = name.trim();
-  let found = byName.get(normalizeKeyword(text)) || [];
-  // `Library.Keyword` and `resource.Keyword` qualified names.
-  const dot = text.lastIndexOf('.');
-  if (!found.length && dot > 0) {
-    const library = text.slice(0, dot).toLowerCase();
-    found = (byName.get(normalizeKeyword(text.slice(dot + 1))) || []).filter((kw) => kw.library.toLowerCase() === library);
-  }
-  if (!found.length)
-    found = embedded.filter(({ regex }) => regex.test(normalizeKeyword(text))).map(({ keyword }) => keyword);
-  return found;
-}
-
-function signature(kw) {
-  return [kw.name, ...kw.args.map((arg) => arg.repr)].join('    ');
-}
-
 function snippetFor(kw) {
   let index = 1;
   const escape = (text) => text.replace(/[\\$}]/g, '\\$&');
@@ -243,7 +203,7 @@ monaco.languages.registerCompletionItemProvider(LANGUAGE, {
     if (cell.type !== 'keyword' && cell.type !== 'control')
       return { suggestions: [] };
 
-    const suggestions = keywords.map((kw) => ({
+    const suggestions = allKeywords().map((kw) => ({
       label: { label: kw.name, description: kw.user ? kw.source : kw.library },
       kind: Function,
       detail: signature(kw),
@@ -564,7 +524,7 @@ async function renameTarget(model, position) {
   if (!cell)
     return null;
   const candidates = cell.type === 'name'
-    ? keywords.filter((kw) => kw.user && kw.source === path && normalizeKeyword(kw.name) === normalizeKeyword(cell.text))
+    ? allKeywords().filter((kw) => kw.user && kw.source === path && normalizeKeyword(kw.name) === normalizeKeyword(cell.text))
     : keywordsCalled(cell.text);
   const userKeywords = candidates.filter((kw) => kw.user && kw.source);
   if (!userKeywords.length) {
@@ -581,7 +541,7 @@ async function renameTarget(model, position) {
     };
   }
   const keyword = userKeywords[0];
-  const sameName = keywords.filter((kw) => kw.user && normalizeKeyword(kw.name) === normalizeKeyword(keyword.name));
+  const sameName = allKeywords().filter((kw) => kw.user && normalizeKeyword(kw.name) === normalizeKeyword(keyword.name));
   if (sameName.length > 1)
     return { reject: `${sameName.length} keywords are named '${keyword.name}' (${sameName.map((kw) => kw.source).join(', ')}): rename is ambiguous.` };
   if (keyword.name.includes('${'))
@@ -775,21 +735,11 @@ monaco.languages.registerRenameProvider(LANGUAGE, {
 // ---------------------------------------------------------------------------
 // Diagnostics: Robot's parser (via the Python helper) and unknown keywords
 
-const BDD_PREFIX = /^(given|when|then|and|but)\s+/i;
-
-/** Keywords called in a cell, accepting BDD prefixes (Given/When/Then/And/But). */
-function keywordsCalled(name) {
-  const found = findKeywords(name);
-  if (found.length || !BDD_PREFIX.test(name))
-    return found;
-  return findKeywords(name.replace(BDD_PREFIX, ''));
-}
-
 /** Unknown keywords (warnings) and invalid arguments (errors), checked against the keyword index. */
 function keywordMarkers(model) {
   const text = model.getValue();
   // With templates the first cell of a test row is data, not a keyword.
-  if (!keywordsComplete || usesTemplate(model.getLinesContent()))
+  if (!catalogComplete() || usesTemplate(model.getLinesContent()))
     return [];
   const marker = (severity, message, cell) => ({
     severity,
@@ -1077,7 +1027,7 @@ async function keywordFixes(model, marker, name) {
   const lines = model.getLinesContent();
   const bdd = BDD.exec(name)?.[0] || '';
   const base = name.slice(bdd.length);
-  for (const candidate of similarNames(base, [...new Set(keywords.map((kw) => kw.name))].filter((n) => !n.includes('${')), normalizeKeyword)) {
+  for (const candidate of similarNames(base, [...new Set(allKeywords().map((kw) => kw.name))].filter((n) => !n.includes('${')), normalizeKeyword)) {
     actions.push(quickFix(`Change to '${candidate}'`, model, marker,
       [{ range: new monaco.Range(marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn), text: bdd + candidate }],
       actions.length === 0));
