@@ -63,8 +63,8 @@ const { ChangeLog } = require('./mcp/changes');
 const { clientConfigs, clientLocations, clientStates, connectionPlan } = require('./mcp/clients');
 const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
 const { childProcesses } = require('./processes');
-const { readJson, writeJsonAtomic } = require('./jsonFile');
 const { Batch } = require('./eventBatch');
+const { InterpreterTrust } = require('./interpreterTrust');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -204,46 +204,13 @@ async function stopProjectServices() {
 }
 
 // ---------------------------------------------------------------------------
-// Interpreters outside the project folder, configured in keywright.json: Keywright runs
-// them by itself (keywords, checks), so the user confirms each one once per project.
+// Interpreters outside the project folder are used after the user confirms them
+// (interpreterTrust.js). Created when the profile folder is known (app ready).
 
-function trustedInterpretersFile() {
-  return path.join(app.getPath('userData'), 'trusted-interpreters.json');
-}
+/** @type {InterpreterTrust | null} */
+let interpreterTrust = null;
 
-function projectKey(root) {
-  const resolved = path.resolve(root);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
-
-function samePath(a, b) {
-  return projectKey(a) === projectKey(b);
-}
-
-function interpreterTrusted(project, python) {
-  // Set by the user's environment, as the UI tests do for the repository's Python.
-  if (process.env.KEYWRIGHT_TRUSTED_PYTHON && samePath(process.env.KEYWRIGHT_TRUSTED_PYTHON, python))
-    return true;
-  try {
-    const stored = readJson(trustedInterpretersFile());
-    const trusted = stored.status === 'ok' && stored.value ? stored.value[projectKey(project.root)] : null;
-    return typeof trusted === 'string' && samePath(trusted, python);
-  } catch {
-    return false;
-  }
-}
-
-/** The project without its interpreter when that is outside the folder and not confirmed. */
-function withTrustedInterpreter(project) {
-  const external = projects.externalInterpreter(project);
-  return external && !interpreterTrusted(project, external) ? { ...project, python: null } : project;
-}
-
-/** Asks about an interpreter outside the project the first time; the answer "use" is kept. */
-async function confirmInterpreter(project) {
-  const external = projects.externalInterpreter(project);
-  if (!external || interpreterTrusted(project, external))
-    return project;
+async function askAboutInterpreter(external) {
   const options = {
     type: 'warning',
     buttons: ['Use This Interpreter', 'Open Without It'],
@@ -255,25 +222,9 @@ async function confirmInterpreter(project) {
   };
   const { response } = mainWindow && !mainWindow.isDestroyed()
     ? await dialog.showMessageBox(mainWindow, options) : await dialog.showMessageBox(options);
-  if (response !== 0)
-    return { ...project, python: null };
-  trustInterpreter(project.root, external);
-  return project;
+  return response === 0;
 }
 
-/** Remembers that the user accepted, or chose, this interpreter for this project. */
-function trustInterpreter(root, python) {
-  try {
-    const file = trustedInterpretersFile();
-    const stored = readJson(file);
-    const value = stored.status === 'ok' && stored.value && typeof stored.value === 'object' ? stored.value : {};
-    writeJsonAtomic(file, { ...value, [projectKey(root)]: python }, { space: 2 });
-  } catch (error) {
-    console.error(`Could not remember the interpreter: ${error.message}`); // asked again next time
-  }
-}
-
-/** The open project read again from disk, with the interpreter choice applied. */
 /**
  * Reads the open project again from disk, with the interpreter choice applied.
  * @returns {string | null} why it could not be read (keywright.json being edited, say); the
@@ -281,7 +232,7 @@ function trustInterpreter(root, python) {
  */
 function refreshProject() {
   try {
-    currentProject = withTrustedInterpreter(projects.loadProject(currentProject.root));
+    currentProject = interpreterTrust.apply(projects.loadProject(currentProject.root));
     return null;
   } catch (error) {
     return error.message;
@@ -290,7 +241,7 @@ function refreshProject() {
 
 function openProject(root) {
   return projectTransitionTask(async () => {
-    const project = await confirmInterpreter(projects.loadProject(root));
+    const project = await interpreterTrust.confirm(projects.loadProject(root));
     await stopProjectServices();
     currentProject = project;
     sourceControl = new SourceControl(project.root);
@@ -342,7 +293,7 @@ ipcMain.handle('project:save-settings', (_event, values) => {
     // An interpreter chosen here is the user's choice: reopening the project does not ask about it.
     const chosen = result.ok && projects.externalInterpreter(projects.loadProject(currentProject.root));
     if (chosen)
-      trustInterpreter(currentProject.root, chosen);
+      interpreterTrust.trust(currentProject.root, chosen);
     return result;
   } catch (error) {
     return { ok: false, errors: {}, error: error.message };
@@ -1198,6 +1149,10 @@ app.whenReady().then(async () => {
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   recovery.removeLeftovers();
+  interpreterTrust = new InterpreterTrust({
+    file: path.join(app.getPath('userData'), 'trusted-interpreters.json'),
+    ask: askAboutInterpreter,
+  });
   crashReports.folder = path.join(app.getPath('userData'), 'crash-reports');
   // The window opens even when the MCP server cannot start.
   try {
