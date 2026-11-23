@@ -477,119 +477,32 @@
   });
 
   // -------------------------------------------------------------------------
-  // Crash recovery: unsaved buffers are copied to the IDE's data folder while
-  // editing. Nothing is written until a pending recovery has been restored or
-  // discarded, so opening a project cannot overwrite it.
+  // Crash recovery (crashRecovery.js): copies of unsaved buffers, restored or discarded
+  // after a crash. The tabs stay here; the module gets accessors for them.
 
-  let recoveryTimer = null;
-  let recoveryReady = false;
+  const crashRecovery = window.RFCrashRecovery.create({
+    api, editor,
+    tabs: () => tabs,
+    addTab: (tab) => { tabs.push(tab); },
+    showRestored: (path) => {
+      shownInEditor = null;
+      activate(path);
+    },
+    renderTabs,
+    status: setEditorStatus,
+  });
 
-  function recoveryEntries() {
-    return editor.dirtyPaths()
-      .map((path) => ({ path, tab: tabs.find((t) => t.path === path) }))
-      .filter(({ tab }) => tab)
-      .map(({ path, tab }) => ({ path, content: editor.getContent(path), revision: tab.revision ?? null }));
-  }
-
-  /** The main process refuses AI changes to files with unsaved editor changes. */
-  let reportedDirty = '';
-  function reportDirtyFiles() {
-    const paths = editor.dirtyPaths().filter((path) => tabs.some((tab) => tab.path === path));
-    const key = JSON.stringify(paths);
-    if (key !== reportedDirty) {
-      reportedDirty = key;
-      api.reportDirtyFiles(paths);
-    }
+  function offerRecovery() {
+    return crashRecovery.offer();
   }
 
   function storeRecovery() {
-    reportDirtyFiles();
-    clearTimeout(recoveryTimer);
-    recoveryTimer = null;
-    return recoveryReady ? api.storeRecovery(recoveryEntries()) : Promise.resolve();
+    return crashRecovery.store();
   }
 
-  /** Stores at most once per second while typing. */
   function scheduleRecovery() {
-    reportDirtyFiles();
-    if (recoveryReady && !recoveryTimer)
-      recoveryTimer = setTimeout(storeRecovery, 1000);
+    crashRecovery.schedule();
   }
-
-  // A project opened again quickly starts a new offer: the earlier one must not store or show
-  // the previous project's copies.
-  let recoveryRequest = 0;
-
-  async function offerRecovery() {
-    const request = ++recoveryRequest;
-    recoveryReady = false;
-    // The last copy may predate a save made just before closing: skip what is already on disk.
-    const entries = [];
-    for (const entry of await api.readRecovery()) {
-      const disk = await api.readProjectFile(entry.path).catch(() => null);
-      if (!disk || disk.content !== entry.content)
-        entries.push(entry);
-    }
-    if (request !== recoveryRequest)
-      return;
-    if (!entries.length) {
-      recoveryReady = true;
-      await storeRecovery();
-      return;
-    }
-    const notice = $('#recovery-notice');
-    const count = entries.length === 1 ? '1 file' : `${entries.length} files`;
-    $('#recovery-notice-text').textContent = `Keywright closed with unsaved changes in ${count}: ${entries.map((e) => e.path).join(', ')}`;
-    notice.dataset.entries = JSON.stringify(entries);
-    notice.hidden = false;
-  }
-
-  async function restoreRecovery(entries) {
-    const failed = [];
-    for (const entry of entries) {
-      let tab = tabs.find((t) => t.path === entry.path);
-      if (!tab) {
-        let disk = null;
-        try {
-          disk = await api.readProjectFile(entry.path);
-        } catch {
-          // Deleted since the crash: saving recreates it.
-        }
-        if (disk && disk.content === null) {
-          failed.push(entry.path);
-          continue;
-        }
-        // A file changed on disk keeps the revision the edits started from, so
-        // saving it raises the usual conflict instead of overwriting silently.
-        const revision = disk && disk.revision === entry.revision ? disk.revision : (entry.revision ?? null);
-        tab = { path: entry.path, content: disk ? disk.content : '', revision: disk ? revision : null };
-        tabs.push(tab);
-      }
-      shownInEditor = null;
-      activate(entry.path);
-      editor.restoreContent(entry.path, entry.content);
-    }
-    renderTabs();
-    if (failed.length)
-      setEditorStatus(`Could not restore ${failed.join(', ')}`, true);
-    else
-      setEditorStatus(`Restored unsaved changes in ${entries.length === 1 ? '1 file' : `${entries.length} files`}. Save to keep them.`);
-  }
-
-  async function finishRecovery(restore) {
-    const notice = $('#recovery-notice');
-    const entries = JSON.parse(notice.dataset.entries || '[]');
-    notice.hidden = true;
-    delete notice.dataset.entries;
-    if (restore)
-      await restoreRecovery(entries);
-    recoveryReady = true;
-    await storeRecovery();
-  }
-
-  $('#recovery-restore').addEventListener('click', () => finishRecovery(true));
-  $('#recovery-discard').addEventListener('click', () => finishRecovery(false));
-  editor.onDirtyChange(scheduleRecovery);
 
   // -------------------------------------------------------------------------
   // Editor status line, and the keyword index for completion and hover (keywordLoader.js)
@@ -687,8 +600,7 @@
       setEditorStatus('Settings saved. Reopen the project to apply them.');
       return;
     }
-    recoveryReady = false;
-    $('#recovery-notice').hidden = true;
+    crashRecovery.suspend();
     const result = await api.openProject(currentRoot);
     if (!result.ok) {
       setEditorStatus(result.error, true);
@@ -705,8 +617,7 @@
   $('#project-close').addEventListener('click', async () => {
     if (!await closeAllTabs())
       return;
-    recoveryReady = false;
-    $('#recovery-notice').hidden = true;
+    crashRecovery.suspend();
     await api.closeProject();
     window.dispatchEvent(new CustomEvent('keywright:project-closed'));
     showWelcome();
