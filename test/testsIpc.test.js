@@ -38,7 +38,7 @@ function setup({ fail = null } = {}) {
     traceServer,
     project: () => current,
     refreshProject: () => null,
-    discoverTests: async () => ({ ok: true, suite: { name: 'Tests' } }),
+    discoverTests: async (_project, options) => ({ ok: true, suite: { name: 'Tests' }, options }),
     openPath: async () => '',
     batchMs: 20,
   });
@@ -55,6 +55,12 @@ test('a run passes the Run options to Robot and allows its results folder to be 
   assert.deepEqual(f.runner.runs[0].include, ['smoke']);
   assert.deepEqual(f.allowed[0], [path.join(f.root, 'results')]);
   assert.match((await f.call('tests:run', {})).error, /already running/);
+});
+
+test('discovery gets the additional arguments of the Run options', async () => {
+  const f = setup();
+  assert.deepEqual((await f.call('tests:discover', { extraArgs: '--name X' })).options, { extraArgs: '--name X' });
+  assert.deepEqual((await f.call('tests:discover')).options, { extraArgs: '' });
 });
 
 test('without a project, or when Robot cannot start, nothing is recorded', async () => {

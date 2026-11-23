@@ -215,6 +215,13 @@ tag patterns, dry run and additional arguments. It starts a loopback TCP server 
 spawns the project Python as `python -m robot` with the Python listener importable
 through `PYTHONPATH`.
 
+Discovery from the Testing panel passes the same additional arguments. The helper reads
+them with Robot's own argument parser and applies those that decide which files are read
+and how tests are named or tagged (`--extension`, `--parser`, `--language`, `--name`,
+`--settag`, ...). Filters and pre-run modifiers are left to the run. Robot applies
+`--name` after pre-run modifiers, so `SelectTests` sets it before comparing full names.
+MCP discovery and runs use no additional arguments.
+
 Every renderer run entry point first calls `WorkspaceFiles.prepareRun()`. It waits
 for pending saves and resolves all dirty editor files, including resources and
 Python libraries. Saving triggers rediscovery before resolving an editor selection.

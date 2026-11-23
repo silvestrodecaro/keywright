@@ -542,13 +542,15 @@
   // Only the latest discovery is applied: an earlier one may answer after another project
   // opened, or after the files changed again.
   let discoverRequest = 0;
+  let discoveredArgs = ''; // the additional arguments of the latest discovery
 
   async function discover({ quiet = false } = {}) {
     const request = ++discoverRequest;
     showError('');
     if (!quiet)
       $('#test-tree').replaceChildren(el('li', { className: 'empty', textContent: 'Loading tests…' }));
-    const result = await api.discoverTests();
+    discoveredArgs = runOptions().extraArgs;
+    const result = await api.discoverTests({ extraArgs: discoveredArgs });
     if (request !== discoverRequest)
       return;
     if (!result.ok) {
@@ -583,8 +585,11 @@
       notice.hidden = !preparation.message;
       if (!preparation.ok)
         return;
-      if (preparation.saved)
+      if (preparation.saved || discoveredArgs !== runOptions().extraArgs) {
         await discover({ quiet: true });
+        if (!rootSuite) // the error is shown
+          return;
+      }
       if (source) {
         select = idsInFile(source.path, source.names);
         if (!select) {
@@ -1089,6 +1094,12 @@
 
   for (const selector of [...Object.values(RUN_OPTION_FIELDS), '#run-dryrun'])
     $(selector).addEventListener(selector === '#run-browser' || selector === '#run-dryrun' ? 'change' : 'input', saveRunOptions);
+
+  // Once entered, not while typing: the arguments can name the suites and choose the files.
+  $('#run-args').addEventListener('change', () => {
+    if (runOptionsKey && !running && !preparing)
+      discover({ quiet: true });
+  });
 
   window.addEventListener('keywright:project-opened', (event) => {
     runOptionsKey = projectKey('keywright.runOptions', event.detail?.root);

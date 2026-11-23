@@ -13,16 +13,17 @@ const { randomUUID, timingSafeEqual } = require('crypto');
 const OUTPUT_AFTER_EXIT_MS = 2000;
 
 /**
- * Builds the suite/test tree of `project` with Robot's own parser.
+ * Builds the suite/test tree of `project` with Robot's own parser, as a run with the same
+ * `extraArgs` reads and names it.
  * @returns {Promise<{ ok: true, suite: object } | { ok: false, error: string }>}
  */
-function discoverTests(project) {
+function discoverTests(project, { extraArgs = '' } = {}) {
   if (!project.python)
     return Promise.resolve({ ok: false, error: 'This project has no virtual environment (.venv) with Robot Framework.' });
   const testsPath = path.join(project.root, project.config.testsDir);
   if (!fs.existsSync(testsPath))
     return Promise.resolve({ ok: false, error: `Tests folder not found: ${project.config.testsDir}` });
-  return runHelper(project.python, ['discover', testsPath, project.root], { cwd: project.root });
+  return runHelper(project.python, ['discover', testsPath, project.root, ...splitArgs(extraArgs)], { cwd: project.root });
 }
 
 /**

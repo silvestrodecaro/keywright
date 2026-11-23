@@ -63,7 +63,7 @@ contextBridge.exposeInMainWorld('keywright', {
   confirmFileConflict: (relative, deleted) => ipcRenderer.invoke('dialog:file-conflict', relative, deleted),
 
   // Test runner
-  discoverTests: () => ipcRenderer.invoke('tests:discover'),
+  discoverTests: (options) => ipcRenderer.invoke('tests:discover', options),
   runTests: (options) => ipcRenderer.invoke('tests:run', options),
   stopTests: () => ipcRenderer.invoke('tests:stop'),
   debugCommand: (command) => ipcRenderer.invoke('tests:debug-command', command),

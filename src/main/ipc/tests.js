@@ -18,7 +18,7 @@ const { Batch } = require('../eventBatch');
  * @param {import('../traceServer').TraceServer} context.traceServer
  * @param {() => object | null} context.project the open project
  * @param {() => string | null} context.refreshProject reads it again; the error, if any
- * @param {(project: object) => Promise<object>} context.discoverTests
+ * @param {(project: object, options?: { extraArgs?: string }) => Promise<object>} context.discoverTests
  * @param {(file: string) => Promise<string>} context.openPath opens a file in its program
  * @param {number} [context.batchMs]
  * @returns {{ startRun: (options?: object) => Promise<void> }}
@@ -65,14 +65,14 @@ function createTestsIpc(context) {
     return project ? runHistory.list(outputDir(project)) : [];
   });
 
-  ipcMain.handle('tests:discover', () => {
+  ipcMain.handle('tests:discover', (_event, options = {}) => {
     if (!context.project())
       return { ok: false, error: 'No project is open.' };
     // Reload: the virtual environment may have been created since the project was opened.
     const unreadable = context.refreshProject();
     if (unreadable)
       return { ok: false, error: unreadable };
-    return context.discoverTests(context.project());
+    return context.discoverTests(context.project(), { extraArgs: options.extraArgs || '' });
   });
 
   /** Starts a run for the Testing panel or an AI client; throws when it cannot start. */
