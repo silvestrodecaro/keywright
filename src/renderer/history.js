@@ -180,8 +180,15 @@
       setTimeout(() => showOutput(`${view}.html`), 300);
   });
 
+  // Only the latest load is applied: an earlier one may answer for the previous project.
+  let loadRequest = 0;
+
   async function load() {
-    runs = await api.testHistory();
+    const request = ++loadRequest;
+    const history = await api.testHistory();
+    if (request !== loadRequest)
+      return;
+    runs = history;
     if (!runs.some((run) => run.id === selectedRun))
       selectedRun = runs[0] ? runs[0].id : null;
     render();

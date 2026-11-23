@@ -295,9 +295,15 @@
     const tree = await api.projectTree();
     if (renaming)
       return;
+    // A save changes no entry: the Explorer is rebuilt only when what it shows changed.
+    const shown = JSON.stringify([tree, [...expanded].sort(), activeTab]);
+    if (shown === lastTreeShown && $('#tree').childElementCount)
+      return;
+    lastTreeShown = shown;
     treeNodes.clear();
     window.RFTree.replace($('#tree'), tree.map((node) => renderNode(node, 0)), activeTab);
   }
+  let lastTreeShown = null;
 
   function renderNode(node, depth) {
     const row = el('div', {
@@ -443,6 +449,9 @@
   async function closeAllTabs() {
     if (!await resolveUnsaved(tabs.map((t) => t.path)))
       return false;
+    // Recording at the cursor of a closing file would leave the editor read-only.
+    if (tabs.some((tab) => editor.recordingPath() === tab.path))
+      await api.stopRecording();
     for (const tab of tabs)
       editor.close(tab.path);
     tabs = [];
@@ -778,7 +787,12 @@
       recoveryTimer = setTimeout(storeRecovery, 1000);
   }
 
+  // A project opened again quickly starts a new offer: the earlier one must not store or show
+  // the previous project's copies.
+  let recoveryRequest = 0;
+
   async function offerRecovery() {
+    const request = ++recoveryRequest;
     recoveryReady = false;
     // The last copy may predate a save made just before closing: skip what is already on disk.
     const entries = [];
@@ -787,6 +801,8 @@
       if (!disk || disk.content !== entry.content)
         entries.push(entry);
     }
+    if (request !== recoveryRequest)
+      return;
     if (!entries.length) {
       recoveryReady = true;
       await storeRecovery();
@@ -1066,6 +1082,7 @@
     input.setAttribute('aria-label', `New name for ${original}`);
     const error = el('div', { className: 'error tree-rename-error', hidden: true });
     renaming = relative;
+    lastTreeShown = null; // the row is changed in place: the next refresh rebuilds it
     row.classList.add('is-renaming');
     label.hidden = true;
     label.after(input);
