@@ -66,6 +66,7 @@ executables out of `.venv` makes their paths independent of the project director
 | --- | --- | --- |
 | Application lifecycle | [main.js](../src/main/main.js), [preload.js](../src/main/preload.js) | Window, IPC, active project, services and shutdown |
 | Project setup and files | [projects.js](../src/main/projects.js), [projectTemplate.js](../src/main/projectTemplate.js) | Tool detection, scaffold, environment setup, configuration, tree and file access |
+| Interpreter confirmation | [interpreterTrust.js](../src/main/interpreterTrust.js) | Confirmation of interpreters outside the project folder and `trusted-interpreters.json` |
 | File changes | [projectWatcher.js](../src/main/projectWatcher.js) | Recursive watch, ignored paths and debounced change events |
 | Recent projects | [recentProjects.js](../src/main/recentProjects.js) | Application-level recent-project list |
 | Recording | [recorder.js](../src/main/recorder.js), [browserInstall.js](../src/main/browserInstall.js) | Recorder/picker sessions, action events and app-side browser installation |
