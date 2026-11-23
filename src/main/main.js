@@ -2,8 +2,6 @@
 
 const path = require('path');
 const fs = require('fs/promises');
-const { existsSync } = require('fs');
-const { pathToFileURL } = require('url');
 const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, session: electronSession } = require('electron');
 const os = require('os');
 const { installStartupDiagnostics } = require('./startupDiagnostics');
@@ -42,7 +40,7 @@ const { RecentProjects } = require('./recentProjects');
 const projects = require('./projects');
 const { SourceControl } = require('./sourceControl');
 const projectSettings = require('./projectSettings');
-const { discoverTests, TestRunner, screenshotsFromHtml } = require('./testRunner');
+const { discoverTests, TestRunner } = require('./testRunner');
 const { KeywordIndex } = require('./keywordIndex');
 const { RecoveryStore } = require('./recoveryStore');
 const { LanguageWorker } = require('./languageWorker');
@@ -52,12 +50,11 @@ const { TraceServer } = require('./traceServer');
 const { projectVariables } = require('./projectVariables');
 const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
-const { RunHistory } = require('./runHistory');
 const { AgentBrowser } = require('./mcp/agentBrowser');
 const { createMcpIpc } = require('./ipc/mcp');
 const { createGeneratorIpc, explainLaunchError, BROWSERS } = require('./ipc/generator');
+const { createTestsIpc } = require('./ipc/tests');
 const { childProcesses } = require('./processes');
-const { Batch } = require('./eventBatch');
 const { InterpreterTrust } = require('./interpreterTrust');
 
 /** @type {BrowserWindow | null} */
@@ -77,7 +74,6 @@ const traceServer = new TraceServer();
 let languageWorker = null;
 /** @type {ProjectWatcher | null} */
 let projectWatcher = null;
-let runOutputDir = null;
 let recentProjects = null;
 let recovery = null;
 // The browser an AI client drives through the MCP tools, separate from the Test Generator's.
@@ -560,126 +556,20 @@ ipcMain.handle('project:reveal', (_event, relative) => {
 });
 
 // ---------------------------------------------------------------------------
-// Test runner (UI mode)
+// Test runner: runs, their events and history, reports and traces (ipc/tests.js).
 
-const runHistory = new RunHistory();
-
-// A run can log thousands of messages a second: the Testing panel receives them in
-// batches, a few IPC messages a second, rather than one each.
-const testEvents = new Batch((events) => send('tests:events', events), 50);
-const testOutput = new Batch((chunks) => send('tests:output', chunks.join('')), 50);
-function flushRunMessages() {
-  testOutput.flush();
-  testEvents.flush();
-}
-
-runner.on('event', (event) => {
-  runHistory.record(event);
-  if (event.type === 'log' && event.html && runOutputDir) {
-    const images = screenshotsFromHtml(event.text, runOutputDir).filter((file) => existsSync(file));
-    if (images.length)
-      event.images = images.map((file) => pathToFileURL(file).href);
-  }
-  testEvents.push(event);
-  // The debugger's pause and the end of a test are shown at once; the rest is batched.
-  if (event.type.startsWith('debug-'))
-    flushRunMessages();
+const testsIpc = createTestsIpc({
+  ipcMain,
+  send,
+  runner,
+  traceServer,
+  project: () => currentProject,
+  refreshProject,
+  discoverTests,
+  openPath: (file) => shell.openPath(file),
 });
-runner.on('output', (text) => testOutput.push(text));
-runner.on('finished', (result) => {
-  const run = runHistory.finish(result);
-  flushRunMessages(); // every event and output line arrives before the end of the run
-  send('tests:finished', result);
-  if (run)
-    send('tests:history-added', run);
-});
-
-ipcMain.handle('tests:history', () => (currentProject
-  ? runHistory.list(path.resolve(currentProject.root, currentProject.config.outputDir)) : []));
-
-ipcMain.handle('tests:discover', () => {
-  if (!currentProject)
-    return { ok: false, error: 'No project is open.' };
-  // Reload: the virtual environment may have been created since the project was opened.
-  const unreadable = refreshProject();
-  if (unreadable)
-    return { ok: false, error: unreadable };
-  return discoverTests(currentProject);
-});
-
 /** Starts a run for the Testing panel or an AI client; throws when it cannot start. */
-async function startRun(options = {}) {
-  if (!currentProject)
-    throw new Error('No project is open.');
-  if (runner.running) // before touching the history of the run in progress
-    throw new Error('Tests are already running.');
-  runOutputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
-  traceServer.allow([runOutputDir]);
-  runHistory.start(runOutputDir, { ...options, debug: !!options.debug });
-  await runner.run(currentProject, runOptions(options)).catch((error) => {
-    runHistory.cancel();
-    throw error;
-  });
-}
-
-function runOptions(options) {
-  return {
-    select: options.select || [],
-    variables: {
-      ...(options.headed ? { HEADLESS: 'False' } : {}),
-      ...(options.browser ? { BROWSER: options.browser } : {}), // used by the project template's New Browser
-    },
-    trace: !!options.trace,
-    include: options.include || [],
-    exclude: options.exclude || [],
-    dryrun: !!options.dryrun,
-    extraArgs: options.extraArgs || '',
-    debug: options.debug ? { breakpoints: options.debug.breakpoints || {}, pauseOnFailure: !!options.debug.pauseOnFailure } : undefined,
-  };
-}
-
-ipcMain.handle('tests:run', async (_event, options = {}) => {
-  try {
-    await startRun(options);
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
-});
-
-ipcMain.handle('tests:stop', () => runner.stop());
-
-// Debugger: continue / over / into / out / pause, new breakpoints or options, evaluate.
-ipcMain.handle('tests:debug-command', (_event, command) => runner.debugCommand(command));
-
-ipcMain.handle('tests:trace-url', async (_event, traceFile) => {
-  if (!traceFile || !existsSync(traceFile))
-    return { ok: false, error: 'The trace is written when the browser context is closed: at the end of the test, or of the suite when the context was created in a suite setup.' };
-  try {
-    // Traces of the open project's results, also of runs before it was reopened.
-    if (currentProject)
-      traceServer.allow([path.resolve(currentProject.root, currentProject.config.outputDir)]);
-    return { ok: true, url: await traceServer.urlFor(traceFile) };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
-});
-
-// Robot's report.html / log.html of the project, shown in the Test Results tab.
-ipcMain.handle('tests:output-url', async (_event, file) => {
-  if (!currentProject || !['log.html', 'report.html'].includes(file))
-    return { ok: false, error: 'No project is open.' };
-  const outputDir = path.resolve(currentProject.root, currentProject.config.outputDir);
-  if (!existsSync(path.join(outputDir, file)))
-    return { ok: false, error: `There is no ${file} yet: run some tests first.` };
-  return { ok: true, url: await traceServer.outputUrl(outputDir, file) };
-});
-
-ipcMain.handle('tests:open-output', async (_event, file) => {
-  if (!currentProject || !['log.html', 'report.html'].includes(file))
-    return 'No results yet.';
-  return shell.openPath(path.join(path.resolve(currentProject.root, currentProject.config.outputDir), file));
-});
+const startRun = (options) => testsIpc.startRun(options);
 
 // ---------------------------------------------------------------------------
 // Test generator: recording, locator picking and saving (ipc/generator.js).
