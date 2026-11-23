@@ -88,7 +88,7 @@ test('navigates to and renames a resource keyword across editor and disk', async
   const file = path.join(project, relative);
   const resource = 'resources/navigation.resource';
   const resourceFile = path.join(project, resource);
-  const caller = '*** Settings ***\nResource    ../resources/navigation.resource\n\n*** Test Cases ***\nNavigation Probe\n    Prepare Navigation Sample\n';
+  const caller = '*** Settings ***\nResource    ../resources/navigation.resource\n\n*** Test Cases ***\nNavigation Probe\n    Prepare Navigation Sample\n    Prepare Navigation Sample\n';
   fs.writeFileSync(file, caller);
   fs.writeFileSync(resourceFile, '*** Keywords ***\nPrepare Navigation Sample\n    No Operation\n');
 
@@ -104,6 +104,12 @@ test('navigates to and renames a resource keyword across editor and disk', async
   await expect(hover).toContainText('Prepare Navigation Sample — keyword in resources/navigation.resource');
   await page.keyboard.press('Escape');
   await expect(hover).toBeHidden();
+  // References (Shift+F12): both calls and the definition in the resource file.
+  await page.keyboard.press('Shift+F12');
+  const peek = page.locator('.monaco-editor .peekview-widget');
+  await expect(peek).toContainText('navigation.resource');
+  await page.keyboard.press('Escape');
+  await expect(peek).toBeHidden();
   await page.keyboard.press('F12');
   // The watcher can report the resource file while the definition opens (it was just written).
   await page.evaluate((changed) => window.dispatchEvent(new CustomEvent('keywright:files-changed', { detail: { paths: [changed] } })), resource);
