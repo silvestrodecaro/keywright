@@ -66,6 +66,14 @@ test('shows live diagnostics, suggests a Robot keyword and formats only the edit
   await expect(page.locator('#file-path')).toHaveText(relative);
   const code = page.locator('#pane-file .monaco-editor .view-lines');
   await goToLine(page, code, 3);
+  // Quick fixes (Ctrl+.) for the unknown keyword.
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Control+.');
+  const actions = page.locator('.action-widget:not(.action-list-submenu-panel)');
+  await expect(actions).toContainText("Create keyword 'Missing Demo Keyword' in this file");
+  await page.keyboard.press('Escape');
+  await expect(actions).toBeHidden();
   await page.keyboard.press('End');
   await page.keyboard.press('Shift+Home');
   await page.keyboard.insertText('No Oper');
