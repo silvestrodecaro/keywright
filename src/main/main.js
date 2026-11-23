@@ -49,15 +49,13 @@ const { LanguageWorker } = require('./languageWorker');
 const { installBrowser } = require('./browserInstall');
 const { ProjectWatcher } = require('./projectWatcher');
 const { TraceServer } = require('./traceServer');
-const { generateRobot, generateSteps, DEFAULT_OPTIONS } = require('../generator/robotGenerator');
-const { toBrowserSelector } = require('../generator/selectors');
-const { escapeArg } = require('../generator/escape');
 const { projectVariables } = require('./projectVariables');
 const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
 const { RunHistory } = require('./runHistory');
 const { AgentBrowser } = require('./mcp/agentBrowser');
 const { createMcpIpc } = require('./ipc/mcp');
+const { createGeneratorIpc, explainLaunchError, BROWSERS } = require('./ipc/generator');
 const { childProcesses } = require('./processes');
 const { Batch } = require('./eventBatch');
 const { InterpreterTrust } = require('./interpreterTrust');
@@ -80,7 +78,6 @@ let languageWorker = null;
 /** @type {ProjectWatcher | null} */
 let projectWatcher = null;
 let runOutputDir = null;
-let generatorOptions = { ...DEFAULT_OPTIONS };
 let recentProjects = null;
 let recovery = null;
 // The browser an AI client drives through the MCP tools, separate from the Test Generator's.
@@ -88,16 +85,6 @@ let recovery = null;
 const agentBrowser = new AgentBrowser({ headless: process.env.KEYWRIGHT_AI_BROWSER_HEADLESS === '1' });
 // Project-relative paths with unsaved changes in the editor, reported by the renderer.
 let editorDirtyPaths = [];
-
-// Browser choices offered in the UI: the Playwright browser to record with and
-// the matching `New Browser` arguments of the generated test.
-const BROWSERS = {
-  chromium: { browser: 'chromium', channel: null },
-  chrome: { browser: 'chromium', channel: 'chrome' },
-  msedge: { browser: 'chromium', channel: 'msedge' },
-  firefox: { browser: 'firefox', channel: null },
-  webkit: { browser: 'webkit', channel: null },
-};
 
 function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed())
@@ -695,151 +682,32 @@ ipcMain.handle('tests:open-output', async (_event, file) => {
 });
 
 // ---------------------------------------------------------------------------
-// Test generator
+// Test generator: recording, locator picking and saving (ipc/generator.js).
 
-function describeStep(action) {
-  switch (action.name) {
-    case 'openPage': return action.url && action.url !== 'about:blank' ? action.url : 'new page';
-    case 'navigate': return action.url;
-    case 'fill': return `${toBrowserSelector(action.selector)} ← "${action.text}"`;
-    case 'press': return `${toBrowserSelector(action.selector)} ⌨ ${action.key}`;
-    case 'select': return `${toBrowserSelector(action.selector)} → ${action.options.join(', ')}`;
-    case 'assertText': return `${toBrowserSelector(action.selector)} ${action.substring ? 'contains' : 'is'} "${action.text}"`;
-    case 'assertValue': return `${toBrowserSelector(action.selector)} = "${action.value || ''}"`;
-    default: return action.selector ? toBrowserSelector(action.selector) : '';
-  }
-}
-
-function publishCode() {
-  send('recorder:code', {
-    code: generateRobot(session.actions, generatorOptions),
-    lines: generateSteps(session.actions), // for "Record at cursor" in the editor
-    steps: session.actions.map((action) => ({
-      name: action.name,
-      detail: describeStep(action),
-      signals: (action.signals || []).map((s) => s.name),
-    })),
-  });
-}
-
-function publishState(extra = {}) {
-  send('recorder:state', { recording: session.recording, ...extra });
-}
-
-session.on('actions', publishCode);
-session.on('stopped', () => publishState());
-session.on('unreadable-action', (detail) => {
-  console.error(`The recorder sent an action Keywright cannot read; it was not recorded: ${detail}`);
-  crashReports.note('unreadable-recorder-action', { detail });
-});
-
-ipcMain.handle('recorder:start', async (_event, options) => {
-  const target = BROWSERS[options.browser] || BROWSERS.chromium;
-  generatorOptions = { ...generatorOptions, ...target, viewport: options.viewport || null };
-  try {
-    await session.start({ ...target, url: options.url, viewport: options.viewport });
-    publishState();
-    return { ok: true };
-  } catch (error) {
-    publishState();
-    return { ok: false, ...explainLaunchError(error, options.browser) };
-  }
-});
-
-ipcMain.handle('recorder:install-browser', async (_event, name) => {
-  try {
-    await installBrowser(name, (text) => send('recorder:install-log', text));
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
-});
-
-ipcMain.handle('recorder:stop', () => session.stop());
-ipcMain.handle('recorder:clear', () => session.clear());
-ipcMain.handle('recorder:remove-step', (_event, index) => session.removeAction(index));
-
-// Pick locator: in the Test Generator's browser while it records, otherwise in
-// a browser opened just for picking (kept open for the next picks).
+// Pick locator opens this browser when nothing records (kept open for the next picks).
 const pickerSession = new RecorderSession();
 if (process.env.KEYWRIGHT_TEST)
   global.__keywrightPicker = pickerSession;
-let pickingSession = null;
 
-function publishPickState() {
-  send('locator:state', { picking: !!pickingSession });
-}
-
-ipcMain.handle('locator:pick', async (_event, options = {}) => {
-  if (pickingSession)
-    return { ok: false, error: 'Already picking a locator.' };
-  const target = session.recording ? session : pickerSession;
-  pickingSession = target;
-  publishPickState();
-  try {
-    if (!target.recording) {
-      const browser = BROWSERS[options.browser] || BROWSERS.chromium;
-      await pickerSession.start({ ...browser, url: options.url, viewport: options.viewport, record: false });
-    }
-    const selector = await target.pickLocator();
-    if (!selector)
-      return { ok: true, cancelled: true };
-    const browserSelector = toBrowserSelector(selector);
+const generatorIpc = createGeneratorIpc({
+  ipcMain,
+  send,
+  session,
+  pickerSession,
+  project: () => currentProject,
+  documentsPath: () => app.getPath('documents'),
+  showSaveDialog: (options) => dialog.showSaveDialog(mainWindow, options),
+  showWindow: () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
     }
-    return { ok: true, selector: browserSelector, cell: escapeArg(browserSelector, { escapeNamedArg: false }) };
-  } catch (error) {
-    return { ok: false, ...explainLaunchError(error, options.browser) };
-  } finally {
-    pickingSession = null;
-    publishPickState();
-  }
-});
-
-ipcMain.handle('locator:cancel', () => pickingSession && pickingSession.cancelPick());
-
-ipcMain.handle('generator:set-options', (_event, options) => {
-  generatorOptions = { ...generatorOptions, ...options };
-  publishCode();
+  },
+  note: (event, details) => crashReports.note(event, details),
+  install: installBrowser,
 });
 
 ipcMain.handle('clipboard:write', (_event, text) => clipboard.writeText(text));
-
-function suggestedFileName() {
-  const slug = (generatorOptions.testName || 'recorded test')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  return `${slug || 'recorded_test'}.robot`;
-}
-
-ipcMain.handle('file:save', async (_event, code) => {
-  const folder = currentProject
-    ? path.join(currentProject.root, currentProject.config.testsDir)
-    : app.getPath('documents');
-  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'Save Robot Framework test',
-    defaultPath: path.join(folder, suggestedFileName()),
-    filters: [{ name: 'Robot Framework', extensions: ['robot'] }, { name: 'All files', extensions: ['*'] }],
-  });
-  if (canceled || !filePath)
-    return null;
-  await fs.writeFile(filePath, code, 'utf8');
-  return filePath;
-});
-
-/** @returns {{ error: string, install?: string }} install: the Playwright browser that can be downloaded */
-function explainLaunchError(error, browser) {
-  const message = String(error && error.message || error).split('\n')[0];
-  if (/Executable doesn't exist|browserType\.launch: .*not found|is not found/i.test(message)) {
-    const target = BROWSERS[browser] || BROWSERS.chromium;
-    if (target.channel)
-      return { error: `${message}\nThis browser does not seem to be installed on this machine.` };
-    return { error: `The ${target.browser} browser used by the Test Generator is not installed yet.`, install: target.browser };
-  }
-  return { error: message };
-}
-
 // ---------------------------------------------------------------------------
 // MCP server
 
@@ -937,8 +805,8 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.webContents.on('did-finish-load', () => {
     editorDirtyPaths = []; // a reloaded page has no unsaved editors yet
-    publishState();
-    publishCode();
+    generatorIpc.publishState();
+    generatorIpc.publishCode();
     publishWindowActive();
   });
   mainWindow.on('page-title-updated', (event) => event.preventDefault());
