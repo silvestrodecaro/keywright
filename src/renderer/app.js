@@ -422,82 +422,19 @@
 
   $('#source-diff-close').addEventListener('click', closeGitDiff);
 
+  // The tab bar and the shown pane (tabBar.js); the tab state stays here.
+  const tabBar = window.RFTabBar.create({
+    el, editor, fixedTabs: FIXED_TABS, gitDiffTab: GIT_DIFF_TAB,
+    tabs: () => tabs,
+    activeTab: () => activeTab,
+    hasGitDiff: () => hasGitDiff,
+    shownInEditor: () => shownInEditor,
+    setShownInEditor: (path) => { shownInEditor = path; },
+    activate, closeTab, ensureEditor, renderProblems, renderRecordBar,
+  });
+
   function renderTabs() {
-    const focus = $('#tabs').contains(document.activeElement) ? document.activeElement.id : null;
-    function semantics(button, id, pane) {
-      button.id = id;
-      button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', String(button.classList.contains('is-active')));
-      button.setAttribute('aria-controls', pane.slice(1));
-      button.tabIndex = button.classList.contains('is-active') ? 0 : -1;
-      if (button.tabIndex === 0) $(pane).setAttribute('aria-labelledby', id);
-      return button;
-    }
-    const fixedTabs = [...FIXED_TABS, ...(hasGitDiff ? [
-      { id: GIT_DIFF_TAB, label: 'Git Diff', pane: '#pane-git-diff' },
-    ] : [])].map((fixed) => {
-      const button = el('button', {
-        type: 'button',
-        className: 'tab' + (activeTab === fixed.id ? ' is-active' : ''),
-        textContent: fixed.label,
-      });
-      button.addEventListener('click', () => activate(fixed.id));
-      return semantics(button, `tab-${fixed.id}`, fixed.pane);
-    });
-
-    const fileTabs = tabs.map((tab) => {
-      const name = tab.path.split('/').pop();
-      const dirty = editor.isDirty(tab.path);
-      const button = el('button', {
-        type: 'button',
-        className: 'tab' + (activeTab === tab.path ? ' is-active' : '') + (dirty ? ' is-dirty' : ''),
-        title: tab.path + (dirty ? ' (unsaved)' : ''),
-      }, el('span', { textContent: name }));
-      button.setAttribute('aria-label', name + (dirty ? ', unsaved changes' : ''));
-      const close = el('span', { className: 'tab-close', title: 'Close (Delete when tab is focused)' });
-      close.setAttribute('aria-hidden', 'true');
-      close.addEventListener('click', (event) => {
-        event.stopPropagation();
-        closeTab(tab.path);
-      });
-      button.append(close);
-      button.addEventListener('click', () => activate(tab.path));
-      button.addEventListener('auxclick', (event) => {
-        if (event.button === 1)
-          closeTab(tab.path);
-      });
-      return semantics(button, `tab-file-${encodeURIComponent(tab.path)}`, '#pane-file');
-    });
-    $('#tabs').replaceChildren(...fixedTabs, ...fileTabs);
-    if (focus) {
-      const target = document.getElementById(focus) || $('#tabs [aria-selected="true"]');
-      target?.focus();
-    }
-
-    const file = tabs.find((t) => t.path === activeTab);
-    for (const fixed of FIXED_TABS)
-      $(fixed.pane).hidden = activeTab !== fixed.id;
-    $('#pane-git-diff').hidden = activeTab !== GIT_DIFF_TAB;
-    $('#pane-file').hidden = !file;
-    if (!file)
-      return;
-    $('#file-path').textContent = file.path;
-    const message = $('#file-message');
-    message.hidden = file.content !== null;
-    $('#editor').hidden = file.content === null;
-    $('#pane-file .file-header-right').hidden = file.content === null;
-    if (file.content === null) {
-      message.textContent = file.reason;
-      return;
-    }
-    if (shownInEditor !== file.path) {
-      ensureEditor();
-      editor.open(file.path, file.content, file.line, file.column, file.selectLength);
-      file.line = null;
-      shownInEditor = file.path;
-    }
-    renderProblems(editor.problems(file.path));
-    renderRecordBar();
+    tabBar.render();
   }
 
   // Only when a file becomes modified or saved: rebuilding the tabs on every keystroke is wasted work.
