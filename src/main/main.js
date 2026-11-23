@@ -54,6 +54,7 @@ const { AgentBrowser } = require('./mcp/agentBrowser');
 const { createMcpIpc } = require('./ipc/mcp');
 const { createGeneratorIpc, explainLaunchError, BROWSERS } = require('./ipc/generator');
 const { createTestsIpc } = require('./ipc/tests');
+const { stopAll, handleQuit } = require('./shutdown');
 const { childProcesses } = require('./processes');
 const { InterpreterTrust } = require('./interpreterTrust');
 
@@ -827,47 +828,22 @@ ipcMain.handle('app:open-crash-reports', async () => {
     throw new Error(error);
 });
 
-// Every way of quitting (closing the window, Quit after a crash, the system) goes
-// through before-quit, which stops the services and processes first.
-const SHUTDOWN_STEP_MS = 5000;
-let shutdown = null;
-let shutdownDone = false;
-
-function stopServices() {
-  const step = async (name, stop) => {
-    let timer;
-    const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve('timeout'), SHUTDOWN_STEP_MS); });
-    try {
-      if (await Promise.race([Promise.resolve().then(stop), timeout]) === 'timeout')
-        console.error(`Shutdown: ${name} did not stop within ${SHUTDOWN_STEP_MS / 1000} seconds`);
-    } catch (error) {
-      console.error(`Shutdown: ${name}: ${error.message}`);
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-  return Promise.all([
-    step('tests', () => runner.stop()),
-    step('trace server', () => traceServer.stop()),
-    step('language worker', () => stopLanguageWorker()),
-    step('file watcher', () => stopWatchingProject()),
-    step('recorder', () => session.stop()),
-    step('locator picker', () => pickerSession.stop()),
-    step('AI browser', () => agentBrowser.close()),
-    step('MCP server', () => mcpIpc.stop()), // the setting stays on for the next start
-    step('child processes', () => childProcesses.killAll()),
-  ]);
-}
-
-app.on('before-quit', (event) => {
-  if (shutdownDone || !primaryInstance)
-    return;
-  event.preventDefault();
-  if (!shutdown)
-    shutdown = stopServices().finally(() => {
-      shutdownDone = true;
-      app.quit();
-    });
+// Every way of quitting goes through before-quit, which stops the services and
+// processes first, each within a time limit (shutdown.js). A second instance that
+// hands over to the first owns none of them.
+handleQuit(app, {
+  enabled: primaryInstance,
+  stop: () => stopAll([
+    ['tests', () => runner.stop()],
+    ['trace server', () => traceServer.stop()],
+    ['language worker', () => stopLanguageWorker()],
+    ['file watcher', () => stopWatchingProject()],
+    ['recorder', () => session.stop()],
+    ['locator picker', () => pickerSession.stop()],
+    ['AI browser', () => agentBrowser.close()],
+    ['MCP server', () => mcpIpc.stop()], // the setting stays on for the next start
+    ['child processes', () => childProcesses.killAll()],
+  ]),
 });
 
 app.on('window-all-closed', () => app.quit());
