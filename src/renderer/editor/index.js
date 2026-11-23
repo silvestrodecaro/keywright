@@ -11,13 +11,14 @@ import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/latin-600.css';
 import { tokenizeLine, analyzeLine, normalizeKeyword, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
-import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
+import { parseFile, findVariable, lookupKeys, importCandidates, variableFileDefinitions,
   isDynamicVariableFile, unresolvedVariables, normalizeVariable } from './navigation.js';
-import { keywordPart, keywordOccurrences, variablePart, variableOccurrences, invalidName, applyEdits } from './rename.js';
+import { invalidName, applyEdits } from './rename.js';
 import { setKeywords, allKeywords, catalogComplete, findKeywords, keywordsCalled } from './keywordCatalog.js';
-import { sectionAt, keywordCellAt } from './modelCells.js';
 import { registerCompletionProvider } from './completion.js';
 import { registerHoverProviders } from './hover.js';
+import { createSymbols } from './symbols.js';
+import { registerNavigationProviders } from './definitions.js';
 import { similarNames, keywordStub, keywordInsertion, variableInsertion, endInsertion, applyInsertion, callArguments } from './quickFix.js';
 
 self.MonacoEnvironment = {
@@ -126,20 +127,13 @@ registerCompletionProvider(monaco, LANGUAGE);
 
 registerHoverProviders(monaco, LANGUAGE, { modelPath, resolveVariable });
 
-monaco.languages.registerDefinitionProvider(LANGUAGE, {
-  async provideDefinition(model, position) {
-    const cell = keywordCellAt(model, position);
-    if (!cell)
-      return null;
-    const targets = findKeywords(cell.text).filter((kw) => kw.user && kw.source);
-    for (const source of new Set(targets.map((kw) => kw.source)))
-      await ensureModel(source);
-    return targets.map((kw) => ({ uri: uriFor(kw.source), range: new monaco.Range(kw.lineno, 1, kw.lineno, 1) }));
-  },
-});
+const symbols = createSymbols(monaco, { modelPath, readLines, resolveVariable, projectTree: () => window.keywright.projectTree() });
+registerNavigationProviders(monaco, LANGUAGE, { modelPath, ensureModel, uriFor, firstExisting, resolveVariable, symbols });
+const { renameTarget, symbolOccurrences, projectContents } = symbols;
 
 // ---------------------------------------------------------------------------
-// Navigation: outline (Ctrl+Shift+O), imported files and variable definitions
+// Project files for navigation: preview models and variable resolution
+// (the providers are in definitions.js, references and rename targets in symbols.js)
 
 function languageForPath(path) {
   const lower = path.toLowerCase();
@@ -262,210 +256,11 @@ async function resolveVariable(path, lines, name, line) {
   return null;
 }
 
-monaco.languages.registerDocumentSymbolProvider(LANGUAGE, {
-  displayName: 'Robot Framework',
-  provideDocumentSymbols(model) {
-    const { SymbolKind } = monaco.languages;
-    const kinds = { section: SymbolKind.Namespace, test: SymbolKind.Method, keyword: SymbolKind.Function, variable: SymbolKind.Variable,
-      resource: SymbolKind.File, variables: SymbolKind.File, library: SymbolKind.Module };
-    const symbol = (item) => {
-      const end = Math.max(item.end, item.line);
-      return {
-        name: item.name,
-        detail: '',
-        kind: kinds[item.kind],
-        tags: [],
-        range: new monaco.Range(item.line, 1, end, model.getLineMaxColumn(end)),
-        selectionRange: new monaco.Range(item.line, 1, item.line, model.getLineMaxColumn(item.line)),
-        children: (item.children || []).map(symbol),
-      };
-    };
-    return outline(model.getLinesContent()).map(symbol);
-  },
-});
 
-// Ctrl+click / F12 on an imported file or on a variable.
-monaco.languages.registerDefinitionProvider(LANGUAGE, {
-  async provideDefinition(model, position) {
-    const path = modelPath(model);
-    const lines = model.getLinesContent();
-    const line = position.lineNumber;
-    const offset = position.column - 1;
-    const item = parseFile(lines).imports.find((i) => i.line === line && i.start <= offset && offset <= i.end);
-    if (item) {
-      const target = await firstExisting(importCandidates(path, item.path));
-      if (!target)
-        return null;
-      await ensureModel(target.path);
-      return [{
-        uri: uriFor(target.path),
-        range: new monaco.Range(1, 1, 1, 1),
-        originSelectionRange: new monaco.Range(line, item.start + 1, line, item.end + 1),
-      }];
-    }
-    const variable = variableAt(lines[line - 1], offset);
-    if (!variable || variable.name.startsWith('%') || isBuiltinVariable(variable.name))
-      return null;
-    const found = await resolveVariable(path, lines, variable.name, line);
-    if (!found)
-      return null;
-    await ensureModel(found.path);
-    const d = found.definition;
-    return [{
-      uri: uriFor(found.path),
-      range: new monaco.Range(d.line, d.start + 1, d.line, d.end + 1),
-      originSelectionRange: new monaco.Range(line, variable.start + 1, line, variable.end + 1),
-    }];
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Rename (F2): user keywords and variables, across the project's files.
 // Open files get the edits in the editor (unsaved, undoable); the others are written to disk.
-
-async function projectRobotFiles() {
-  const flatten = (nodes) => nodes.flatMap((node) => (node.type === 'dir' ? flatten(node.children || [])
-    : /\.(robot|resource)$/i.test(node.path) ? [node.path] : []));
-  return flatten(await window.keywright.projectTree());
-}
-
-/** The files that import `target` (directly or through other resources), `target` included. */
-function filesImporting(target, contents) {
-  const importsOf = new Map([...contents].map(([path, lines]) => [path, parseFile(lines).imports
-    .filter((item) => item.type !== 'library')
-    .map((item) => importCandidates(path, item.path).find((candidate) => contents.has(candidate) || candidate === target))
-    .filter(Boolean)]));
-  const reaches = (path, seen = new Set()) => {
-    if (path === target)
-      return true;
-    if (seen.has(path))
-      return false;
-    seen.add(path);
-    return (importsOf.get(path) || []).some((next) => reaches(next, seen));
-  };
-  return [...contents.keys()].filter((path) => reaches(path));
-}
-
-/** What F2 at `position` renames: { kind, range, text, ... }, { reject } or null. */
-async function renameTarget(model, position) {
-  const path = modelPath(model);
-  const lines = model.getLinesContent();
-  const line = position.lineNumber;
-  const offset = position.column - 1;
-
-  const variable = variableAt(lines[line - 1], offset);
-  if (variable) {
-    if (variable.name.startsWith('%') || isBuiltinVariable(variable.name))
-      return { reject: 'Built-in and environment variables cannot be renamed.' };
-    const found = await resolveVariable(path, lines, variable.name, line);
-    if (!found)
-      return { reject: `No definition of ${variable.name} was found in this file or its imports.` };
-    const definition = found.definition;
-    const part = variablePart(variable.name, definition.key);
-    if (!part)
-      return { reject: `${variable.name} cannot be renamed here.` };
-    return {
-      kind: 'variable',
-      definition,
-      definitionPath: found.path,
-      range: new monaco.Range(line, variable.start + part.start + 1, line, variable.start + part.end + 1),
-      text: variable.name.slice(part.start, part.end),
-      // References are found, but the definition is not in a Robot file.
-      reject: definition.how === 'variable file' ? `${variable.name} is defined in the variable file ${found.path}: rename it there.` : undefined,
-    };
-  }
-
-  const section = sectionAt(model, line);
-  const cell = analyzeLine(lines[line - 1], section).cells.find((c) => (c.type === 'keyword' || (c.type === 'name' && section === 'keywords'))
-    && offset >= c.start && offset <= c.start + c.text.length);
-  if (!cell)
-    return null;
-  const candidates = cell.type === 'name'
-    ? allKeywords().filter((kw) => kw.user && kw.source === path && normalizeKeyword(kw.name) === normalizeKeyword(cell.text))
-    : keywordsCalled(cell.text);
-  const userKeywords = candidates.filter((kw) => kw.user && kw.source);
-  if (!userKeywords.length) {
-    if (candidates.length !== 1 || candidates[0].name.includes('${'))
-      return { reject: candidates.length ? `'${cell.text}' matches ${candidates.length} library keywords.` : `No keyword named '${cell.text}' was found.` };
-    // A library keyword: its calls can be listed (references), not renamed.
-    const part = keywordPart(cell.text, candidates[0]);
-    return part && {
-      kind: 'keyword',
-      keyword: candidates[0],
-      range: new monaco.Range(line, cell.start + part.start + 1, line, cell.start + part.end + 1),
-      text: cell.text.slice(part.start, part.end),
-      reject: `'${cell.text}' comes from the ${candidates[0].library} library: only keywords defined in the project can be renamed.`,
-    };
-  }
-  const keyword = userKeywords[0];
-  const sameName = allKeywords().filter((kw) => kw.user && normalizeKeyword(kw.name) === normalizeKeyword(keyword.name));
-  if (sameName.length > 1)
-    return { reject: `${sameName.length} keywords are named '${keyword.name}' (${sameName.map((kw) => kw.source).join(', ')}): rename is ambiguous.` };
-  if (keyword.name.includes('${'))
-    return { reject: 'Keywords with embedded arguments cannot be renamed.' };
-  const part = cell.type === 'name' ? { start: 0, end: cell.text.length } : keywordPart(cell.text, keyword);
-  if (!part)
-    return null;
-  return {
-    kind: 'keyword',
-    keyword,
-    range: new monaco.Range(line, cell.start + part.start + 1, line, cell.start + part.end + 1),
-    text: cell.text.slice(part.start, part.end),
-  };
-}
-
-/** Lines of every .robot/.resource file of the project (open files with their unsaved edits). */
-async function projectContents() {
-  const contents = new Map();
-  for (const path of await projectRobotFiles()) {
-    const lines = await readLines(path);
-    if (lines)
-      contents.set(path, lines);
-  }
-  return contents;
-}
-
-/**
- * Where the keyword or variable of `target` (from renameTarget) occurs, by file:
- * Map<path, { line, start, end, expression? }[]>.
- */
-async function symbolOccurrences(target, contents) {
-  const occurrences = new Map();
-  const add = (path, list) => {
-    if (list.length)
-      occurrences.set(path, list);
-  };
-
-  if (target.kind === 'keyword') {
-    const keyword = target.keyword;
-    const scope = !keyword.user ? [...contents.keys()]
-      : /\.resource$/i.test(keyword.source) ? filesImporting(keyword.source, contents) : [keyword.source];
-    for (const path of scope.filter((p) => contents.has(p)))
-      add(path, keywordOccurrences(contents.get(path), keyword, { definition: keyword.user && path === keyword.source }));
-    return occurrences;
-  }
-
-  const { definition, definitionPath } = target;
-  const sameDefinition = (other) => !!other && other.line === definition.line && other.start === definition.start;
-  const local = !!definition.block && !definition.fileWide;
-  const scope = local ? [definitionPath] : filesImporting(definitionPath, contents);
-  for (const path of scope.filter((p) => contents.has(p))) {
-    const lines = contents.get(path);
-    const parsed = parseFile(lines);
-    // Other files see the variable through their imports, unless they define it themselves.
-    let imported = false;
-    if (path !== definitionPath) {
-      const found = await resolveVariable(path, lines, definition.name, 0);
-      imported = !!found && found.path === definitionPath && sameDefinition(found.definition);
-    }
-    const accept = (name, line) => {
-      const own = findVariable(parsed, name, line);
-      return path === definitionPath ? sameDefinition(own) : !own && imported;
-    };
-    add(path, variableOccurrences(lines, definition.key, accept));
-  }
-  return occurrences;
-}
 
 /** Edits of a rename, by file: Map<path, { line, start, end, text }[]>. */
 async function renameEdits(target, newName) {
@@ -480,33 +275,6 @@ async function renameEdits(target, newName) {
   return new Map([...occurrences].map(([path, list]) => [path, list.map((o) => ({ ...o, text: text(o) }))]));
 }
 
-// Shift+F12: references of a keyword (library ones too) or a variable.
-monaco.languages.registerReferenceProvider(LANGUAGE, {
-  async provideReferences(model, position, context) {
-    const target = await renameTarget(model, position);
-    if (!target || !target.kind)
-      return [];
-    const occurrences = await symbolOccurrences(target, await projectContents());
-    const isDefinition = (path, o) => (target.kind === 'keyword'
-      ? target.keyword.user && path === target.keyword.source && o.line === target.keyword.lineno
-      : path === target.definitionPath && o.line === target.definition.line && o.start === target.definition.start + 2);
-    const locations = [];
-    for (const [path, list] of occurrences) {
-      await ensureModel(path); // the peek view shows the lines of every file
-      for (const o of list) {
-        if (context.includeDeclaration || !isDefinition(path, o))
-          locations.push({ uri: uriFor(path), range: new monaco.Range(o.line, o.start + 1, o.line, o.end + 1) });
-      }
-    }
-    // Variable files are not Robot files: add their definition.
-    if (context.includeDeclaration && target.kind === 'variable' && target.definition.how === 'variable file') {
-      const d = target.definition;
-      await ensureModel(target.definitionPath);
-      locations.unshift({ uri: uriFor(target.definitionPath), range: new monaco.Range(d.line, d.start + 1, d.line, d.end + 1) });
-    }
-    return locations;
-  },
-});
 
 /**
  * Applies a rename: workspace edits for open files (returned), files written to disk for the
