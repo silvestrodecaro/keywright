@@ -14,9 +14,10 @@ import { collectCalls, checkCall } from './argumentCheck.js';
 import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
   isDynamicVariableFile, unresolvedVariables, normalizeVariable } from './navigation.js';
 import { keywordPart, keywordOccurrences, variablePart, variableOccurrences, invalidName, applyEdits } from './rename.js';
-import { setKeywords, allKeywords, catalogComplete, findKeywords, keywordsCalled, signature } from './keywordCatalog.js';
+import { setKeywords, allKeywords, catalogComplete, findKeywords, keywordsCalled } from './keywordCatalog.js';
 import { sectionAt, keywordCellAt } from './modelCells.js';
 import { registerCompletionProvider } from './completion.js';
+import { registerHoverProviders } from './hover.js';
 import { similarNames, keywordStub, keywordInsertion, variableInsertion, endInsertion, applyInsertion, callArguments } from './quickFix.js';
 
 self.MonacoEnvironment = {
@@ -107,17 +108,6 @@ monaco.editor.defineTheme('keywright-dark', {
 // ---------------------------------------------------------------------------
 // Keywords: completion, hover and go to definition
 
-/** Text shown literally in Markdown (keyword names may contain * _ or backticks). */
-function markdownText(text) {
-  return String(text).replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
-}
-
-/** A code block whose fence is longer than any backtick run in `code`. */
-function codeBlock(code, language) {
-  const fence = '`'.repeat(Math.max(3, ...[...String(code).matchAll(/`+/g)].map((run) => run[0].length + 1)));
-  return `${fence}${language}\n${code}\n${fence}`;
-}
-
 /** Whether the file uses test templates, where a test row's first cell is data, not a keyword. */
 function usesTemplate(lines) {
   let section = 'none';
@@ -132,30 +122,9 @@ function usesTemplate(lines) {
   });
 }
 
-function documentation(kw) {
-  const where = kw.user ? `keyword in ${markdownText(kw.source)}` : `${markdownText(kw.library)} library`;
-  const header = `**${markdownText(kw.name)}** — ${where}\n\n${codeBlock(signature(kw), 'robotframework')}`;
-  const doc = kw.doc || '';
-  const body = kw.docFormat === 'HTML' ? { value: doc, supportHtml: true } : { value: doc };
-  return doc ? [{ value: header }, body] : [{ value: header }];
-}
-
 registerCompletionProvider(monaco, LANGUAGE);
 
-monaco.languages.registerHoverProvider(LANGUAGE, {
-  provideHover(model, position) {
-    const cell = keywordCellAt(model, position);
-    if (!cell)
-      return null;
-    const found = findKeywords(cell.text);
-    if (!found.length)
-      return null;
-    return {
-      range: new monaco.Range(position.lineNumber, cell.start + 1, position.lineNumber, cell.start + cell.text.length + 1),
-      contents: found.flatMap((kw, i) => (i ? [{ value: '---' }] : []).concat(documentation(kw))),
-    };
-  },
-});
+registerHoverProviders(monaco, LANGUAGE, { modelPath, resolveVariable });
 
 monaco.languages.registerDefinitionProvider(LANGUAGE, {
   async provideDefinition(model, position) {
@@ -347,30 +316,6 @@ monaco.languages.registerDefinitionProvider(LANGUAGE, {
       range: new monaco.Range(d.line, d.start + 1, d.line, d.end + 1),
       originSelectionRange: new monaco.Range(line, variable.start + 1, line, variable.end + 1),
     }];
-  },
-});
-
-monaco.languages.registerHoverProvider(LANGUAGE, {
-  async provideHover(model, position) {
-    const line = position.lineNumber;
-    const variable = variableAt(model.getLineContent(line), position.column - 1);
-    if (!variable)
-      return null;
-    const range = new monaco.Range(line, variable.start + 1, line, variable.end + 1);
-    const name = '`' + variable.name + '`';
-    if (variable.name.startsWith('%'))
-      return { range, contents: [{ value: `${name} environment variable` }] };
-    if (isBuiltinVariable(variable.name))
-      return { range, contents: [{ value: `${name} built-in variable` }] };
-    const path = modelPath(model);
-    const found = await resolveVariable(path, model.getLinesContent(), variable.name, line);
-    if (!found)
-      return { range, contents: [{ value: `${name} is not defined in this file or in its resource and variable files (it may come from the command line or a library)` }] };
-    const d = found.definition;
-    const where = found.path === path ? `line ${d.line}` : `${found.path}:${d.line}`;
-    const how = d.how === 'assignment' && d.from ? 'assigned from `' + d.from + '`' : d.how;
-    const value = d.values && d.values.length ? '\n\n```\n' + [d.name, ...d.values].join('    ') + '\n```' : '';
-    return { range, contents: [{ value: `**${d.name}**: ${how} (${where})${value}` }] };
   },
 });
 

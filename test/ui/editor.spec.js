@@ -97,6 +97,13 @@ test('navigates to and renames a resource keyword across editor and disk', async
   await goToLine(page, code, 6);
   await page.keyboard.press('End');
   await page.keyboard.press('ArrowLeft');
+  // Hover from the keyboard: the resource keyword's documentation header.
+  await page.keyboard.press('Control+K');
+  await page.keyboard.press('Control+I');
+  const hover = page.locator('.monaco-editor .monaco-hover:not(.hidden)');
+  await expect(hover).toContainText('Prepare Navigation Sample — keyword in resources/navigation.resource');
+  await page.keyboard.press('Escape');
+  await expect(hover).toBeHidden();
   await page.keyboard.press('F12');
   // The watcher can report the resource file while the definition opens (it was just written).
   await page.evaluate((changed) => window.dispatchEvent(new CustomEvent('keywright:files-changed', { detail: { paths: [changed] } })), resource);
