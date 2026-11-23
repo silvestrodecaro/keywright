@@ -9,12 +9,14 @@ import '@fontsource/ibm-plex-mono/latin-400.css';
 import '@fontsource/ibm-plex-mono/latin-400-italic.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/latin-600.css';
-import { tokenizeLine, analyzeLine, cellAt, normalizeKeyword, sectionOf, testCases } from './robotSyntax.js';
+import { tokenizeLine, analyzeLine, normalizeKeyword, testCases } from './robotSyntax.js';
 import { collectCalls, checkCall } from './argumentCheck.js';
 import { parseFile, findVariable, variableAt, isBuiltinVariable, lookupKeys, importCandidates, variableFileDefinitions, outline,
   isDynamicVariableFile, unresolvedVariables, normalizeVariable } from './navigation.js';
 import { keywordPart, keywordOccurrences, variablePart, variableOccurrences, invalidName, applyEdits } from './rename.js';
 import { setKeywords, allKeywords, catalogComplete, findKeywords, keywordsCalled, signature } from './keywordCatalog.js';
+import { sectionAt, keywordCellAt } from './modelCells.js';
+import { registerCompletionProvider } from './completion.js';
 import { similarNames, keywordStub, keywordInsertion, variableInsertion, endInsertion, applyInsertion, callArguments } from './quickFix.js';
 
 self.MonacoEnvironment = {
@@ -105,38 +107,6 @@ monaco.editor.defineTheme('keywright-dark', {
 // ---------------------------------------------------------------------------
 // Keywords: completion, hover and go to definition
 
-const BUILTIN_SNIPPETS = [
-  // Snippet syntax: a literal `$` is written `\\$`.
-  ['FOR', 'FOR    \\${${1:item}}    IN    @{${2:items}}\n    $0\nEND', 'FOR loop'],
-  ['FOR IN RANGE', 'FOR    \\${${1:i}}    IN RANGE    ${2:10}\n    $0\nEND', 'FOR loop over a range'],
-  ['IF', 'IF    ${1:\\$condition}\n    $0\nEND', 'IF block'],
-  ['IF ELSE', 'IF    ${1:\\$condition}\n    $2\nELSE\n    $0\nEND', 'IF / ELSE block'],
-  ['WHILE', 'WHILE    ${1:\\$condition}\n    $0\nEND', 'WHILE loop'],
-  ['TRY', 'TRY\n    $1\nEXCEPT    ${2:message}\n    $0\nEND', 'TRY / EXCEPT block'],
-  ['VAR', 'VAR    \\${${1:name}}    ${2:value}', 'Create a variable'],
-  ['RETURN', 'RETURN    ${1:value}', 'Return from the keyword'],
-];
-const SETTINGS = ['Library', 'Resource', 'Variables', 'Documentation', 'Metadata', 'Suite Setup', 'Suite Teardown',
-  'Test Setup', 'Test Teardown', 'Test Template', 'Test Timeout', 'Test Tags', 'Keyword Tags'];
-const TEST_SETTINGS = ['[Documentation]', '[Tags]', '[Setup]', '[Teardown]', '[Template]', '[Timeout]'];
-const KEYWORD_SETTINGS = ['[Documentation]', '[Arguments]', '[Tags]', '[Setup]', '[Teardown]', '[Timeout]'];
-const SECTION_HEADERS = ['*** Settings ***', '*** Variables ***', '*** Test Cases ***', '*** Tasks ***', '*** Keywords ***', '*** Comments ***'];
-
-function snippetFor(kw) {
-  let index = 1;
-  const escape = (text) => text.replace(/[\\$}]/g, '\\$&');
-  // Embedded arguments become placeholders in the name itself.
-  let name = '';
-  let last = 0;
-  for (const match of kw.name.matchAll(/\$\{([^}:]+)(?::[^}]*)?\}/g)) {
-    name += escape(kw.name.slice(last, match.index)) + `\${${index++}:${escape(match[1])}}`;
-    last = match.index + match[0].length;
-  }
-  name += escape(kw.name.slice(last));
-  const required = kw.args.filter((arg) => arg.required && (arg.kind === 'POSITIONAL_ONLY' || arg.kind === 'POSITIONAL_OR_NAMED'));
-  return [name, ...required.map((arg) => `\${${index++}:${escape(arg.name)}}`)].join('    ');
-}
-
 /** Text shown literally in Markdown (keyword names may contain * _ or backticks). */
 function markdownText(text) {
   return String(text).replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, '\\$&');
@@ -170,65 +140,7 @@ function documentation(kw) {
   return doc ? [{ value: header }, body] : [{ value: header }];
 }
 
-function sectionAt(model, lineNumber) {
-  for (let line = lineNumber - 1; line >= 1; line--) {
-    const section = sectionOf(model.getLineContent(line));
-    if (section)
-      return section;
-  }
-  return 'none';
-}
-
-monaco.languages.registerCompletionItemProvider(LANGUAGE, {
-  triggerCharacters: ['['],
-  provideCompletionItems(model, position) {
-    const line = model.getLineContent(position.lineNumber);
-    const before = line.slice(0, position.column - 1);
-    const range = (start) => new monaco.Range(position.lineNumber, start + 1, position.lineNumber, position.column);
-
-    if (/^\*/.test(before))
-      return { suggestions: SECTION_HEADERS.map((label) => ({ label, kind: monaco.languages.CompletionItemKind.Module, insertText: label, range: range(0) })) };
-
-    const section = sectionAt(model, position.lineNumber);
-    const cell = cellAt(line, position.column - 1, section);
-    if (!cell)
-      return { suggestions: [] };
-    const cellRange = range(cell.start);
-    const { Function, Snippet, Property } = monaco.languages.CompletionItemKind;
-
-    if (cell.type === 'setting' || (cell.text.startsWith('[') && (section === 'tests' || section === 'keywords'))) {
-      const names = section === 'settings' ? SETTINGS : section === 'keywords' ? KEYWORD_SETTINGS : TEST_SETTINGS;
-      return { suggestions: names.map((label) => ({ label, kind: Property, insertText: label, range: cellRange })) };
-    }
-    if (cell.type !== 'keyword' && cell.type !== 'control')
-      return { suggestions: [] };
-
-    const suggestions = allKeywords().map((kw) => ({
-      label: { label: kw.name, description: kw.user ? kw.source : kw.library },
-      kind: Function,
-      detail: signature(kw),
-      documentation: { value: kw.shortdoc || '' },
-      insertText: snippetFor(kw),
-      insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-      filterText: kw.name,
-      sortText: (kw.user ? '0' : kw.library === 'BuiltIn' ? '2' : '1') + kw.name,
-      range: cellRange,
-    }));
-    if (section === 'tests' || section === 'keywords') {
-      for (const [label, insertText, detail] of BUILTIN_SNIPPETS)
-        suggestions.push({ label, kind: Snippet, detail, insertText, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, sortText: '3' + label, range: cellRange });
-    }
-    return { suggestions };
-  },
-});
-
-/** The keyword cell under `position`, if any. */
-function keywordCellAt(model, position) {
-  const line = model.getLineContent(position.lineNumber);
-  const { cells } = analyzeLine(line, sectionAt(model, position.lineNumber));
-  const column = position.column - 1;
-  return cells.find((cell) => cell.type === 'keyword' && column >= cell.start && column <= cell.start + cell.text.length) || null;
-}
+registerCompletionProvider(monaco, LANGUAGE);
 
 monaco.languages.registerHoverProvider(LANGUAGE, {
   provideHover(model, position) {
