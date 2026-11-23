@@ -57,14 +57,10 @@ const { searchProject, replaceInProject } = require('./projectSearch');
 const { formatRobot, installRobocop } = require('./formatter');
 const { RunHistory } = require('./runHistory');
 const { AgentBrowser } = require('./mcp/agentBrowser');
-const { McpService } = require('./mcp/service');
-const { createTools } = require('./mcp/tools');
-const { ChangeLog } = require('./mcp/changes');
-const { clientConfigs, clientLocations, clientStates, connectionPlan } = require('./mcp/clients');
-const { testConnection, testHttpConnection } = require('./mcp/connectionTest');
+const { createMcpIpc } = require('./ipc/mcp');
 const { childProcesses } = require('./processes');
-const { readJson, writeJsonAtomic } = require('./jsonFile');
 const { Batch } = require('./eventBatch');
+const { InterpreterTrust } = require('./interpreterTrust');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -90,10 +86,6 @@ let recovery = null;
 // The browser an AI client drives through the MCP tools, separate from the Test Generator's.
 // UI tests run it without a window.
 const agentBrowser = new AgentBrowser({ headless: process.env.KEYWRIGHT_AI_BROWSER_HEADLESS === '1' });
-/** @type {McpService | null} */
-let mcp = null;
-/** @type {ChangeLog | null} file changes made by AI clients, for undo */
-let aiChanges = null;
 // Project-relative paths with unsaved changes in the editor, reported by the renderer.
 let editorDirtyPaths = [];
 
@@ -204,46 +196,13 @@ async function stopProjectServices() {
 }
 
 // ---------------------------------------------------------------------------
-// Interpreters outside the project folder, configured in keywright.json: Keywright runs
-// them by itself (keywords, checks), so the user confirms each one once per project.
+// Interpreters outside the project folder are used after the user confirms them
+// (interpreterTrust.js). Created when the profile folder is known (app ready).
 
-function trustedInterpretersFile() {
-  return path.join(app.getPath('userData'), 'trusted-interpreters.json');
-}
+/** @type {InterpreterTrust | null} */
+let interpreterTrust = null;
 
-function projectKey(root) {
-  const resolved = path.resolve(root);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
-
-function samePath(a, b) {
-  return projectKey(a) === projectKey(b);
-}
-
-function interpreterTrusted(project, python) {
-  // Set by the user's environment, as the UI tests do for the repository's Python.
-  if (process.env.KEYWRIGHT_TRUSTED_PYTHON && samePath(process.env.KEYWRIGHT_TRUSTED_PYTHON, python))
-    return true;
-  try {
-    const stored = readJson(trustedInterpretersFile());
-    const trusted = stored.status === 'ok' && stored.value ? stored.value[projectKey(project.root)] : null;
-    return typeof trusted === 'string' && samePath(trusted, python);
-  } catch {
-    return false;
-  }
-}
-
-/** The project without its interpreter when that is outside the folder and not confirmed. */
-function withTrustedInterpreter(project) {
-  const external = projects.externalInterpreter(project);
-  return external && !interpreterTrusted(project, external) ? { ...project, python: null } : project;
-}
-
-/** Asks about an interpreter outside the project the first time; the answer "use" is kept. */
-async function confirmInterpreter(project) {
-  const external = projects.externalInterpreter(project);
-  if (!external || interpreterTrusted(project, external))
-    return project;
+async function askAboutInterpreter(external) {
   const options = {
     type: 'warning',
     buttons: ['Use This Interpreter', 'Open Without It'],
@@ -255,25 +214,9 @@ async function confirmInterpreter(project) {
   };
   const { response } = mainWindow && !mainWindow.isDestroyed()
     ? await dialog.showMessageBox(mainWindow, options) : await dialog.showMessageBox(options);
-  if (response !== 0)
-    return { ...project, python: null };
-  trustInterpreter(project.root, external);
-  return project;
+  return response === 0;
 }
 
-/** Remembers that the user accepted, or chose, this interpreter for this project. */
-function trustInterpreter(root, python) {
-  try {
-    const file = trustedInterpretersFile();
-    const stored = readJson(file);
-    const value = stored.status === 'ok' && stored.value && typeof stored.value === 'object' ? stored.value : {};
-    writeJsonAtomic(file, { ...value, [projectKey(root)]: python }, { space: 2 });
-  } catch (error) {
-    console.error(`Could not remember the interpreter: ${error.message}`); // asked again next time
-  }
-}
-
-/** The open project read again from disk, with the interpreter choice applied. */
 /**
  * Reads the open project again from disk, with the interpreter choice applied.
  * @returns {string | null} why it could not be read (keywright.json being edited, say); the
@@ -281,7 +224,7 @@ function trustInterpreter(root, python) {
  */
 function refreshProject() {
   try {
-    currentProject = withTrustedInterpreter(projects.loadProject(currentProject.root));
+    currentProject = interpreterTrust.apply(projects.loadProject(currentProject.root));
     return null;
   } catch (error) {
     return error.message;
@@ -290,7 +233,7 @@ function refreshProject() {
 
 function openProject(root) {
   return projectTransitionTask(async () => {
-    const project = await confirmInterpreter(projects.loadProject(root));
+    const project = await interpreterTrust.confirm(projects.loadProject(root));
     await stopProjectServices();
     currentProject = project;
     sourceControl = new SourceControl(project.root);
@@ -342,7 +285,7 @@ ipcMain.handle('project:save-settings', (_event, values) => {
     // An interpreter chosen here is the user's choice: reopening the project does not ask about it.
     const chosen = result.ok && projects.externalInterpreter(projects.loadProject(currentProject.root));
     if (chosen)
-      trustInterpreter(currentProject.root, chosen);
+      interpreterTrust.trust(currentProject.root, chosen);
     return result;
   } catch (error) {
     return { ok: false, errors: {}, error: error.message };
@@ -898,7 +841,7 @@ function explainLaunchError(error, browser) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP server (MCP server)
+// MCP server
 
 function aiLaunchError(error, browser) {
   const explained = explainLaunchError(error, browser);
@@ -907,133 +850,25 @@ function aiLaunchError(error, browser) {
     : explained.error;
 }
 
-function createMcpService() {
-  aiChanges = new ChangeLog({ folder: path.join(app.getPath('userData'), 'mcp-undo') });
-  aiChanges.on('change', () => send('mcp:state', mcpStatus()));
-  const tools = createTools({
-    changes: aiChanges,
-    project: () => currentProject,
-    dirtyPaths: () => editorDirtyPaths,
-    trash: (entry) => shell.trashItem(entry),
-    keywords: async () => {
-      const unreadable = refreshProject();
-      if (unreadable)
-        return { ok: false, error: unreadable, keywords: [], errors: [] };
-      return keywordIndex.build(currentProject);
-    },
-    check: async (relative, text) => {
-      const worker = projectLanguageWorker();
-      if (!worker)
-        return { ok: false, problems: [], error: 'The project has no Python environment with Robot Framework.' };
-      try {
-        const { problems } = await worker.request('check', { path: relative, text });
-        return { ok: true, problems };
-      } catch (error) {
-        return { ok: false, problems: [], error: error.message };
-      }
-    },
-    discover: async () => {
-      const unreadable = refreshProject();
-      if (unreadable)
-        return { ok: false, error: unreadable };
-      return discoverTests(currentProject);
-    },
-    runner,
-    startRun: async (options) => {
-      await startRun(options);
-      // The Testing panel shows a run it did not start.
-      send('tests:started', { select: options.select || [], include: options.include || [], exclude: options.exclude || [] });
-    },
-    browser: agentBrowser,
-    browsers: BROWSERS,
-    launchError: (error) => aiLaunchError(error, agentBrowser.options.channel || agentBrowser.options.browser),
-  });
-  const service = new McpService({ folder: app.getPath('userData'), version: app.getVersion(), tools });
-  service.on('state', () => send('mcp:state', mcpStatus()));
-  agentBrowser.on('state', () => send('mcp:state', mcpStatus()));
-  return service;
-}
-
-/** Server state, plus each client's configuration and what its own config file says (read-only). */
-function mcpStatus() {
-  if (!mcp)
-    return null;
-  const status = mcp.status();
-  const locations = clientLocations({ project: currentProject?.root });
-  const states = clientStates(status, locations);
-  const setups = clientConfigs(status, locations).map((client) => {
-    const { entry: _entry, ...state } = states[client.id]; // the page needs the verdict, not the entry
-    return { ...client, ...state, seen: status.seen[client.id] || null };
-  });
-  const changes = currentProject ? aiChanges.list(currentProject.root) : [];
-  return { ...status, browserOpen: agentBrowser.open, setups, changes };
-}
-
-ipcMain.handle('mcp:status', () => mcpStatus());
-/** The MCP service; throws when it could not be created at startup. */
-function mcpService() {
-  if (!mcp)
-    throw new Error('The MCP server is unavailable in this session. Its crash report says why.');
-  return mcp;
-}
-
-ipcMain.handle('mcp:set-enabled', async (_event, enabled) => {
-  await mcpService().setEnabled(!!enabled);
-  if (!enabled)
-    await agentBrowser.close();
-  return mcpStatus();
-});
-ipcMain.handle('mcp:regenerate-token', () => {
-  mcpService().regenerateToken();
-  return mcpStatus();
-});
-ipcMain.handle('mcp:close-browser', () => agentBrowser.close());
-ipcMain.handle('mcp:undo-change', (_event, id) => mcpService() && aiChanges.undo(id, {
-  dirtyPaths: editorDirtyPaths,
+// The MCP service, its tools and the mcp:* channels of the MCP dialog (ipc/mcp.js).
+const mcpIpc = createMcpIpc({
+  ipcMain,
+  get userData() { return app.getPath('userData'); },
+  version: app.getVersion(),
+  send,
+  showMessageBox: (options) => dialog.showMessageBox(mainWindow, options),
   trash: (entry) => shell.trashItem(entry),
-}));
-// Tests what the client will start: the entry in its own file when there is one,
-// otherwise the configuration offered (reported as not configured yet).
-/**
- * An entry read from a file inside the open project was written by whoever made the
- * project: its command runs (or its address is called) only after the user has seen it.
- */
-async function confirmProjectEntry(plan) {
-  const relative = currentProject && plan.file ? path.relative(currentProject.root, plan.file) : '..';
-  if (relative.startsWith('..') || path.isAbsolute(relative))
-    return true; // the client's own file, in the user's profile
-  const what = plan.config
-    ? [plan.config.command, ...(plan.config.args || [])].join(' ')
-      + Object.keys(plan.config.env || {}).map((name) => `\n${name}=${plan.config.env[name]}`).join('')
-    : plan.url;
-  const { response } = await dialog.showMessageBox(mainWindow, {
-    type: 'warning',
-    buttons: ['Run Test', 'Cancel'],
-    defaultId: 1,
-    cancelId: 1,
-    message: 'Test the connection with the project\'s configuration?',
-    detail: `${relative.split(path.sep).join('/')} in the open project configures the server as:\n\n${what}\n\n`
-      + (plan.config ? 'The test runs this command with your permissions.' : 'The test sends requests to this address.')
-      + ' Continue only if you trust this project.',
-  });
-  return response === 0;
-}
-
-ipcMain.handle('mcp:test-connection', async (_event, clientId) => {
-  const status = mcpService().status();
-  if (!status.running)
-    return { ok: false, scope: 'server', error: 'Turn the server on first.' };
-  try {
-    const plan = connectionPlan(clientId, status, clientLocations({ project: currentProject?.root }));
-    if (plan.kind === 'unreadable')
-      return { ok: false, scope: 'client', file: plan.file, error: plan.error };
-    if (plan.kind === 'client' && !(await confirmProjectEntry(plan)))
-      return { ok: false, scope: 'client', file: plan.file, error: 'The test was cancelled.' };
-    const result = plan.config ? await testConnection(plan.config) : await testHttpConnection(plan.url, plan.token);
-    return { ...result, scope: plan.kind, file: plan.file || null };
-  } catch (error) {
-    return { ok: false, scope: 'server', error: error.message };
-  }
+  project: () => currentProject,
+  refreshProject,
+  dirtyPaths: () => editorDirtyPaths,
+  keywordIndex,
+  languageWorker: () => projectLanguageWorker(),
+  discoverTests,
+  runner,
+  startRun,
+  agentBrowser,
+  browsers: BROWSERS,
+  launchError: (error) => aiLaunchError(error, agentBrowser.options.channel || agentBrowser.options.browser),
 });
 ipcMain.on('editor:dirty-files', (_event, paths) => {
   editorDirtyPaths = Array.isArray(paths) ? paths.filter((item) => typeof item === 'string') : [];
@@ -1198,11 +1033,14 @@ app.whenReady().then(async () => {
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   recovery.removeLeftovers();
+  interpreterTrust = new InterpreterTrust({
+    file: path.join(app.getPath('userData'), 'trusted-interpreters.json'),
+    ask: askAboutInterpreter,
+  });
   crashReports.folder = path.join(app.getPath('userData'), 'crash-reports');
   // The window opens even when the MCP server cannot start.
   try {
-    mcp = createMcpService();
-    await mcp.restore();
+    await mcpIpc.start();
   } catch (error) {
     console.error(`The MCP server could not start: ${error.message}`);
     writeCrashReport('MCP server could not start', { reason: error.message });
@@ -1258,7 +1096,7 @@ function stopServices() {
     step('recorder', () => session.stop()),
     step('locator picker', () => pickerSession.stop()),
     step('AI browser', () => agentBrowser.close()),
-    step('MCP server', () => mcp?.stop()), // the setting stays on for the next start
+    step('MCP server', () => mcpIpc.stop()), // the setting stays on for the next start
     step('child processes', () => childProcesses.killAll()),
   ]);
 }

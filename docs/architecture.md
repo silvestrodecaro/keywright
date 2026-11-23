@@ -66,6 +66,7 @@ executables out of `.venv` makes their paths independent of the project director
 | --- | --- | --- |
 | Application lifecycle | [main.js](../src/main/main.js), [preload.js](../src/main/preload.js) | Window, IPC, active project, services and shutdown |
 | Project setup and files | [projects.js](../src/main/projects.js), [projectTemplate.js](../src/main/projectTemplate.js) | Tool detection, scaffold, environment setup, configuration, tree and file access |
+| Interpreter confirmation | [interpreterTrust.js](../src/main/interpreterTrust.js) | Confirmation of interpreters outside the project folder and `trusted-interpreters.json` |
 | File changes | [projectWatcher.js](../src/main/projectWatcher.js) | Recursive watch, ignored paths and debounced change events |
 | Recent projects | [recentProjects.js](../src/main/recentProjects.js) | Application-level recent-project list |
 | Recording | [recorder.js](../src/main/recorder.js), [browserInstall.js](../src/main/browserInstall.js) | Recorder/picker sessions, action events and app-side browser installation |
@@ -76,7 +77,7 @@ executables out of `.venv` makes their paths independent of the project director
 | Search | [projectSearch.js](../src/main/projectSearch.js), [searchCore.js](../src/renderer/searchCore.js), [search.js](../src/renderer/search.js) | Disk traversal, matching/replacement and open-buffer coordination |
 | Source Control | [sourceControl.js](../src/main/sourceControl.js) (main), [sourceControl.js](../src/renderer/sourceControl.js) (panel) | Git status, read-only patches, repository initialization, staging and local commits |
 | Artifacts | [traceServer.js](../src/main/traceServer.js), [runHistory.js](../src/main/runHistory.js) | Local output serving and bounded run summaries |
-| MCP server | [mcp/service.js](../src/main/mcp/service.js), [protocol.js](../src/main/mcp/protocol.js), [httpServer.js](../src/main/mcp/httpServer.js), [settings.js](../src/main/mcp/settings.js), [bridge.js](../src/main/mcp/bridge.js) | MCP lifecycle and tool calls, loopback HTTP transport, token and connection file, stdio bridge for clients |
+| MCP server | [mcp/service.js](../src/main/mcp/service.js), [protocol.js](../src/main/mcp/protocol.js), [httpServer.js](../src/main/mcp/httpServer.js), [settings.js](../src/main/mcp/settings.js), [bridge.js](../src/main/mcp/bridge.js), [ipc/mcp.js](../src/main/ipc/mcp.js) | MCP lifecycle and tool calls, loopback HTTP transport, token and connection file, stdio bridge for clients; the main-process wiring and the `mcp:*` channels of the MCP dialog |
 | MCP clients | [mcp/clients.js](../src/main/mcp/clients.js), [connectionTest.js](../src/main/mcp/connectionTest.js) | Per-client configuration, read-only checks of client files, and the connection test |
 | AI tools and browser | [mcp/tools.js](../src/main/mcp/tools.js), [changes.js](../src/main/mcp/changes.js), [agentBrowser.js](../src/main/mcp/agentBrowser.js), [mcpDialog.js](../src/renderer/mcpDialog.js) | Tool definitions over project files, keywords and the runner; the log and undo of their file changes; the AI's browser and its recorded steps; the dialog and title bar button |
 | UI shell | [app.js](../src/renderer/app.js), [index.html](../src/renderer/index.html), [styles.css](../src/renderer/styles.css) | Welcome/setup, project tabs, file saves, shared structure and visual tokens |
