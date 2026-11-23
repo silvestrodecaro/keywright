@@ -294,44 +294,17 @@
   // File tabs (Monaco editor, see editor/index.js)
 
   const editor = window.RFEditor;
+  // A file that changed on disk while being saved: both versions side by side (compareDialog.js).
+  const compareDialog = window.RFCompareDialog.create({ editor });
   const workspace = new window.RFWorkspaceFiles.WorkspaceFiles({
     editor, api,
     getFile: (path) => tabs.find((tab) => tab.path === path),
     status: (text, error) => setEditorStatus(text, error),
     onSaved: (path) => window.dispatchEvent(new CustomEvent('keywright:file-saved', { detail: { path, fromEditor: true } })),
-    compare: (request) => compareVersions(request),
+    compare: (request) => compareDialog.compareVersions(request),
   });
   window.RFWorkspace = workspace;
 
-  /** Shows a conflicting file's disk and editor versions side by side until the user decides. */
-  function compareVersions({ path, disk, mine }) {
-    const view = $('#compare-view');
-    const returnFocus = document.activeElement;
-    $('#compare-title').textContent = `${path} changed on disk`;
-    view.hidden = false;
-    const comparison = editor.createComparison($('#compare-editor'), { path, disk, mine });
-    return new Promise((resolve) => {
-      const buttons = { '#compare-save': 'save', '#compare-reload': 'reload', '#compare-cancel': 'cancel' };
-      const finish = (choice) => {
-        const content = comparison.content();
-        for (const selector of Object.keys(buttons))
-          $(selector).onclick = null;
-        view.onkeydown = null;
-        comparison.dispose();
-        view.hidden = true;
-        returnFocus?.focus?.();
-        resolve(choice === 'save' ? { choice, content } : { choice });
-      };
-      for (const [selector, choice] of Object.entries(buttons))
-        $(selector).onclick = () => finish(choice);
-      view.onkeydown = (event) => {
-        if (event.key === 'Escape' && !event.defaultPrevented) {
-          event.preventDefault();
-          finish('cancel');
-        }
-      };
-    });
-  }
   let editorMounted = false;
   let shownInEditor = null; // path currently displayed by the editor
 
