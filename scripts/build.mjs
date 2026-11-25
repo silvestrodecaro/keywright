@@ -33,6 +33,15 @@ export const options = {
         return build.resolve('dompurify', { resolveDir: root, kind: args.kind });
       });
     },
+  }, {
+    name: 'monaco-language-services',
+    setup(build) {
+      // These services need their own workers, which are not shipped: without them every
+      // request fails. Syntax colors come from languages/definitions and stay.
+      const namespace = 'monaco-language-services';
+      build.onResolve({ filter: /\/languages\/features\/(css|html|typescript)\/register\.js$/ }, (args) => ({ path: args.path, namespace }));
+      build.onLoad({ filter: /.*/, namespace }, () => ({ contents: 'export {};' }));
+    },
   }],
   logLevel: 'info',
 };

@@ -141,3 +141,28 @@ test('navigates to and renames a resource keyword across editor and disk', async
   await page.keyboard.press('Control+S');
   await expect.poll(() => fs.readFileSync(file, 'utf8')).toContain('    Prepare Renamed Sample');
 });
+
+// The desktop fixture fails on uncaught renderer errors, such as a missing Monaco worker.
+test('edits web files with syntax colors and without language service errors', async ({ desktop }) => {
+  const { page, project } = desktop;
+  const samples = {
+    'probe.js': 'const probeValue = 1;\n',
+    'probe.ts': 'const probeValue: number = 1;\n',
+    'probe.css': '.probeValue { color: red; }\n',
+    'probe.html': '<p class="probeValue">text</p>\n',
+  };
+  for (const [name, content] of Object.entries(samples))
+    fs.writeFileSync(path.join(project, name), content);
+  for (const name of Object.keys(samples)) {
+    const code = await openFile(page, name);
+    await expect(code).toContainText('probeValue');
+    await expect.poll(() => code.evaluate((lines) => new Set([...lines.querySelectorAll('span span')].map((s) => s.className)).size)).toBeGreaterThan(1);
+    await code.click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.insertText('probeV');
+    await page.keyboard.press('Control+Space');
+    await expect(page.locator('.suggest-widget.visible')).toContainText('No suggestions.');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+S');
+  }
+});
