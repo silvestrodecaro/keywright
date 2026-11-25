@@ -536,6 +536,7 @@ const testsIpc = createTestsIpc({
   project: () => currentProject,
   refreshProject,
   discoverTests,
+  installBrowsers: projects.installTestBrowsers,
   openPath: (file) => shell.openPath(file),
 });
 /** Starts a run for the Testing panel or an AI client; throws when it cannot start. */

@@ -439,6 +439,16 @@ save them before discovery and execution, **Run Saved Files** to use disk conten
 while keeping editor changes unsaved, or **Cancel**. Testing displays a notice
 when unsaved changes are excluded. A failed or cancelled save prevents the run.
 
+### Missing browsers
+
+Each version of Browser library starts its own browser builds, so updating it can
+leave a project without them. When a run fails for that reason, or because the
+library was not initialized after an update, the Testing panel offers to install the
+browsers the tests tried to start. It runs `Browser.entry init` with the project's
+Python, which needs Node.js on PATH and replaces the library's Node.js dependencies
+(`Browser.entry install` with BrowserBatteries). Tests cannot start until it ends;
+then run them again. Chrome and Edge are not installed this way.
+
 ### Run options
 
 | Option | Effect |

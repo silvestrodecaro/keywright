@@ -19,6 +19,8 @@ const { Batch } = require('../eventBatch');
  * @param {() => object | null} context.project the open project
  * @param {() => string | null} context.refreshProject reads it again; the error, if any
  * @param {(project: object, options?: { extraArgs?: string }) => Promise<object>} context.discoverTests
+ * @param {(project: object, names: string[], onLog: Function) => Promise<void>} context.installBrowsers
+ *   installs browsers for the project's Browser library
  * @param {(file: string) => Promise<string>} context.openPath opens a file in its program
  * @param {number} [context.batchMs]
  * @returns {{ startRun: (options?: object) => Promise<void> }}
@@ -27,6 +29,7 @@ function createTestsIpc(context) {
   const { ipcMain, send, runner, traceServer } = context;
   const runHistory = new RunHistory();
   let runOutputDir = null;
+  const installing = new Set(); // projects whose browsers are being installed
   const outputDir = (project) => path.resolve(project.root, project.config.outputDir);
 
   // A run can log thousands of messages a second: the Testing panel receives them in
@@ -82,6 +85,8 @@ function createTestsIpc(context) {
       throw new Error('No project is open.');
     if (runner.running) // before touching the history of the run in progress
       throw new Error('Tests are already running.');
+    if (installing.has(project.root))
+      throw new Error('The browsers of this project are being installed. Run the tests when it has finished.');
     runOutputDir = outputDir(project);
     traceServer.allow([runOutputDir]);
     runHistory.start(runOutputDir, { ...options, debug: !!options.debug });
@@ -97,6 +102,27 @@ function createTestsIpc(context) {
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error.message };
+    }
+  });
+
+  // Browsers of the project's Browser library, when a run found them missing. Tests do not
+  // start meanwhile: the installation replaces the library's Node.js dependencies.
+  ipcMain.handle('tests:install-browsers', async (_event, names) => {
+    const project = context.project();
+    if (!project)
+      return { ok: false, error: 'No project is open.' };
+    if (runner.running)
+      return { ok: false, error: 'Tests are running: install the browsers when they have finished.' };
+    if (installing.has(project.root))
+      return { ok: false, error: 'The browsers of this project are already being installed.' };
+    installing.add(project.root);
+    try {
+      await context.installBrowsers(project, names, (text) => send('tests:browsers-log', text));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    } finally {
+      installing.delete(project.root);
     }
   });
 

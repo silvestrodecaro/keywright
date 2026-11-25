@@ -29,6 +29,8 @@ run from source; there are no installers yet.
 
 - Test Generator says when its browser is missing, for example after an update
   that needs a newer build, and offers to install it before you record.
+- When tests fail because the project's Browser library has no browser for its
+  version, or is not initialized, the Testing panel offers to install it.
 
 ### Changed
 

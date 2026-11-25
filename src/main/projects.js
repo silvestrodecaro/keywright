@@ -79,6 +79,36 @@ async function findPython() {
   return null;
 }
 
+const TEST_BROWSERS = new Set(['chromium', 'firefox', 'webkit']);
+
+/** The arguments of the project's Python that install browsers for its Browser library. */
+function testBrowserCommands(names, batteries) {
+  if (!Array.isArray(names) || !names.length || !names.every((name) => TEST_BROWSERS.has(name)))
+    throw new Error(`Unknown browser: ${names}`);
+  // BrowserBatteries has its own Node.js: its command takes one browser at a time.
+  return batteries
+    ? names.map((name) => ['-m', 'Browser.entry', 'install', name])
+    : [['-m', 'Browser.entry', 'init', ...names]];
+}
+
+/**
+ * Installs browsers, and the dependencies they need, for the Browser library of `project`.
+ * @param {{ root: string, python: string | null }} project
+ * @param {string[]} names chromium | firefox | webkit
+ * @param {(text: string) => void} [onLog]
+ */
+async function installTestBrowsers(project, names, onLog) {
+  if (!project.python)
+    throw new Error('This project has no virtual environment (.venv) with Robot Framework.');
+  const find = "import importlib.util, sys; sys.exit(importlib.util.find_spec('BrowserBatteries') is None)";
+  const batteries = await probe(project.python, ['-c', find]) !== null;
+  const commands = testBrowserCommands(names, batteries);
+  if (!batteries && !await probe('node', ['--version']))
+    throw new Error('Node.js is required to install the browsers but was not found on PATH.');
+  for (const args of commands)
+    await run(project.python, args, { cwd: project.root, onLog });
+}
+
 /** Reports which tools needed by the project setup are installed. */
 async function detectTools() {
   const [python, node, git] = await Promise.all([findPython(), probe('node', ['--version']), probe('git', ['--version'])]);
@@ -422,6 +452,8 @@ module.exports = {
   validateEntryName,
   projectEntry,
   renameProjectPath,
+  testBrowserCommands,
+  installTestBrowsers,
   detectTools,
   findPython,
   createProject,

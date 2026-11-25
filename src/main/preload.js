@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld('keywright', {
   runTests: (options) => ipcRenderer.invoke('tests:run', options),
   stopTests: () => ipcRenderer.invoke('tests:stop'),
   debugCommand: (command) => ipcRenderer.invoke('tests:debug-command', command),
+  installTestBrowsers: (names) => ipcRenderer.invoke('tests:install-browsers', names),
+  onTestBrowsersLog: (callback) => subscribe('tests:browsers-log', callback),
   testHistory: () => ipcRenderer.invoke('tests:history'),
   onHistoryAdded: (callback) => subscribe('tests:history-added', callback),
   openTestOutput: (file) => ipcRenderer.invoke('tests:open-output', file),
