@@ -5,6 +5,23 @@ run from source; there are no installers yet.
 
 ## Unreleased
 
+## 0.7.0 - 2026-11-25
+
+### Added
+
+- Test Generator says when its browser is missing, for example after an update
+  that needs a newer build, and offers to install it before you record.
+- When tests fail because the project's Browser library has no browser for its
+  version, or is not initialized, the Testing panel offers to install it.
+- Keywright asks before an AI client first runs the tests of a project. Allowing
+  lasts until the MCP server is turned off or Keywright closes.
+
+### Changed
+
+- The recorder uses Playwright 1.65.1, which needs a newer Chromium: install it from
+  Test Generator or with `npm run install-browsers`.
+  DOMPurify is 3.4.18 and the Robocop test baseline 9.4.0.
+
 ### Fixed
 
 - A test run ends when Robot exits, even when a process the tests started keeps
@@ -24,21 +41,6 @@ run from source; there are no installers yet.
   `--extension` are listed.
 - Editing CSS, HTML, JavaScript and TypeScript files no longer raises errors in the
   editor.
-
-### Added
-
-- Test Generator says when its browser is missing, for example after an update
-  that needs a newer build, and offers to install it before you record.
-- When tests fail because the project's Browser library has no browser for its
-  version, or is not initialized, the Testing panel offers to install it.
-- Keywright asks before an AI client first runs the tests of a project. Allowing
-  lasts until the MCP server is turned off or Keywright closes.
-
-### Changed
-
-- The recorder uses Playwright 1.65.1, which needs a newer Chromium: install it from
-  Test Generator or with `npm run install-browsers`.
-  DOMPurify is 3.4.18 and the Robocop test baseline 9.4.0.
 
 ## 0.6.0 - 2026-11-21
 

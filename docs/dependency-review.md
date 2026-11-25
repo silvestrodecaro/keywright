@@ -52,6 +52,12 @@ the replacement. See [Architecture](architecture.md#build-and-packaging).
 
 ## Verification
 
+The Windows checks for Keywright 0.7.0 passed on 2026-11-25 on Node.js 24.16.0 and
+Python 3.13.14: a clean `npm ci` installed 27 packages, the complete audit and
+`npm audit --omit=dev` reported zero findings, `setup.bat --check --no-pause` passed,
+both example Browser tests passed, and the regression suite passed 425 Node and 37
+desktop UI tests with zero skips.
+
 On 2026-11-25 Playwright 1.65.1, DOMPurify 3.4.18, Biome 2.6.8 and Robocop 9.4.0 were
 checked together: a clean `npm ci`, an audit with zero findings, verified registry
 signatures, and the regression suite with 411 Node and 35 UI tests passed and none
