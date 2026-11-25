@@ -69,6 +69,36 @@ test('additional arguments that name the suite keep tests, selected runs and res
   await expectResult(page, 1, 0);
 });
 
+test('offers the browser that the tests miss, then runs them once it is installed', async ({ desktop }, testInfo) => {
+  const { app, page } = desktop;
+  // The real Browser library fails on an empty storage; only the download is replaced.
+  await app.evaluate(({ ipcMain }, empty) => {
+    const previous = process.env.PLAYWRIGHT_BROWSERS_PATH;
+    process.env.PLAYWRIGHT_BROWSERS_PATH = empty;
+    global.__installed = [];
+    ipcMain.removeHandler('tests:install-browsers');
+    ipcMain.handle('tests:install-browsers', (_event, names) => {
+      global.__installed.push(names);
+      if (previous === undefined)
+        delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+      else
+        process.env.PLAYWRIGHT_BROWSERS_PATH = previous;
+      return { ok: true };
+    });
+  }, testInfo.outputPath('no-browsers'));
+  await openTesting(page);
+  const notice = page.locator('#tests-browsers');
+  await expect(notice).toBeHidden();
+  await page.locator('#tests-run-all').click();
+  await expect(notice).toContainText('has no chromium for its version', { timeout: 60_000 });
+  await notice.getByRole('button', { name: 'Install chromium' }).click();
+  await expect(notice).toContainText('Installed chromium. Run the tests again.');
+  expect(await app.evaluate(() => global.__installed)).toEqual([['chromium']]);
+  await page.locator('#tests-run-all').click();
+  await expectResult(page, 2, 0);
+  await expect(notice).toBeHidden();
+});
+
 test('pauses at an editor breakpoint, inspects and watches a value, then steps and continues', async ({ desktop }) => {
   const { page, project } = desktop;
   const relative = 'tests/debug-probe.robot';

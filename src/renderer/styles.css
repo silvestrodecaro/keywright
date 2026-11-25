@@ -1102,7 +1102,9 @@ input:disabled, select:disabled { opacity: .55; }
 /* Notices in the file pane (e.g. Robocop missing) */
 .notice { display: flex; align-items: center; gap: 10px; margin: 6px 12px; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--surface); font-size: 12px; }
 .notice > span { flex: 1; }
-#tests-notice { border: 1px solid var(--border-strong); }
+#tests-notice, #tests-browsers { border: 1px solid var(--border-strong); }
+#tests-browsers { flex-wrap: wrap; overflow-wrap: anywhere; }
+#tests-browsers > span { flex: 1 1 100%; }
 .problem-info { color: var(--info); }
 .problems-robocop { margin-right: 4px; }
 #sidebar-problems .notice { margin: 6px 8px; }

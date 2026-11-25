@@ -614,8 +614,21 @@
     }
   }
 
+  const testBrowsers = window.RFTestBrowsers.create({
+    api,
+    box: $('#tests-browsers'),
+    idle: () => !running && !preparing,
+    setInstalling: (installing) => {
+      preparing = installing;
+      scheduleRender();
+      if (!preparing && !running && pendingChanges.size)
+        processChanges();
+    },
+  });
+
   /** Marks the tests about to run as queued and clears their previous results. */
   function resetForRun(scope) {
+    testBrowsers.reset();
     for (const id of scope) {
       results.set(id, { status: 'queued' });
       runs.delete(id);
@@ -720,6 +733,7 @@
         break;
       case 'test-end':
         results.set(event.id, { status: event.status, message: event.message, elapsed: event.elapsed, robotId: event.robotId });
+        testBrowsers.note(event.message);
         break;
       case 'step-start': {
         const runData = runDataFor(event);
@@ -819,6 +833,7 @@
     // Robot exit codes: 0-250 number of failed tests, 251 help/version, 252+ errors.
     if (!stopped && exitCode >= 252)
       showError('Robot Framework could not run the tests. See the console output below the results.');
+    testBrowsers.finished(output);
     scheduleRender();
     // Data files written while tests ran are most likely their own output (downloads, created
     // files): rerunning for them would loop. Suites, resources and libraries still count.
@@ -1192,6 +1207,7 @@
     filter = '';
     $('#tests-filter').value = '';
     $('#console-output').textContent = '';
+    testBrowsers.reset();
     discover();
   });
 

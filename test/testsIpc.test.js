@@ -11,7 +11,7 @@ const { EventEmitter } = require('node:events');
 const { createTestsIpc } = require('../src/main/ipc/tests');
 const { tempDir } = require('./helpers/tempDir');
 
-function setup({ fail = null } = {}) {
+function setup({ fail = null, installBrowsers = async () => {} } = {}) {
   const handlers = new Map();
   const sent = [];
   const root = tempDir('tests-ipc');
@@ -39,6 +39,7 @@ function setup({ fail = null } = {}) {
     project: () => current,
     refreshProject: () => null,
     discoverTests: async (_project, options) => ({ ok: true, suite: { name: 'Tests' }, options }),
+    installBrowsers,
     openPath: async () => '',
     batchMs: 20,
   });
@@ -61,6 +62,25 @@ test('discovery gets the additional arguments of the Run options', async () => {
   const f = setup();
   assert.deepEqual((await f.call('tests:discover', { extraArgs: '--name X' })).options, { extraArgs: '--name X' });
   assert.deepEqual((await f.call('tests:discover')).options, { extraArgs: '' });
+});
+
+test('browsers are installed for the open project, and tests wait for it', async () => {
+  let finish;
+  const asked = [];
+  const f = setup({ installBrowsers: (project, names, onLog) => {
+    asked.push([project.root, names]);
+    onLog('10%');
+    return new Promise((resolve, reject) => { finish = { resolve, reject }; });
+  } });
+  const first = f.call('tests:install-browsers', ['chromium']);
+  assert.deepEqual(asked, [[f.root, ['chromium']]]);
+  assert.deepEqual(f.sent, [['tests:browsers-log', '10%']]);
+  assert.match((await f.call('tests:install-browsers', ['chromium'])).error, /already being installed/);
+  assert.match((await f.call('tests:run', {})).error, /being installed/);
+  finish.reject(new Error('no network'));
+  assert.deepEqual(await first, { ok: false, error: 'no network' });
+  assert.deepEqual(await f.call('tests:run', {}), { ok: true });
+  assert.match((await f.call('tests:install-browsers', ['chromium'])).error, /Tests are running/);
 });
 
 test('without a project, or when Robot cannot start, nothing is recorded', async () => {

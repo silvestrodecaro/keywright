@@ -249,7 +249,7 @@ does not prove that browser actions or application assertions will pass. Review
 ## The recorder works but the test browser does not launch
 
 The recorder's successful launch verifies its own browser installation only.
-Prepare Browser in the project's selected Python:
+Use **Install** in the Testing panel when it offers one after the run, or prepare Browser in the project's selected Python:
 
 ```powershell
 $env:PLAYWRIGHT_BROWSERS_PATH = "$env:LOCALAPPDATA\ms-playwright"
