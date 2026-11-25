@@ -167,7 +167,7 @@ requests; review its release notes and run the desktop UI tests before merging.
 
 ## Verified environment
 
-Local verification for Keywright 0.6.0 on 2026-11-21 used this combination. The Python baseline is
+Local verification of the development version on 2026-11-25 used this combination. The Python baseline is
 pinned in [requirements-dev.txt](requirements-dev.txt); the JavaScript dependency
 tree is recorded in `package-lock.json`. This is a tested combination, not a claim
 that every version accepted by the project creator is compatible.
@@ -179,9 +179,9 @@ that every version accepted by the project creator is compatible.
 | Python | 3.13.14 |
 | Robot Framework | 7.5.1 |
 | Browser library | 21.0.0 |
-| Robocop | 9.3.0 |
+| Robocop | 9.4.0 |
 | Electron | 45.2.1 |
-| Recorder Playwright | 1.65.0 |
+| Recorder Playwright | 1.65.1 |
 
 The [Keywright example project](examples/browser-walkthrough/) has two local browser tests.
 From the repository root, use the prepared integration-test Python to verify it:

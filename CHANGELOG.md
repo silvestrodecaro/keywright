@@ -17,6 +17,18 @@ run from source; there are no installers yet.
   project's unsaved-file copies.
 - Saving a file no longer rebuilds the Explorer, and reading the project tree no
   longer holds up the rest of Keywright in large projects.
+- Closing or changing the project while recovered files load no longer opens them
+  in the next project or overwrites its unsaved-file copies.
+- The test tree uses the additional Robot arguments of the Run options, so tests
+  renamed with `--name` can be run and show their results, and files added with
+  `--extension` are listed.
+- Editing CSS, HTML, JavaScript and TypeScript files no longer raises errors in the
+  editor.
+
+### Changed
+
+- The recorder uses Playwright 1.65.1; run `npm run install-browsers` after updating.
+  DOMPurify is 3.4.18 and the Robocop test baseline 9.4.0.
 
 ## 0.6.0 - 2026-11-21
 
