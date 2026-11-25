@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { childProcesses } = require('./processes');
@@ -10,6 +11,39 @@ const INSTALLABLE = new Set(['chromium', 'firefox', 'webkit']);
 function playwrightCli() {
   const cli = path.join(path.dirname(require.resolve('playwright-core/package.json')), 'cli.js');
   return cli.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+}
+
+/**
+ * Whether the build of a Playwright browser that this playwright-core launches is missing:
+ * each Playwright version has its own build, so an update can need another one.
+ * @param {string} name chromium | firefox | webkit
+ * @returns {null | { outdated: boolean }} outdated: another build of it is installed
+ */
+function missingBrowser(name, playwright = require('playwright-core')) {
+  if (!INSTALLABLE.has(name))
+    return null;
+  let executable;
+  try {
+    executable = playwright[name].executablePath();
+  } catch {
+    return null; // not available on this platform: launching it explains why
+  }
+  if (!executable || fs.existsSync(executable))
+    return null;
+  // <cache>/chromium-1255/chrome-win64/chrome.exe
+  const build = new RegExp(`^${name}-\\d+$`);
+  const parts = path.normalize(executable).split(path.sep);
+  const index = parts.findLastIndex((part) => build.test(part));
+  let outdated = false;
+  if (index > 0) {
+    try {
+      outdated = fs.readdirSync(parts.slice(0, index).join(path.sep))
+        .some((entry) => entry !== parts[index] && build.test(entry));
+    } catch {
+      // no browser storage yet
+    }
+  }
+  return { outdated };
 }
 
 /**
@@ -34,4 +68,4 @@ function installBrowser(name, onLog = () => {}) {
   });
 }
 
-module.exports = { installBrowser, INSTALLABLE };
+module.exports = { installBrowser, missingBrowser, INSTALLABLE };

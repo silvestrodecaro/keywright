@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld('keywright', {
 
   // Test generator
   startRecording: (options) => ipcRenderer.invoke('recorder:start', options),
+  missingBrowser: (name) => ipcRenderer.invoke('recorder:missing-browser', name),
   installBrowser: (name) => ipcRenderer.invoke('recorder:install-browser', name),
   onInstallLog: (callback) => subscribe('recorder:install-log', callback),
   stopRecording: () => ipcRenderer.invoke('recorder:stop'),

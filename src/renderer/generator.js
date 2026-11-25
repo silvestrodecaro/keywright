@@ -19,8 +19,11 @@
     return match ? { width: Number(match[1]), height: Number(match[2]) } : null;
   }
 
-  function showError(message, install = null) {
+  /** then: what a finished installation starts, such as the recording that failed. */
+  function showError(message, install = null, then = () => {}) {
+    noticeShown = false;
     const el = $('#error');
+    el.classList.remove('is-info');
     el.replaceChildren(document.createTextNode(message || ''));
     el.hidden = !message;
     if (install) {
@@ -28,12 +31,31 @@
       button.type = 'button';
       button.className = 'btn btn-sm btn-primary error-action';
       button.textContent = `Install ${install}`;
-      button.addEventListener('click', () => installBrowser(install));
+      button.addEventListener('click', () => installBrowser(install, then));
       el.append(button);
     }
   }
 
-  async function installBrowser(name) {
+  // A browser missing for the chosen option, often after a Keywright update. Only the latest
+  // check is shown, and never over an error, a recording or an installation.
+  let noticeShown = false;
+  let checkRequest = 0;
+
+  async function checkBrowser() {
+    const request = ++checkRequest;
+    const missing = await window.keywright.missingBrowser($('#browser').value).catch(() => null);
+    if (request !== checkRequest || busy || recording || (!noticeShown && !$('#error').hidden))
+      return;
+    if (missing) {
+      showError(missing.message, missing.install);
+      $('#error').classList.add('is-info');
+      noticeShown = true;
+    } else if (noticeShown) {
+      showError('');
+    }
+  }
+
+  async function installBrowser(name, then) {
     const el = $('#error');
     const log = document.createElement('pre');
     log.className = 'install-log';
@@ -58,11 +80,11 @@
       renderState();
     }
     if (!result.ok) {
-      showError(result.error, name);
+      showError(result.error, name, then);
       return;
     }
     showError('');
-    $('#record-form').requestSubmit(); // start the recording that failed
+    then();
   }
 
   function flash(button, text) {
@@ -153,7 +175,7 @@
       renderState();
     }
     if (!result.ok)
-      showError(result.error, result.install);
+      showError(result.error, result.install, () => $('#record-form').requestSubmit());
   });
 
   $('#test-name').addEventListener('input', (event) => {
@@ -192,7 +214,7 @@
       viewport: parseViewport($('#viewport').value),
     });
     if (!result.ok)
-      showError(result.error, result.install);
+      showError(result.error, result.install, () => $('#pick').click());
     else if (!result.cancelled) {
       $('#picked-selector').textContent = result.cell;
       $('#picked').hidden = false;
@@ -222,5 +244,8 @@
     renderState();
   });
 
+  $('#browser').addEventListener('change', checkBrowser);
+
   renderState();
+  checkBrowser();
 })();

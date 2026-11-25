@@ -351,7 +351,10 @@ or branch changes made in another Git client.
 
 1. Open **Test Generator** and enter the starting URL.
 2. Select a browser and viewport. Chromium, Firefox and WebKit use Playwright
-   binaries; Chrome and Edge use their installed browser channels.
+   binaries; Chrome and Edge use their installed browser channels. If the selected
+   Playwright browser is missing, or an update needs a newer build, the tab says so:
+   choose **Install** to download it. Nothing is downloaded without your choice.
+   These browsers are separate from those your project's Browser library uses.
 3. Press **Record** and interact with the opened page.
 4. Use the toolbar in that page to add assertions for visible elements, text,
    values, checkbox state or an ARIA snapshot.

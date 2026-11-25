@@ -44,7 +44,7 @@ const { discoverTests, TestRunner } = require('./testRunner');
 const { KeywordIndex } = require('./keywordIndex');
 const { RecoveryStore } = require('./recoveryStore');
 const { LanguageWorker } = require('./languageWorker');
-const { installBrowser } = require('./browserInstall');
+const { installBrowser, missingBrowser } = require('./browserInstall');
 const { ProjectWatcher } = require('./projectWatcher');
 const { TraceServer } = require('./traceServer');
 const { projectVariables } = require('./projectVariables');
@@ -565,6 +565,7 @@ const generatorIpc = createGeneratorIpc({
   },
   note: (event, details) => crashReports.note(event, details),
   install: installBrowser,
+  missing: (name) => missingBrowser(name),
 });
 
 ipcMain.handle('clipboard:write', (_event, text) => clipboard.writeText(text));
