@@ -31,6 +31,8 @@ run from source; there are no installers yet.
   that needs a newer build, and offers to install it before you record.
 - When tests fail because the project's Browser library has no browser for its
   version, or is not initialized, the Testing panel offers to install it.
+- Keywright asks before an AI client first runs the tests of a project. Allowing
+  lasts until the MCP server is turned off or Keywright closes.
 
 ### Changed
 

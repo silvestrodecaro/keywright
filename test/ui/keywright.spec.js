@@ -761,6 +761,17 @@ test('an AI client connects, explores the app in a browser, writes a test and ru
     expect((await client.tool('check_file', { path: 'tests/ai_request.robot' })).text).toBe('No problems found.');
 
     // The run shows in the Testing panel while the client waits for its result.
+    // The first run asks the user; a refusal runs nothing, and Allow lasts for the project.
+    await app.evaluate(({ dialog }) => {
+      global.__runQuestions = [];
+      dialog.showMessageBox = async (_window, options) => {
+        global.__runQuestions.push(options.message);
+        return { response: global.__runQuestions.length === 1 ? 1 : 0 };
+      };
+    });
+    const refused = await client.tool('run_tests');
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain('The user did not allow running the tests.');
     const run = await client.tool('run_tests');
     expect(run.text).toMatch(/^Finished: 3 passed, 0 failed, 0 skipped \(exit code 0\)\./);
     expect(run.text).toContain('PASS  Tests.Ai Request.AI Requests A Code');
@@ -772,6 +783,7 @@ test('an AI client connects, explores the app in a browser, writes a test and ru
     await client.tool('write_file', { path: 'tests/ai_failure.robot', content: failing });
     const failedRun = await client.tool('run_tests', { tests: ['Tests.Ai Failure'] });
     expect(failedRun.text).toMatch(/^Finished: 0 passed, 1 failed/);
+    expect(await app.evaluate(() => global.__runQuestions)).toEqual(Array(2).fill('Allow the AI client to run the tests of project?'));
     expect(failedRun.text).toMatch(/failing keyword: Get Text .+\(tests\/ai_failure\.robot:\d+\)/);
     const details = await client.request('tools/call', { name: 'test_failure_details', arguments: {} });
     const [detailText, ...images] = details.result.content;

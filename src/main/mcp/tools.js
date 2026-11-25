@@ -271,6 +271,7 @@ function describeSuite(suite, depth = 0, lines = []) {
  *   check: (relative: string, text: string) => Promise<{ ok: boolean, problems: object[], error?: string }>,
  *   discover: () => Promise<{ ok: boolean, suite?: object, error?: string }>,
  *   runner: import('events').EventEmitter & { running: boolean, stop(): void },
+ *   confirmRun: () => Promise<void>, asks the user the first time; throws when tests may not run
  *   startRun: (options: object) => Promise<void>,
  *   browser: import('./agentBrowser').AgentBrowser,
  *   browsers: Record<string, { browser: string, channel: string|null }>,
@@ -654,7 +655,7 @@ function createTools(app) {
     {
       name: 'run_tests',
       title: 'Run tests',
-      description: `Runs Robot Framework tests from the files on disk. The run appears in Keywright's Testing panel. Waits up to wait_seconds (default ${RUN_WAIT_SECONDS}) and returns each finished test's status, the failing keyword and message, and the console output on failure. If tests are still running, call wait_for_run.`,
+      description: `Runs Robot Framework tests from the files on disk. The run appears in Keywright's Testing panel. The user is asked to allow it the first time. Waits up to wait_seconds (default ${RUN_WAIT_SECONDS}) and returns each finished test's status, the failing keyword and message, and the console output on failure. If tests are still running, call wait_for_run.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -670,6 +671,10 @@ function createTools(app) {
         if (app.runner.running)
           throw new ToolError('Tests are already running. Call wait_for_run for a run started here, or stop_tests.');
         try {
+          // Before the run is followed: a run the user starts meanwhile is not this one.
+          await app.confirmRun();
+          if (app.runner.running)
+            throw new Error('Tests were started in Keywright meanwhile. Call run_tests again when they have finished.');
           await runs.start(() => app.startRun({ select: tests, include, exclude, headed }));
         } catch (error) {
           throw new ToolError(error.message);

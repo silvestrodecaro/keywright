@@ -654,6 +654,12 @@ larger ones stay in the Recycle Bin. The list holds the last 100 changes and is
 cleared when Keywright closes. The title bar button's tooltip counts the changes not
 undone.
 
+The first time a client calls `run_tests` in a project, Keywright asks whether to
+allow it: tests run with your permissions, including ones the AI wrote. **Allow**
+lasts for that project until you turn the MCP server off or close Keywright;
+**Don't Allow** refuses that call. If you do not answer within 45 seconds the client
+is told to ask you; the question stays open and your answer counts for its next call.
+
 `run_tests` uses the files on disk, like the Testing panel. The run appears in the
 Testing panel, and the client receives each test's status, the failing keyword and
 message, and the end of the console output.

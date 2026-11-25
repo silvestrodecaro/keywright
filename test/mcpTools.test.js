@@ -31,6 +31,7 @@ function setup({ dirty = [], keywords = [] } = {}) {
     check: async () => ({ ok: true, problems: [{ line: 2, severity: 'ERROR', message: 'Bad' }] }),
     discover: async () => ({ ok: true, suite: { name: 'Tests', source: 'tests', tests: [], suites: [] } }),
     runner,
+    confirmRun: async () => {},
     startRun: async () => {},
     browser: { open: false },
     browsers: {},
@@ -152,6 +153,20 @@ test('a run collects test statuses, the failing keyword and the console tail', a
 
   f.runner.running = true;
   assert.match((await f.callTool('run_tests')).text, /already running/);
+});
+
+test('run_tests starts nothing when the user does not allow it, or runs tests while being asked', async () => {
+  const f = setup();
+  let started = 0;
+  f.app.startRun = async () => { started++; };
+  f.app.confirmRun = async () => { throw new Error('The user did not allow running the tests.'); };
+  const refused = await f.callTool('run_tests');
+  assert.equal(refused.isError, true);
+  assert.match(refused.text, /did not allow/);
+  f.app.confirmRun = async () => { f.runner.running = true; };
+  assert.match((await f.callTool('run_tests')).text, /started in Keywright meanwhile/);
+  assert.equal(started, 0);
+  assert.equal(f.runner.listenerCount('event'), 0);
 });
 
 test('a long run returns partial results, and wait_for_run follows it to the end', async () => {
