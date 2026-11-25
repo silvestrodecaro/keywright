@@ -1,4 +1,4 @@
-# Dependency review — 2026-11-16
+# Dependency review — 2026-11-25
 
 ## Audit scope
 
@@ -39,11 +39,11 @@ a new dependency review and checks of the packaged app, signing and update path.
 
 ## Editor dependencies
 
-The lockfile uses Electron 45.2.1 and Playwright 1.65.0. The recorder uses
+The lockfile uses Electron 45.2.1 and Playwright 1.65.1. The recorder uses
 private Playwright APIs. The regression suite exercises real recording,
 locator picking and replay with the Browser library after an upgrade.
 
-DOMPurify remains pinned to 3.4.17, the patched version listed in
+DOMPurify is pinned to 3.4.18, newer than 3.4.17, the patched version listed in
 [GHSA-cg2g-xh64-v4q7](https://github.com/cure53/DOMPurify/security/advisories/GHSA-cg2g-xh64-v4q7).
 Monaco imports a vendored sanitizer, so updating the npm dependency alone would
 leave that copy in the editor. The build replaces the vendored import with the
@@ -52,8 +52,15 @@ the replacement. See [Architecture](architecture.md#build-and-packaging).
 
 ## Verification
 
+On 2026-11-25 Playwright 1.65.1, DOMPurify 3.4.18, Biome 2.6.8 and Robocop 9.4.0 were
+checked together: a clean `npm ci`, an audit with zero findings, verified registry
+signatures, and the regression suite with 411 Node and 35 UI tests passed and none
+skipped, after installing the Chromium build this Playwright needs. The CodeQL action
+4.39.4 is pinned to the commit of its tag.
+
 The Windows checks for Keywright 0.6.0 passed on 2026-11-21 on Node.js 24.16.0 and
-Python 3.13.14, with the dependency versions listed above.
+Python 3.13.14, with Electron 45.2.1, Playwright 1.65.0, DOMPurify 3.4.17
+and Robocop 9.3.0.
 
 - A clean `npm ci` installed 27 packages. The complete audit and
   `npm audit --omit=dev` both reported zero findings.
