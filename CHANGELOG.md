@@ -25,9 +25,15 @@ run from source; there are no installers yet.
 - Editing CSS, HTML, JavaScript and TypeScript files no longer raises errors in the
   editor.
 
+### Added
+
+- Test Generator says when its browser is missing, for example after an update
+  that needs a newer build, and offers to install it before you record.
+
 ### Changed
 
-- The recorder uses Playwright 1.65.1; run `npm run install-browsers` after updating.
+- The recorder uses Playwright 1.65.1, which needs a newer Chromium: install it from
+  Test Generator or with `npm run install-browsers`.
   DOMPurify is 3.4.18 and the Robocop test baseline 9.4.0.
 
 ## 0.6.0 - 2026-11-21

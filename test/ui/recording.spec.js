@@ -81,3 +81,29 @@ test('inserts recorded steps at the editor cursor and undoes them together', asy
   await expect(code).not.toContainText('New Page');
   await expect(code).toContainText('No Operation');
 });
+
+test('offers a browser that an update made missing, installs it and does not start recording', async ({ desktop }) => {
+  const { app, page } = desktop;
+  // No download: only the two main-process answers are replaced.
+  await app.evaluate(({ ipcMain }) => {
+    let installed = false;
+    ipcMain.removeHandler('recorder:missing-browser');
+    ipcMain.handle('recorder:missing-browser', (_event, name) => (name === 'firefox' && !installed
+      ? { install: 'firefox', message: 'Recording and picking locators need a newer firefox than the one installed.' } : null));
+    ipcMain.removeHandler('recorder:install-browser');
+    ipcMain.handle('recorder:install-browser', () => { installed = true; return { ok: true }; });
+  });
+  await page.getByRole('tab', { name: /Test Generator/ }).click();
+  const notice = page.locator('#error');
+  await page.locator('#browser').selectOption('firefox');
+  await expect(notice).toContainText('need a newer firefox');
+  await page.locator('#browser').selectOption('msedge');
+  await expect(notice).toBeHidden();
+  await page.locator('#browser').selectOption('firefox');
+  await notice.getByRole('button', { name: 'Install firefox' }).click();
+  await expect(notice).toBeHidden();
+  await expect(page.locator('#record .label')).toHaveText('Record');
+  await page.locator('#browser').selectOption('chromium');
+  await page.locator('#browser').selectOption('firefox');
+  await expect(notice).toBeHidden();
+});

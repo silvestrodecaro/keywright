@@ -42,6 +42,7 @@ function setup(options = {}) {
     showWindow: () => {},
     note: () => {},
     install: async () => {},
+    missing: options.missing || (() => null),
   });
   const call = (channel, ...args) => handlers.get(channel)({}, ...args);
   return { generator, handlers, sent, saves, session, pickerSession, call };
@@ -60,6 +61,16 @@ test('a browser that is not installed is explained, with the download it needs',
   assert.equal(result.ok, false);
   assert.equal(result.install, 'chromium');
   assert.match(explainLaunchError(new Error("Executable doesn't exist at x"), 'msedge').error, /does not seem to be installed/);
+});
+
+test('a missing browser is reported before recording, unless it is one the system provides', async () => {
+  const f = setup({ missing: (name) => (name === 'firefox' ? { outdated: false } : name === 'chromium' ? { outdated: true } : null) });
+  const outdated = await f.call('recorder:missing-browser', 'chromium');
+  assert.equal(outdated.install, 'chromium');
+  assert.match(outdated.message, /newer chromium/);
+  assert.match((await f.call('recorder:missing-browser', 'firefox')).message, /not installed yet/);
+  assert.equal(await f.call('recorder:missing-browser', 'webkit'), null);
+  assert.equal(await f.call('recorder:missing-browser', 'msedge'), null);
 });
 
 test('picking without a recording opens the picking browser and returns the selector as a cell', async () => {

@@ -57,6 +57,7 @@ function describeStep(action) {
  * @param {() => void} context.showWindow brings Keywright back after picking
  * @param {(event: string, details: object) => void} context.note for crash reports
  * @param {(name: string, onLog: Function) => Promise<void>} context.install installs a browser
+ * @param {(name: string) => null | { outdated: boolean }} context.missing whether a browser must be installed
  */
 function createGeneratorIpc(context) {
   const { ipcMain, send, session, pickerSession } = context;
@@ -101,6 +102,20 @@ function createGeneratorIpc(context) {
       publishState();
       return { ok: false, ...explainLaunchError(error, request.browser) };
     }
+  });
+
+  // Asked before recording, so a browser missing after an update is offered at once.
+  ipcMain.handle('recorder:missing-browser', (_event, name) => {
+    const target = BROWSERS[name] || BROWSERS.chromium;
+    const missing = target.channel ? null : context.missing(target.browser);
+    if (!missing)
+      return null;
+    return {
+      install: target.browser,
+      message: missing.outdated
+        ? `Recording and picking locators need a newer ${target.browser} than the one installed.`
+        : `Recording and picking locators need ${target.browser}, which is not installed yet.`,
+    };
   });
 
   ipcMain.handle('recorder:install-browser', async (_event, name) => {
