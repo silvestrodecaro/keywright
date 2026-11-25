@@ -18,6 +18,8 @@ const { testConnection, testHttpConnection } = require('../mcp/connectionTest');
  * @param {string} context.version
  * @param {(channel: string, payload: unknown) => void} context.send to the window
  * @param {(options: object) => Promise<{ response: number }>} context.showMessageBox
+ * @param {(wanted: boolean) => void} [context.attention] asks for the user's attention, or no longer
+ * @param {number} [context.confirmWaitMs] how long a tool call waits for the user's answer
  * @param {(entry: string) => Promise<void>} context.trash moves an entry to the Recycle Bin
  * @param {() => object | null} context.project the open project
  * @param {() => string | null} context.refreshProject reads it again; the error, if any
@@ -34,6 +36,11 @@ const { testConnection, testHttpConnection } = require('../mcp/connectionTest');
  */
 function createMcpIpc(context) {
   const { ipcMain, send, agentBrowser } = context;
+  // Below the clients' tool timeouts (60 s in Codex).
+  const confirmWaitMs = context.confirmWaitMs ?? 45_000;
+  // Projects whose tests AI clients may run, until the server is turned off or Keywright closes.
+  const allowedRuns = new Set();
+  let asking = null; // { root, answer } while the question is shown
   /** @type {McpService | null} */
   let service = null;
   /** @type {ChangeLog | null} */
@@ -98,6 +105,7 @@ function createMcpIpc(context) {
         return context.discoverTests(context.project());
       },
       runner: context.runner,
+      confirmRun,
       startRun: async (options) => {
         await context.startRun(options);
         // The Testing panel shows a run it did not start.
@@ -111,6 +119,58 @@ function createMcpIpc(context) {
     created.on('state', () => send('mcp:state', status()));
     agentBrowser.on('state', () => send('mcp:state', status()));
     return created;
+  }
+
+  async function askRun(project) {
+    context.attention?.(true);
+    try {
+      const { response } = await context.showMessageBox({
+        type: 'warning',
+        buttons: ['Allow', "Don't Allow"],
+        defaultId: 1,
+        cancelId: 1,
+        message: `Allow the AI client to run the tests of ${project.name}?`,
+        detail: 'Tests run with your permissions, including tests and libraries the AI has written. '
+          + 'The AI can be influenced by the pages and files it reads.\n\n'
+          + 'Allowing lasts for this project until you turn the MCP server off or close Keywright.',
+      });
+      return response === 0;
+    } finally {
+      context.attention?.(false);
+    }
+  }
+
+  /** Asks once per project; throws what the AI client is told when it may not run tests. */
+  async function confirmRun() {
+    const project = context.project();
+    if (!project)
+      throw new Error('No project is open.');
+    const { root } = project;
+    if (allowedRuns.has(root))
+      return;
+    if (!asking) {
+      const question = { root };
+      asking = question;
+      question.answer = askRun(project).then((allowed) => {
+        // Not when the server was turned off meanwhile: the question was dropped.
+        if (allowed && asking === question)
+          allowedRuns.add(root);
+      }).finally(() => {
+        if (asking === question)
+          asking = null;
+      });
+    }
+    let timer;
+    const answered = await Promise.race([
+      asking.answer.then(() => true),
+      new Promise((resolve) => { timer = setTimeout(() => resolve(false), confirmWaitMs); }),
+    ]).finally(() => clearTimeout(timer));
+    if (!answered)
+      throw new Error('Keywright is asking the user whether AI clients may run the tests. Tell the user to answer in Keywright, then call run_tests again.');
+    if (context.project()?.root !== root)
+      throw new Error('Another project was opened in Keywright.');
+    if (!allowedRuns.has(root))
+      throw new Error('The user did not allow running the tests. Do not call run_tests again unless the user asks for it.');
   }
 
   /**
@@ -142,8 +202,11 @@ function createMcpIpc(context) {
   ipcMain.handle('mcp:status', () => status());
   ipcMain.handle('mcp:set-enabled', async (_event, enabled) => {
     await required().setEnabled(!!enabled);
-    if (!enabled)
+    if (!enabled) {
+      allowedRuns.clear();
+      asking = null;
       await agentBrowser.close();
+    }
     return status();
   });
   ipcMain.handle('mcp:regenerate-token', () => {

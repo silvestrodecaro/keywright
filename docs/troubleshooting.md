@@ -284,11 +284,10 @@ as `New Browser    chromium    headless=True` keeps its literal values.
 An individual-test selection bypasses include/exclude tag filters. Extra Robot
 arguments can also change behavior; review them when reproducing a run.
 
-The Testing panel lists tests as Robot names them without the extra arguments.
-`--name`, `--language` and `--extension` change those names or the files Robot
-reads, so running selected tests with them can report that no test matches. Run
-the whole project in that case, or set the language with a `Language:` header in
-the files instead of `--language`.
+The Testing panel reads and names tests with the extra arguments, but filters such
+as `--test` and pre-run modifiers apply only to the run: the panel can list tests
+that the run leaves out. Runs started by an AI client do not use these arguments, so
+with `--name` their results do not match the panel's tests.
 
 ## No trace is available
 

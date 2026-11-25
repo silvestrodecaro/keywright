@@ -46,7 +46,10 @@ the tools offer: read and change project files, run tests and drive a browser.
 Treat what the AI reads, such as web pages in its browser, as untrusted input that
 can steer it. Keywright limits that browser to web pages (`http`, `https`) and
 files inside the open project, refuses edits to files with unsaved changes, and
-lists every file change with undo; it does not ask before the AI runs tests.
+lists every file change with undo. It asks before an AI client first runs the tests of
+a project; allowing lasts until you turn the server off or close Keywright. That
+question does not isolate the project's code: a library the AI writes can be imported
+when Keywright lists keywords, as described above, without a test run.
 **Test connection** shows the command first when it comes from a configuration
 file inside the project.
 

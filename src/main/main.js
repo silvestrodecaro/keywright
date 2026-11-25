@@ -587,6 +587,10 @@ const mcpIpc = createMcpIpc({
   version: app.getVersion(),
   send,
   showMessageBox: (options) => dialog.showMessageBox(mainWindow, options),
+  attention: (wanted) => {
+    if (mainWindow && !mainWindow.isDestroyed())
+      mainWindow.flashFrame(wanted && !mainWindow.isFocused());
+  },
   trash: (entry) => shell.trashItem(entry),
   project: () => currentProject,
   refreshProject,

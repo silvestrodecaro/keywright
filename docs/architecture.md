@@ -342,7 +342,9 @@ editor saves; the watcher then reports the change to the renderer. The renderer
 sends the paths of dirty editor models to the main process (`editor:dirty-files`)
 whenever they change; tools refuse to write, edit, rename or delete those paths or
 folders containing them. `delete_path` uses `shell.trashItem` without a dialog.
-`run_tests` starts the shared `startRun()` used by the Testing panel and sends
+`run_tests` first calls `confirmRun()` ([ipc/mcp.js](../src/main/ipc/mcp.js)), which
+asks the user once per project and keeps the answer in memory until the server is
+turned off. It then starts the shared `startRun()` used by the Testing panel and sends
 `tests:started` so the panel shows the run. `RunTracker` collects listener events
 into per-test statuses, the innermost failing keyword and the console tail, and keeps
 collecting after the tool returns. `run_tests` and `wait_for_run` wait at most 55
