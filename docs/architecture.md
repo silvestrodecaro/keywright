@@ -460,6 +460,11 @@ tools and the HTTP checks together when changing either.
 into `src/renderer/dist/`, including font assets. Those generated files are ignored
 by Git. Most renderer panels remain plain scripts loaded by the HTML shell.
 
+The bundle leaves out Monaco's CSS, HTML and JavaScript/TypeScript language services:
+they need their own web workers, which are not shipped. Files of these languages keep
+their syntax colors. JSON keeps its service and worker.
+`editorBuild.test.js` checks that every bundled service has a worker.
+
 Monaco 0.57.0 imports a vendored DOMPurify copy rather than its declared npm
 dependency. The build replaces that one import in `domSanitize.js` with the pinned
 DOMPurify package. The npm override keeps Monaco's dependency tree aligned with
