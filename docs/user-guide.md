@@ -321,6 +321,8 @@ an empty repository.
    At the repository root, **Amend Last Commit** in the commit menu replaces the most recent commit
    with the entered message and any staged changes.
 
+![Staged and unstaged changes with a side-by-side diff](images/source-control.png)
+
 For projects inside a larger repository, the panel lists files in the open
 project. If files elsewhere in the repository are staged, open the repository
 root to review and commit them, or unstage them in your Git client.
