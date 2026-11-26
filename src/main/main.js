@@ -58,6 +58,7 @@ const { stopAll, handleQuit } = require('./shutdown');
 const { createSourceControlIpc } = require('./ipc/sourceControl');
 const { childProcesses } = require('./processes');
 const { InterpreterTrust } = require('./interpreterTrust');
+const { spellCheckerLanguages } = require('./spellCheck');
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -764,6 +765,10 @@ app.whenReady().then(async () => {
     callback(clipboardPermission(permission) && ownPage(details.requestingUrl)));
   electronSession.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) =>
     clipboardPermission(permission) && ownPage(details?.requestingUrl || requestingOrigin));
+  // Commit messages are usually English, also on systems in another language.
+  const spelling = electronSession.defaultSession;
+  spelling.setSpellCheckerLanguages(
+    spellCheckerLanguages(spelling.getSpellCheckerLanguages(), spelling.availableSpellCheckerLanguages));
   recentProjects = new RecentProjects(path.join(app.getPath('userData'), 'recent-projects.json'));
   recovery = new RecoveryStore(path.join(app.getPath('userData'), 'recovery'));
   recovery.removeLeftovers();

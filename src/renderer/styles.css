@@ -655,8 +655,10 @@ input:disabled, select:disabled { opacity: .55; }
 
 #status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-#status.is-recording { color: var(--text); }
-#status.is-recording .status-dot { background: var(--record); animation: pulse 1.2s infinite; }
+#status:not([data-activity="idle"]) { color: var(--text); }
+#status[data-activity="running"] .status-dot { background: var(--accent); }
+#status[data-activity="paused"] .status-dot { background: var(--debug); }
+#status[data-activity="recording"] .status-dot { background: var(--record); animation: pulse 1.2s infinite; }
 
 @keyframes pulse { 50% { opacity: .3; } }
 

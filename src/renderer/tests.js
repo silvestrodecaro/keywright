@@ -87,6 +87,7 @@
       renderDetail();
       renderControls();
       renderDebug();
+      window.RFStatusBar.set('tests', { running, paused });
       pushEditorStates();
     }), wait);
   }
