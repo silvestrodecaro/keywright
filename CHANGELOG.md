@@ -5,6 +5,14 @@ run from source; there are no installers yet.
 
 ## Unreleased
 
+### Fixed
+
+- The status bar shows when tests are running or the debugger is paused, instead
+  of *Idle*.
+- The commit message is checked for English spelling as well as the system
+  language, so English words are no longer underlined on a system in another
+  language.
+
 ## 0.7.0 - 2026-11-25
 
 ### Added
