@@ -101,8 +101,7 @@
     button.disabled = busy;
     for (const el of ['#url', '#browser', '#viewport'])
       $(el).disabled = recording || busy;
-    $('#status').classList.toggle('is-recording', recording);
-    $('#status .status-text').textContent = busy ? 'Launching browser…' : recording ? 'Recording' : 'Idle';
+    window.RFStatusBar.set('recorder', { busy, recording });
   }
 
   function renderCode(code) {

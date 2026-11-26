@@ -526,7 +526,7 @@
           <svg width="13" height="13" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><use href="#keywright-git-icon"/></svg>
           <span></span>
         </button>
-        <span id="status"><span class="status-dot"></span><span class="status-text">Idle</span></span>
+        <span id="status" data-activity="idle"><span class="status-dot"></span><span class="status-text">Idle</span></span>
       </span>
       <span class="statusbar-right">
         <span id="editor-status" class="muted"></span>
@@ -651,6 +651,7 @@
 
   <script src="dist/editor.js"></script>
   <script src="highlight.js"></script>
+  <script src="statusBar.js"></script>
   <script src="generator.js"></script>
   <script src="watchPlan.js"></script>
   <script src="searchCore.js"></script>
